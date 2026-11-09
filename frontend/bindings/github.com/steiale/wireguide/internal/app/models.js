@@ -190,6 +190,15 @@ export class FarewellStatus {
              */
             this["cancelled"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * Warning: the move succeeded with a caveat ("shared_anchor": rules are
+             * still loaded in the pf anchor shared with upstream WireGuide).
+             * @member
+             * @type {string | undefined}
+             */
+            this["warning"] = undefined;
+        }
         if (!("brew" in $$source)) {
             /**
              * Brew: installed with Homebrew (the hand-over text differs).
@@ -236,13 +245,13 @@ export class FarewellStatus {
      */
     static createFrom($$source = {}) {
         const $$createField2_0 = $$createType2;
-        const $$createField10_0 = $$createType2;
+        const $$createField11_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("remnants" in $$parsedSource) {
             $$parsedSource["remnants"] = $$createField2_0($$parsedSource["remnants"]);
         }
         if ("old_apps" in $$parsedSource) {
-            $$parsedSource["old_apps"] = $$createField10_0($$parsedSource["old_apps"]);
+            $$parsedSource["old_apps"] = $$createField11_0($$parsedSource["old_apps"]);
         }
         return new FarewellStatus(/** @type {Partial<FarewellStatus>} */($$parsedSource));
     }

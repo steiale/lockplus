@@ -262,6 +262,9 @@ func Run(addr string, ownerUID int, dataDir string) error {
 	return err
 }
 
+// Note: our own stale pf-was-enabled "0" (from a crashed older helper) still
+// drives pfctl -d here, exactly as on every helper start since 1.0.x.
+//
 // recoverStaleState undoes what a helper that died without cleanup() left
 // behind: orphaned root openvpn processes, stale pf rules (and the pf enable
 // state it changed), orphaned routes, overridden DNS. openvpn goes first: it

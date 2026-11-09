@@ -48,6 +48,10 @@ const (
 	sharedAnchor = "com.apple/wireguide"
 )
 
+// Note: pgrep -f matches argv, which any local process can imitate to force
+// the 30 s wait and an abort — a local denial of the move only, never a
+// removal (pre-existing pattern).
+//
 // helperProcRE matches a running LockPlus helper: the PrivilegedHelperTools
 // daemon and the pre-1.0.22 single binary started as "<bundle>/lockplus
 // --helper" (not the .cleanup copy). "[l]ockplus" keeps the uninstall
@@ -139,6 +143,12 @@ func HelperRemnants() []string {
 // ErrLegacyBusy: the WireGuide+ helper still has a tunnel up or its kill
 // switch on; nothing was changed. Disconnect in WireGuide+ first.
 var ErrLegacyBusy = errors.New("WireGuide+ still has a tunnel connected or its kill switch on")
+
+// ErrSharedAnchorRules is a warning, not a failure: the helper was removed,
+// but upstream WireGuide (left alone) shares our pf anchor and it still holds
+// rules — upstream's kill switch or LockPlus leftovers. Reconnecting in
+// WireGuide or a restart clears it.
+var ErrSharedAnchorRules = errors.New("firewall rules shared with WireGuide are still loaded; reconnect in WireGuide or restart your Mac")
 
 // ErrLegacyProbe: whether WireGuide+ is busy couldn't be determined; nothing
 // was changed (fail closed).
@@ -292,7 +302,9 @@ func buildUninstallScript(exe string) string {
 	w(`if [ ! -L %s ] && [ -d %s ] && [ "$(stat -f %%u %s)" = 0 ]; then rm -rf %s; fi; `,
 		q(legacy.WGPlusSocketDir), q(legacy.WGPlusSocketDir), q(legacy.WGPlusSocketDir), q(legacy.WGPlusSocketDir))
 	//    Its root data dir holds only helper state (pf-was-enabled, ovpn-run,
-	//    tunnel-states): removed when it is a real root-owned directory.
+	//    tunnel-states): removed when it is a real root-owned directory. A
+	//    non-root-owned or symlinked one (only root could make it) is left and
+	//    reported by the verify step on every retry.
 	w(`if [ ! -L %s ] && [ -d %s ] && [ "$(stat -f %%u %s)" = 0 ]; then rm -rf %s; fi; fi; `,
 		q(legacy.WGPlusDataDir), q(legacy.WGPlusDataDir), q(legacy.WGPlusDataDir), q(legacy.WGPlusDataDir))
 	//    Our own com.wireguide.helper (1.0.0).
@@ -319,11 +331,13 @@ func buildUninstallScript(exe string) string {
 		w(`[ -e %s ] && FAIL="$FAIL "%s; `, q(f), q(f))
 	}
 	w(`[ $FOREIGN = 0 ] && for A in %s %s/dns; do [ -n "$(pfctl -a $A -sr 2>/dev/null)" ] && FAIL="$FAIL pf:$A"; done; `, sharedAnchor, sharedAnchor)
-	// Upstream installed: its anchor is never flushed, but rules in it with
-	// no upstream helper running belong to nobody (e.g. a 1.0.6x LockPlus
-	// helper without SIGTERM teardown) — say so instead of reporting OK.
-	w(`[ $FOREIGN = 1 ] && ! launchctl print system/%s >/dev/null 2>&1 && [ -n "$(pfctl -a %s -sr 2>/dev/null)$(pfctl -a %s/dns -sr 2>/dev/null)" ] && FAIL="$FAIL SHARED_ANCHOR_RULES_LEFT"; `,
-		legacyLabel, sharedAnchor, sharedAnchor)
+	// Upstream installed: its anchor is never flushed. Rules in it may be
+	// upstream's own kill switch or leftovers of a LockPlus helper without
+	// SIGTERM teardown (1.0.6x) — we can't tell, so the removal still counts
+	// as done, but the user gets a hint (non-fatal marker), whether or not
+	// upstream's job is loaded.
+	w(`[ $FOREIGN = 1 ] && [ -n "$(pfctl -a %s -sr 2>/dev/null)$(pfctl -a %s/dns -sr 2>/dev/null)" ] && echo SHARED_ANCHOR_RULES_PRESENT; `,
+		sharedAnchor, sharedAnchor)
 	w(`if [ $WGP_PLIST = 1 ] || [ $WGP_BIN = 1 ]; then launchctl print system/%s >/dev/null 2>&1 && FAIL="$FAIL launchd:%s"; pgrep -f %s >/dev/null 2>&1 && FAIL="$FAIL wgp-process"; `,
 		legacy.WGPlusLabel, legacy.WGPlusLabel, q(wgpProcRE))
 	for _, f := range []string{legacy.WGPlusPlist, legacy.WGPlusBinary, legacy.WGPlusSocketDir, legacy.WGPlusDataDir} {
@@ -339,6 +353,10 @@ func buildUninstallScript(exe string) string {
 // error to typed errors (ErrUserCancelled, *SignatureError, *UninstallError).
 func interpretUninstallOutput(out string, err error) error {
 	if err == nil && strings.Contains(out, "UNINSTALL_OK") {
+		if strings.Contains(out, "SHARED_ANCHOR_RULES_PRESENT") {
+			slog.Warn("helper removed; firewall rules in the anchor shared with WireGuide are still loaded", "output", out)
+			return ErrSharedAnchorRules
+		}
 		slog.Info("helper removed and verified", "output", out)
 		return nil
 	}
@@ -356,9 +374,6 @@ func interpretUninstallOutput(out string, err error) error {
 		down := strings.Contains(out, "UNINSTALL_ABORTED_HELPER_DOWN")
 		slog.Error("helper removal aborted", "helper_down", down, "output", out)
 		return &UninstallError{Output: out, Aborted: true, HelperDown: down, Err: err}
-	case strings.Contains(out, "SHARED_ANCHOR_RULES_LEFT"):
-		slog.Error("helper removed, but firewall rules shared with WireGuide are still loaded", "output", out)
-		return &UninstallError{Output: "firewall rules in com.apple/wireguide (shared with WireGuide) are still loaded; disconnect in WireGuide or restart your Mac\n" + out, Err: err}
 	case strings.Contains(out, "UNINSTALL_INCOMPLETE"):
 		slog.Error("helper removal incomplete", "output", out)
 		return &UninstallError{Output: out, Err: err}

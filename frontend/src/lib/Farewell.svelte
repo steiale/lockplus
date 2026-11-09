@@ -187,6 +187,9 @@
       {#if status?.remnants?.length}
         <div class="fw-error" role="alert">{$t('farewell.remnants', { items: status.remnants.join(', ') })}</div>
       {/if}
+      {#if status?.warning === 'shared_anchor'}
+        <div class="fw-status" role="status">{$t('farewell.warning_shared_anchor')}</div>
+      {/if}
       {#if working}
         <div class="fw-status" role="status"><span class="fw-spinner"></span>{$t('farewell.working')}</div>
       {/if}

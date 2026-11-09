@@ -107,10 +107,7 @@ func TestInterpretUninstallOutput(t *testing.T) {
 		{"context canceled", exitErr, func(e error) bool { return !errors.Is(e, ErrUserCancelled) }},
 		{"UNINSTALL_ABORTED_LEGACY_PROBE: x", exitErr, func(e error) bool { return errors.Is(e, ErrLegacyProbe) }},
 		{"UNINSTALL_ABORTED_LEGACY_BUSY: x", exitErr, func(e error) bool { return errors.Is(e, ErrLegacyBusy) }},
-		{"UNINSTALL_INCOMPLETE: SHARED_ANCHOR_RULES_LEFT", exitErr, func(e error) bool {
-			var u *UninstallError
-			return errors.As(e, &u) && !u.Aborted && strings.Contains(u.Output, "restart your Mac")
-		}},
+		{"SHARED_ANCHOR_RULES_PRESENT\nUNINSTALL_OK", nil, func(e error) bool { return errors.Is(e, ErrSharedAnchorRules) }},
 		{"UNINSTALL_INCOMPLETE: pf:com.apple/wireguide", exitErr, func(e error) bool {
 			var u *UninstallError
 			return errors.As(e, &u) && !u.Aborted
@@ -192,5 +189,22 @@ func TestUninstallScriptLegacyHelpers(t *testing.T) {
 	re := regexp.MustCompile(wgpProcRE)
 	if !re.MatchString(legacy.WGPlusBinary+" --helper --socket=x") || re.MatchString("/bin/sh -c "+script) {
 		t.Error("wgpProcRE must match the daemon and not the script itself")
+	}
+}
+
+// Upstream installed: rules in the shared anchor are reported (non-fatal),
+// whether or not upstream's job is loaded, and never flushed or failed on.
+func TestUninstallScriptSharedAnchorRulesPresent(t *testing.T) {
+	script := buildUninstallScript("/Applications/LockPlus.app/Contents/MacOS/lockplus-helper")
+	line := `[ $FOREIGN = 1 ] && [ -n "$(pfctl -a com.apple/wireguide -sr 2>/dev/null)$(pfctl -a com.apple/wireguide/dns -sr 2>/dev/null)" ] && echo SHARED_ANCHOR_RULES_PRESENT; `
+	i := strings.Index(script, line)
+	if i < 0 {
+		t.Fatal("missing non-fatal SHARED_ANCHOR_RULES_PRESENT check")
+	}
+	if strings.Contains(script, "SHARED_ANCHOR_RULES_LEFT") {
+		t.Error("the shared-anchor case must not be a verify failure")
+	}
+	if ok := strings.Index(script, "echo UNINSTALL_OK"); ok < i {
+		t.Error("the marker must be emitted before the final verdict")
 	}
 }

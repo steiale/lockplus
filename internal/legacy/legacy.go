@@ -8,6 +8,8 @@ package legacy
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -49,9 +51,15 @@ func Busy(ctx context.Context, socket string) (busy, reachable bool, err error) 
 	if fi, lerr := os.Lstat(socket); lerr != nil || fi.Mode()&os.ModeSocket == 0 {
 		return false, false, nil
 	}
-	if !ipc.SocketLive(socket) {
-		return false, false, nil
+	conn, derr := net.DialTimeout("unix", socket, 500*time.Millisecond)
+	if derr != nil {
+		if dialIdle(derr) {
+			return false, false, nil
+		}
+		// Timeout, EAGAIN (full backlog), …: a live but wedged helper.
+		return false, true, derr
 	}
+	conn.Close()
 	c, err := ipc.NewClient(socket)
 	if err != nil {
 		return false, true, err
@@ -140,4 +148,10 @@ func WGPlusRecognised() bool {
 		return strings.TrimSpace(string(out))
 	}
 	return read("Label") == WGPlusLabel && read("ProgramArguments.0") == WGPlusBinary
+}
+
+// dialIdle: only "nobody listens" (ECONNREFUSED) or "no socket" (ENOENT)
+// prove the helper is gone.
+func dialIdle(err error) bool {
+	return errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, syscall.ENOENT)
 }

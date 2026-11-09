@@ -94,7 +94,7 @@ func probeWireGuidePlus() int {
 				}
 			}
 			if gid < 0 {
-				gid = 20 // staff
+				gid = int(st.Gid) // the socket's group
 			}
 			if err := syscall.Setgroups([]int{gid}); err != nil {
 				log.Println("probe: setgroups:", err)

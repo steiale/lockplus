@@ -288,6 +288,7 @@
     "trash_do": "In den Papierkorb legen",
     "blocked_wgplus_running_late": "WireGuide+ (die alte Version von LockPlus) wurde inzwischen geöffnet. Beende WireGuide+ und versuche es dann erneut. Deine LockPlus-Tunnel wurden getrennt; entfernt wurde nichts.",
     "blocked_wgplus_busy_late": "WireGuide+ (die alte Version von LockPlus) hat noch einen Tunnel verbunden oder den Kill Switch aktiv. Trenne die Verbindung in WireGuide+ (oder starte den Mac neu) und versuche es dann erneut. Deine LockPlus-Tunnel wurden getrennt; WireGuide+ wurde nicht verändert.",
-    "blocked_wgplus_probe": "LockPlus konnte nicht prüfen, ob WireGuide+ (die alte Version von LockPlus) noch verbunden ist. Starte den Mac neu und versuche es dann erneut. Deine LockPlus-Tunnel wurden getrennt; WireGuide+ wurde nicht verändert."
+    "blocked_wgplus_probe": "LockPlus konnte nicht prüfen, ob WireGuide+ (die alte Version von LockPlus) noch verbunden ist. Starte den Mac neu und versuche es dann erneut. Deine LockPlus-Tunnel wurden getrennt; WireGuide+ wurde nicht verändert.",
+    "warning_shared_anchor": "WireGuide ist installiert und teilt einen Firewall-Anker mit LockPlus; dort sind noch Regeln aktiv. Falls deine Verbindung blockiert ist, verbinde WireGuide neu oder starte deinen Mac neu."
   }
 }

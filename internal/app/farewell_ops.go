@@ -55,6 +55,7 @@ type farewellRuntime struct {
 	configDir string
 	busy      bool
 	verified  *farewell.Verified
+	warning   string
 }
 
 // SetFarewell wires the farewell flow (internal/gui calls it once).
@@ -81,6 +82,9 @@ type FarewellStatus struct {
 	Busy bool `json:"busy"`
 	// Cancelled: the last move stopped at the admin prompt; nothing removed.
 	Cancelled bool `json:"cancelled,omitempty"`
+	// Warning: the move succeeded with a caveat ("shared_anchor": rules are
+	// still loaded in the pf anchor shared with upstream WireGuide).
+	Warning string `json:"warning,omitempty"`
 	// Brew: installed with Homebrew (the hand-over text differs).
 	Brew bool `json:"brew"`
 	// Supported: this Mac runs LockPlus 2 (macOS 26+). Otherwise "Move" is
@@ -107,6 +111,7 @@ func (s *TunnelService) farewellStatusLocked() FarewellStatus {
 		HelperInstalled: elevate.HelperInstalled(),
 		Remnants:        elevate.HelperRemnants(),
 		Busy:            s.farewell.busy,
+		Warning:         s.farewell.warning,
 		Brew:            update.IsBrewInstall(),
 		Supported:       farewell.LockPlus2Supported(),
 		OldApps:         legacy.OldApps(bundleIDOf),
@@ -244,7 +249,14 @@ func (s *TunnelService) MoveToLockPlus2() (FarewellStatus, error) {
 			st.Blocked = blocked + "_late"
 			return st, nil
 		}
-		if err := elevate.UninstallHelper(); err != nil {
+		err := elevate.UninstallHelper()
+		if errors.Is(err, elevate.ErrSharedAnchorRules) {
+			s.farewell.mu.Lock()
+			s.farewell.warning = "shared_anchor"
+			s.farewell.mu.Unlock()
+			err = nil
+		}
+		if err != nil {
 			var ue *elevate.UninstallError
 			switch {
 			case errors.Is(err, elevate.ErrLegacyBusy), errors.Is(err, elevate.ErrLegacyProbe):
@@ -449,7 +461,9 @@ func UninstallHelperCLI(configDir string) error {
 		return nil
 	}
 	(&TunnelService{}).disconnectAllForFarewell()
-	if err := elevate.UninstallHelper(); err != nil {
+	if err := elevate.UninstallHelper(); errors.Is(err, elevate.ErrSharedAnchorRules) {
+		fmt.Fprintln(os.Stderr, "LockPlus: note:", err)
+	} else if err != nil {
 		var ue *elevate.UninstallError
 		if !(errors.As(err, &ue) && !ue.Aborted && !elevate.HelperInstalled()) {
 			_ = farewell.SaveState(configDir, prev)
