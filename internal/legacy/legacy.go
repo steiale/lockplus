@@ -9,8 +9,10 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/steiale/wireguide/internal/ipc"
@@ -115,4 +117,27 @@ func OldApps(bundleID func(plist string) string) []string {
 		}
 	}
 	return out
+}
+
+// WGPlusRecognised mirrors the uninstall script's identification, without
+// privileges: no WireGuide+ plist, or a root-owned regular one with the exact
+// Label and ProgramArguments[0]. An unexpected plist means the script leaves
+// the whole WireGuide+ install alone.
+func WGPlusRecognised() bool {
+	fi, err := os.Lstat(WGPlusPlist)
+	if err != nil {
+		return true
+	}
+	st, ok := fi.Sys().(*syscall.Stat_t)
+	if !fi.Mode().IsRegular() || !ok || st.Uid != 0 {
+		return false
+	}
+	read := func(key string) string {
+		out, err := exec.Command("/usr/bin/plutil", "-extract", key, "raw", "-o", "-", WGPlusPlist).Output()
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(string(out))
+	}
+	return read("Label") == WGPlusLabel && read("ProgramArguments.0") == WGPlusBinary
 }

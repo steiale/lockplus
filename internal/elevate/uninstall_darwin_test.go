@@ -165,18 +165,17 @@ func TestUninstallScriptLegacyHelpers(t *testing.T) {
 	}
 	// rm -rf only on our own two directories.
 	for _, m := range regexp.MustCompile(`rm -rf [^;]*`).FindAllString(script, -1) {
-		if m != "rm -rf "+shellQuote(socketDir) && m != "rm -rf "+shellQuote(systemDataDir) && m != "rm -rf "+shellQuote(legacy.WGPlusDataDir) {
+		if m != "rm -rf "+shellQuote(socketDir) && m != "rm -rf "+shellQuote(systemDataDir) && m != "rm -rf "+shellQuote(legacy.WGPlusDataDir) && m != "rm -rf "+shellQuote(legacy.WGPlusSocketDir) {
 			t.Errorf("rm -rf outside the known paths: %q", m)
 		}
 	}
 	// WireGuide+ socket dir only via rmdir; its data dir only when it is a
 	// real root-owned directory.
-	if !strings.Contains(script, "rmdir "+shellQuote(legacy.WGPlusSocketDir)) {
-		t.Error("WireGuide+ socket dir must be removed with rmdir")
-	}
-	d := shellQuote(legacy.WGPlusDataDir)
-	if !strings.Contains(script, "if [ ! -L "+d+" ] && [ -d "+d+" ] && [ \"$(stat -f %u "+d+")\" = 0 ]; then rm -rf "+d+"; fi") {
-		t.Error("WireGuide+ data dir rm -rf must be guarded (not a symlink, a directory, root-owned)")
+	for _, dir := range []string{legacy.WGPlusDataDir, legacy.WGPlusSocketDir} {
+		d := shellQuote(dir)
+		if !strings.Contains(script, "if [ ! -L "+d+" ] && [ -d "+d+" ] && [ \"$(stat -f %u "+d+")\" = 0 ]; then rm -rf "+d+"; fi") {
+			t.Errorf("rm -rf of %s must be guarded (not a symlink, a directory, root-owned)", dir)
+		}
 	}
 	// Its stale pf-was-enabled is never acted on.
 	if strings.Contains(script, "cat "+shellQuote(legacy.WGPlusPfWasOn)) {

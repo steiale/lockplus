@@ -108,7 +108,7 @@ func probeWireGuidePlus() int {
 				log.Println("probe: setuid:", err)
 				return 11
 			}
-			if syscall.Getuid() != uid || syscall.Geteuid() != uid || syscall.Getegid() != gid {
+			if syscall.Getuid() != uid || syscall.Geteuid() != uid || syscall.Getgid() != gid || syscall.Getegid() != gid {
 				log.Println("probe: privilege drop incomplete")
 				return 11
 			}

@@ -117,7 +117,11 @@ var (
 func HelperRemnants() []string {
 	var left []string
 	paths := append(append([]string{}, helperFiles...), socketPath, dnsJournal, pfWasEnabled)
-	paths = append(paths, legacy.WGPlusPaths...)
+	// A WireGuide+ install the script would leave alone (unexpected plist)
+	// isn't reported either: retrying couldn't change it.
+	if legacy.WGPlusRecognised() {
+		paths = append(paths, legacy.WGPlusPaths...)
+	}
 	for _, p := range paths {
 		if _, err := os.Lstat(p); err == nil {
 			left = append(left, p)
@@ -284,7 +288,9 @@ func buildUninstallScript(exe string) string {
 	//    enabled since by something else (Internet Sharing, a pf frontend),
 	//    and leaving pf on with Apple's pf.conf blocks nothing.
 	w(`[ $WGP_PLIST = 1 ] && rm -f %s; [ $WGP_BIN = 1 ] && rm -f %s; `, q(legacy.WGPlusPlist), q(legacy.WGPlusBinary))
-	w(`rm -f %s %s; rmdir %s 2>/dev/null; `, q(legacy.WGPlusSocket), q(legacy.WGPlusLog), q(legacy.WGPlusSocketDir))
+	w(`rm -f %s %s; `, q(legacy.WGPlusSocket), q(legacy.WGPlusLog))
+	w(`if [ ! -L %s ] && [ -d %s ] && [ "$(stat -f %%u %s)" = 0 ]; then rm -rf %s; fi; `,
+		q(legacy.WGPlusSocketDir), q(legacy.WGPlusSocketDir), q(legacy.WGPlusSocketDir), q(legacy.WGPlusSocketDir))
 	//    Its root data dir holds only helper state (pf-was-enabled, ovpn-run,
 	//    tunnel-states): removed when it is a real root-owned directory.
 	w(`if [ ! -L %s ] && [ -d %s ] && [ "$(stat -f %%u %s)" = 0 ]; then rm -rf %s; fi; fi; `,
@@ -352,7 +358,7 @@ func interpretUninstallOutput(out string, err error) error {
 		return &UninstallError{Output: out, Aborted: true, HelperDown: down, Err: err}
 	case strings.Contains(out, "SHARED_ANCHOR_RULES_LEFT"):
 		slog.Error("helper removed, but firewall rules shared with WireGuide are still loaded", "output", out)
-		return &UninstallError{Output: "firewall rules in com.apple/wireguide (shared with WireGuide) are still loaded; disconnect in WireGuide or restart your Mac", Err: err}
+		return &UninstallError{Output: "firewall rules in com.apple/wireguide (shared with WireGuide) are still loaded; disconnect in WireGuide or restart your Mac\n" + out, Err: err}
 	case strings.Contains(out, "UNINSTALL_INCOMPLETE"):
 		slog.Error("helper removal incomplete", "output", out)
 		return &UninstallError{Output: out, Err: err}
