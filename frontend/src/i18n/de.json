@@ -145,11 +145,6 @@
     "proceed": "Jetzt aktualisieren",
     "cancel": "Später"
   },
-  "kofi": {
-    "banner_text": "LockPlus gefällt dir? Es ist kostenlos — aber ein Kaffee hält es am Laufen. (einmalige Erinnerung)",
-    "buy_coffee": "Kauf mir einen Kaffee",
-    "dismiss": "Schließen"
-  },
   "history": {
     "title": "Verlauf",
     "no_history": "Noch kein Verbindungsverlauf",
@@ -246,5 +241,41 @@
     "skip": "Überspringen",
     "continue": "Weiter",
     "selected_configs": "Ausgewählte Konfigurationen"
+  },
+  "farewell": {
+    "title": "LockPlus 2 ist da",
+    "subtitle": "Nativ für macOS neu gebaut, auf Apples Network-Extension-Framework. Den Hintergrund-Helfer von LockPlus 1 braucht es nicht mehr.",
+    "migrate_title": "Was LockPlus 2 beim ersten Start übernimmt",
+    "migrate_profiles": "Alle WireGuard- und OpenVPN-Profile",
+    "migrate_policy": "Kill-Switch- und DNS-Schutz-Einstellungen",
+    "migrate_wifi": "WLAN-Regeln zum automatischen Verbinden und vertrauenswürdige Netzwerke",
+    "migrate_history": "Verbindungsverlauf",
+    "migrate_credentials": "Gespeicherte OpenVPN-Benutzernamen (und gespeicherte Passwörter, wenn du es erlaubst)",
+    "migrate_note": "Deine Daten von LockPlus 1 bleiben auf diesem Mac. Nichts wird gelöscht.",
+    "eol": "LockPlus 1.2 ist die letzte Version von LockPlus 1. Weitere Updates gibt es nicht.",
+    "move_explain": "Jetzt umsteigen: LockPlus 1 trennt deine Tunnel und entfernt seinen Hintergrund-Helfer (macOS fragt nach deinem Administratorpasswort). Danach lädt es LockPlus 2 für dich herunter.",
+    "later_explain": "Später: LockPlus 1 vorerst weiter nutzen. Umsteigen kannst du jederzeit über das Banner oben.",
+    "move_now": "Jetzt zu LockPlus 2 wechseln",
+    "later": "Später",
+    "close": "Schließen",
+    "working": "Tunnel werden getrennt und der Helfer von LockPlus 1 wird entfernt …",
+    "cancelled": "Nichts wurde entfernt. Deine Tunnel wurden getrennt; LockPlus 1 funktioniert weiter.",
+    "failed": "Der Helfer konnte nicht entfernt werden: {error}",
+    "removed_title": "Der Helfer von LockPlus 1 wurde entfernt",
+    "removed_body": "Der Hintergrunddienst von LockPlus 1 läuft nicht mehr. Installiere LockPlus 2, um dich wieder zu verbinden; es übernimmt beim ersten Start deine Profile und Einstellungen.",
+    "remnants": "Einige Teile sind noch vorhanden: {items}. Wiederhole das Entfernen; hilft das nicht, starte den Mac neu und versuche es erneut.",
+    "download": "LockPlus 2 herunterladen",
+    "downloading": "LockPlus 2 wird heruntergeladen und geprüft …",
+    "verified": "LockPlus {version} ist heruntergeladen und geprüft: vom LockPlus-Entwickler signiert und von Apple notarisiert.",
+    "open_installer": "Installer öffnen",
+    "installer_hint": "LockPlus 1 wird beendet. Ziehe LockPlus in den Ordner „Programme“ und wähle „Ersetzen“.",
+    "download_failed": "Der Download hat nicht geklappt: {error}",
+    "open_page": "Im Browser herunterladen",
+    "keep_v1": "LockPlus 1 weiter nutzen",
+    "keep_v1_hint": "Installiert den Helfer wieder (Administratorpasswort).",
+    "banner": "LockPlus 2 ist da, nativ für macOS neu gebaut. LockPlus 1 erhält keine Updates mehr.",
+    "banner_action": "Zu LockPlus 2 wechseln …",
+    "retry_removal": "Entfernen wiederholen",
+    "brew_hint": "Du hast LockPlus mit Homebrew installiert. Das Ersetzen funktioniert genauso; Homebrew führt das Cask lockplus weiter, bis es auf LockPlus 2 umgestellt wird."
   }
 }

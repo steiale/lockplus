@@ -11,6 +11,7 @@ export {
     ConnectionStatus,
     DNSLeakResult,
     DNSServer,
+    FarewellStatus,
     FoundConfig,
     RouteEntry,
     SavedCredentials,

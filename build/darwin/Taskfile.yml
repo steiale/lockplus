@@ -294,6 +294,16 @@ tasks:
           FALLBACK=$(sed -nE 's/^[[:space:]]*fallbackVersion[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' internal/update/checker.go)
           [ -n "${FALLBACK}" ] && [ "${FALLBACK}" = "${PLIST}" ]
         msg: "fallbackVersion in internal/update/checker.go must equal CFBundleShortVersionString in build/darwin/Info.plist."
+      # v1.2.0: the LockPlus 2 download URL must be the real one. Test builds
+      # (E2E, which point the app at a local server) set
+      # FAREWELL_ALLOW_PLACEHOLDER=1.
+      - sh: '! grep -q "LockPlus2DMGURL = \"https://lockplus.invalid" internal/farewell/farewell.go || [ "${FAREWELL_ALLOW_PLACEHOLDER:-}" = "1" ]'
+        msg: "Set LockPlus2DMGURL in internal/farewell/farewell.go to the final LockPlus 2 DMG URL (FAREWELL_ALLOW_PLACEHOLDER=1 only for test builds)."
+      # No extra build tags in a release: EXTRA_TAGS=farewell_e2e produces a
+      # test build (download URL override, version "<v>-e2e"). Only with an
+      # explicit FAREWELL_E2E_BUILD=1, and never for publishing.
+      - sh: '[ -z "{{.EXTRA_TAGS}}" ] || [ "${FAREWELL_E2E_BUILD:-}" = "1" ]'
+        msg: "The release task refuses EXTRA_TAGS. Test builds only: FAREWELL_E2E_BUILD=1 (never publish them)."
     cmds:
       - task: sign:notarize
       - |

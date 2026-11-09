@@ -115,6 +115,17 @@ export function DisconnectTunnel(name) {
 }
 
 /**
+ * DownloadLockPlus2 downloads and verifies LockPlus 2 (Developer ID team,
+ * bundle ID, notarization). On failure the frontend offers the browser.
+ * @returns {$CancellablePromise<$models.FarewellStatus>}
+ */
+export function DownloadLockPlus2() {
+    return $Call.ByID(1227190265).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType4($result);
+    }));
+}
+
+/**
  * ExportAllTunnels bundles every stored tunnel's config into a single zip
  * (mirroring ImportZip's format, so the result can be re-imported directly)
  * via a native save dialog. Returns the saved path, or empty string if the
@@ -133,6 +144,16 @@ export function ExportAllTunnels() {
  */
 export function ExportTunnel(name) {
     return $Call.ByID(2791885822, name);
+}
+
+/**
+ * FarewellLater keeps LockPlus 1 running as before (helper started, upgraded
+ * if needed) and remembers the answer; the app shows a banner instead. A
+ * failed state write is reported but never keeps the VPN from starting.
+ * @returns {$CancellablePromise<void>}
+ */
+export function FarewellLater() {
+    return $Call.ByID(3739232776);
 }
 
 /**
@@ -172,7 +193,7 @@ export function GetConfigText(name) {
  */
 export function GetConnectionHistory() {
     return $Call.ByID(4142379542).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType5($result);
+        return $$createType6($result);
     }));
 }
 
@@ -184,6 +205,16 @@ export function GetConnectionHistory() {
  */
 export function GetCurrentSSID() {
     return $Call.ByID(1781422564);
+}
+
+/**
+ * GetFarewellStatus returns the current farewell state.
+ * @returns {$CancellablePromise<$models.FarewellStatus>}
+ */
+export function GetFarewellStatus() {
+    return $Call.ByID(3067250604).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType4($result);
+    }));
 }
 
 /**
@@ -202,7 +233,7 @@ export function GetLocationAuthStatus() {
  */
 export function GetRoutingTable() {
     return $Call.ByID(2660289744).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType7($result);
+        return $$createType8($result);
     }));
 }
 
@@ -215,7 +246,7 @@ export function GetRoutingTable() {
  */
 export function GetSavedCredentials(tunnelName) {
     return $Call.ByID(1122228093, tunnelName).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType9($result);
+        return $$createType10($result);
     }));
 }
 
@@ -224,7 +255,7 @@ export function GetSavedCredentials(tunnelName) {
  */
 export function GetSettings() {
     return $Call.ByID(1159302687).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType11($result);
+        return $$createType12($result);
     }));
 }
 
@@ -236,7 +267,7 @@ export function GetSettings() {
  */
 export function GetStatus() {
     return $Call.ByID(3347375428).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType13($result);
+        return $$createType14($result);
     }));
 }
 
@@ -248,7 +279,7 @@ export function GetStatus() {
  */
 export function GetTunnelDetail(name) {
     return $Call.ByID(881582661, name).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType15($result);
+        return $$createType16($result);
     }));
 }
 
@@ -277,7 +308,7 @@ export function GetTunnelLatency(name) {
  */
 export function GetTunnelMeta(name) {
     return $Call.ByID(402927985, name).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType17($result);
+        return $$createType18($result);
     }));
 }
 
@@ -296,7 +327,7 @@ export function GetVersion() {
  */
 export function GetWifiRules() {
     return $Call.ByID(2048144510).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType19($result);
+        return $$createType20($result);
     }));
 }
 
@@ -309,7 +340,7 @@ export function GetWifiRules() {
  */
 export function ImportConfig(name, content) {
     return $Call.ByID(188679809, name, content).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType21($result);
+        return $$createType22($result);
     }));
 }
 
@@ -324,7 +355,7 @@ export function ImportConfig(name, content) {
  */
 export function ImportFile(filename, content) {
     return $Call.ByID(2721946621, filename, content).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType21($result);
+        return $$createType22($result);
     }));
 }
 
@@ -337,7 +368,7 @@ export function ImportFile(filename, content) {
  */
 export function ImportFoundConfigs(paths) {
     return $Call.ByID(1596298812, paths).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType23($result);
+        return $$createType24($result);
     }));
 }
 
@@ -374,7 +405,7 @@ export function ImportQRFromPath(path) {
  */
 export function ImportZip(path) {
     return $Call.ByID(2515408722, path).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType23($result);
+        return $$createType24($result);
     }));
 }
 
@@ -386,7 +417,7 @@ export function ImportZip(path) {
  */
 export function ImportZipData(data) {
     return $Call.ByID(368497186, data).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType23($result);
+        return $$createType24($result);
     }));
 }
 
@@ -398,6 +429,16 @@ export function ImportZipData(data) {
  */
 export function IsHelperReady() {
     return $Call.ByID(3400283157);
+}
+
+/**
+ * KeepUsingLockPlus1 undoes a move: reinstalls the helper (admin prompt) and
+ * the login item if "Launch at startup" is still on. A cancelled admin prompt
+ * returns to the "moved" state instead of the Retry/Quit dialog.
+ * @returns {$CancellablePromise<void>}
+ */
+export function KeepUsingLockPlus1() {
+    return $Call.ByID(2625542885);
 }
 
 /**
@@ -414,7 +455,20 @@ export function IsHelperReady() {
  */
 export function ListTunnels() {
     return $Call.ByID(3011645541).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType24($result);
+        return $$createType25($result);
+    }));
+}
+
+/**
+ * MoveToLockPlus2 removes the helper and the login items. Idempotent: with
+ * nothing left to remove it skips the admin prompt. A cancelled prompt
+ * returns a status with Cancelled set (no error) and leaves LockPlus 1 as it
+ * was (tunnels stay disconnected).
+ * @returns {$CancellablePromise<$models.FarewellStatus>}
+ */
+export function MoveToLockPlus2() {
+    return $Call.ByID(2681887961).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType4($result);
     }));
 }
 
@@ -425,6 +479,25 @@ export function ListTunnels() {
  */
 export function OpenLocationSettings() {
     return $Call.ByID(403715592);
+}
+
+/**
+ * OpenLockPlus2DownloadPage opens the LockPlus 2 download in the browser (the
+ * fallback when the in-app download can't be used).
+ * @returns {$CancellablePromise<void>}
+ */
+export function OpenLockPlus2DownloadPage() {
+    return $Call.ByID(1074857598);
+}
+
+/**
+ * OpenLockPlus2Installer re-verifies the downloaded DMG, opens that same file
+ * in Finder and quits LockPlus 1, so dragging LockPlus 2 onto Applications can
+ * replace it (Finder refuses to replace a running app).
+ * @returns {$CancellablePromise<void>}
+ */
+export function OpenLockPlus2Installer() {
+    return $Call.ByID(252670019);
 }
 
 /**
@@ -501,7 +574,7 @@ export function ResizeToFit(tunnelCount) {
  */
 export function RunDNSLeakTest() {
     return $Call.ByID(2844578013).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType26($result);
+        return $$createType27($result);
     }));
 }
 
@@ -585,7 +658,7 @@ export function SaveWifiRules(rules) {
  */
 export function ScanForWireGuardConfigs() {
     return $Call.ByID(2588850719).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType28($result);
+        return $$createType29($result);
     }));
 }
 
@@ -666,7 +739,7 @@ export function UpdateConfig(name, content) {
  */
 export function ValidateConfig(content) {
     return $Call.ByID(3943944654, content).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType29($result);
+        return $$createType30($result);
     }));
 }
 
@@ -675,29 +748,30 @@ const $$createType0 = tunnel$0.ConflictInfo.createFrom;
 const $$createType1 = $Create.Array($$createType0);
 const $$createType2 = update$0.UpdateInfo.createFrom;
 const $$createType3 = $Create.Nullable($$createType2);
-const $$createType4 = history$0.Session.createFrom;
-const $$createType5 = $Create.Array($$createType4);
-const $$createType6 = $models.RouteEntry.createFrom;
-const $$createType7 = $Create.Array($$createType6);
-const $$createType8 = $models.SavedCredentials.createFrom;
-const $$createType9 = $Create.Nullable($$createType8);
-const $$createType10 = storage$0.Settings.createFrom;
-const $$createType11 = $Create.Nullable($$createType10);
-const $$createType12 = domain$0.ConnectionStatus.createFrom;
-const $$createType13 = $Create.Nullable($$createType12);
-const $$createType14 = domain$0.WireGuardConfig.createFrom;
-const $$createType15 = $Create.Nullable($$createType14);
-const $$createType16 = storage$0.TunnelMeta.createFrom;
-const $$createType17 = $Create.Nullable($$createType16);
-const $$createType18 = wifi$0.Rules.createFrom;
-const $$createType19 = $Create.Nullable($$createType18);
-const $$createType20 = $models.TunnelInfo.createFrom;
-const $$createType21 = $Create.Nullable($$createType20);
-const $$createType22 = $models.ZipImportResult.createFrom;
-const $$createType23 = $Create.Array($$createType22);
-const $$createType24 = $Create.Array($$createType20);
-const $$createType25 = $models.DNSLeakResult.createFrom;
-const $$createType26 = $Create.Nullable($$createType25);
-const $$createType27 = $models.FoundConfig.createFrom;
-const $$createType28 = $Create.Array($$createType27);
-const $$createType29 = $Create.Array($Create.Any);
+const $$createType4 = $models.FarewellStatus.createFrom;
+const $$createType5 = history$0.Session.createFrom;
+const $$createType6 = $Create.Array($$createType5);
+const $$createType7 = $models.RouteEntry.createFrom;
+const $$createType8 = $Create.Array($$createType7);
+const $$createType9 = $models.SavedCredentials.createFrom;
+const $$createType10 = $Create.Nullable($$createType9);
+const $$createType11 = storage$0.Settings.createFrom;
+const $$createType12 = $Create.Nullable($$createType11);
+const $$createType13 = domain$0.ConnectionStatus.createFrom;
+const $$createType14 = $Create.Nullable($$createType13);
+const $$createType15 = domain$0.WireGuardConfig.createFrom;
+const $$createType16 = $Create.Nullable($$createType15);
+const $$createType17 = storage$0.TunnelMeta.createFrom;
+const $$createType18 = $Create.Nullable($$createType17);
+const $$createType19 = wifi$0.Rules.createFrom;
+const $$createType20 = $Create.Nullable($$createType19);
+const $$createType21 = $models.TunnelInfo.createFrom;
+const $$createType22 = $Create.Nullable($$createType21);
+const $$createType23 = $models.ZipImportResult.createFrom;
+const $$createType24 = $Create.Array($$createType23);
+const $$createType25 = $Create.Array($$createType21);
+const $$createType26 = $models.DNSLeakResult.createFrom;
+const $$createType27 = $Create.Nullable($$createType26);
+const $$createType28 = $models.FoundConfig.createFrom;
+const $$createType29 = $Create.Array($$createType28);
+const $$createType30 = $Create.Array($Create.Any);

@@ -22,6 +22,11 @@ func main() {
 	socketPath := flag.String("socket", "", "socket path for IPC")
 	socketUID := flag.Int("uid", -1, "socket owner UID")
 	dataDir := flag.String("data-dir", "", "data directory")
+	// --cleanup-only: the v1.2.0 farewell uninstall runs a codesign-verified,
+	// root-owned copy of this binary once, after `launchctl bootout`, to undo
+	// whatever the stopped helper left behind (pf, routes, DNS, openvpn), then
+	// exits. Never serves IPC.
+	cleanupOnly := flag.Bool("cleanup-only", false, "run crash recovery once and exit (uninstall)")
 	flag.Parse()
 
 	if *socketPath == "" {
@@ -29,6 +34,13 @@ func main() {
 	}
 	if *dataDir == "" {
 		*dataDir = systemDataDir()
+	}
+	if *cleanupOnly {
+		if err := helper.RecoverOnly(*socketPath, *dataDir); err != nil {
+			log.Fatal("cleanup error:", err)
+		}
+		log.Println("LockPlus helper cleanup complete")
+		return
 	}
 	log.Println("LockPlus helper starting...")
 	if err := helper.Run(*socketPath, *socketUID, *dataDir); err != nil {

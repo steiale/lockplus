@@ -145,11 +145,6 @@
     "proceed": "更新する",
     "cancel": "あとで"
   },
-  "kofi": {
-    "banner_text": "LockPlus は気に入っていますか? 無料ですが、コーヒー1杯が開発の継続を支えます。(一度だけの表示)",
-    "buy_coffee": "コーヒーをおごる",
-    "dismiss": "閉じる"
-  },
   "history": {
     "title": "履歴",
     "no_history": "接続履歴はまだありません",

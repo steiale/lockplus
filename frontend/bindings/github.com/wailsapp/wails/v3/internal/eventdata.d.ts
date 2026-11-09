@@ -19,6 +19,7 @@ declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
             "auth_prompt": ipc$0.AuthPromptEventPayload;
+            "farewell": {};
             "files-dropped": { [_ in string]?: any };
             "helper": gui$0.HelperEvent;
             "helper_reset": {};

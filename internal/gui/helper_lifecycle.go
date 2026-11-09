@@ -198,6 +198,12 @@ func startHelperHealthMonitor(app *application.App, clients *ipc.ClientHolder, s
 			case <-ticker.C:
 			}
 
+			// Retired for LockPlus 2 (v1.2.0): never "recover" (reinstall)
+			// a helper the user just removed.
+			if helperCtl.isRetired() {
+				wasAlive = true
+				continue
+			}
 			c := clients.Get()
 			if c == nil {
 				continue // client may be temporarily nil during swap; keep ticking
@@ -382,10 +388,20 @@ func recoverHelper(clients *ipc.ClientHolder, settingsStore *storage.SettingsSto
 	}()
 	defer close(earlyExit)
 
+	helperCtl.lockInstall()
+	if helperCtl.isRetired() {
+		helperCtl.unlockInstall()
+		return false, nil
+	}
 	newClient, err := ensureHelper(ctx, dataDir)
+	helperCtl.unlockInstall()
 	if err != nil {
 		slog.Debug("helper recovery attempt failed", "error", err)
 		return false, err
+	}
+	if helperCtl.isRetired() {
+		newClient.Close()
+		return false, nil
 	}
 	pushPersistedSettings(newClient, settingsStore) // before the client is usable
 	clients.Set(newClient)

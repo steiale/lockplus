@@ -104,8 +104,8 @@ func TestIsNewerVersion_EmptyStrings(t *testing.T) {
 
 func TestCurrentVersion(t *testing.T) {
 	got := CurrentVersion()
-	if got != fallbackVersion {
-		t.Errorf("CurrentVersion() = %q, want %q", got, fallbackVersion)
+	if got != fallbackVersion+buildSuffix {
+		t.Errorf("CurrentVersion() = %q, want %q", got, fallbackVersion+buildSuffix)
 	}
 	// Sanity: should look like a semver string.
 	parts := strings.Split(got, ".")

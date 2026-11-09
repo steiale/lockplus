@@ -2,6 +2,36 @@
 
 All notable changes to WireGuide will be documented in this file.
 
+## [1.2.0] "Farewell" - unreleased
+
+The last release of LockPlus 1 (Go). It hands users over to LockPlus 2, the
+native macOS rewrite. See docs/FAREWELL-1.2.0.md.
+
+### Added
+- "LockPlus 2 is here" screen on launch: what LockPlus 2 copies (profiles,
+  kill switch / DNS settings, Wi-Fi rules, history, saved OpenVPN usernames),
+  that 1.x gets no further updates, and a choice between "Move to LockPlus 2
+  now" and "Later". The helper isn't started or upgraded until the user
+  chooses, so moving costs one administrator prompt.
+- "Move to LockPlus 2 now": disconnects every tunnel, removes the privileged
+  helper as root (LaunchDaemon, helper and openvpn binaries, socket, helper
+  log, pf anchors, pf enable state, orphaned routes, DNS overrides, helper
+  state) with a root-side verification, removes the 1.0.x LaunchAgent and the
+  1.1.0 login item, then downloads LockPlus 2 and opens it only after checking
+  the Developer ID team, bundle ID and notarization. Idempotent; a cancelled
+  prompt or a failed cleanup leaves LockPlus 1 working.
+- "Later" keeps LockPlus 1 fully working, with a banner to move any time.
+  After a move, "Keep using LockPlus 1" reinstalls the helper.
+- Helper `--cleanup-only` mode (the uninstall's recovery pass).
+
+### Removed
+- The Ko-fi banner.
+
+### Unchanged on purpose
+- `~/Library/Application Support/lockplus` and the OpenVPN keychain items stay
+  for LockPlus 2's importer; `auto_start` in config.json is kept so LockPlus 2
+  can offer "Launch at login".
+
 ## [0.1.8] - 2026-04-13
 
 ### Changed

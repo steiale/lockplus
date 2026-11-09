@@ -51,6 +51,9 @@ type TunnelService struct {
 	// never trusts URLs/hashes supplied by the frontend.
 	updateMu   sync.Mutex
 	lastUpdate *update.UpdateInfo
+
+	// farewell is the v1.2.0 move-to-LockPlus-2 state (farewell_ops.go).
+	farewell farewellRuntime
 }
 
 // NewTunnelService creates a service. Set the app reference via the package-level SetApp()

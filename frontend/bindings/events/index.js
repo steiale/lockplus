@@ -12,6 +12,11 @@ import "../github.com/wailsapp/wails/v3/internal/eventcreate.js";
 export const AuthPrompt = "auth_prompt";
 
 /**
+ * Name of the custom event "farewell".
+ */
+export const Farewell = "farewell";
+
+/**
  * Name of the custom event "files-dropped".
  */
 export const FilesDropped = "files-dropped";

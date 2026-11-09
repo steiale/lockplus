@@ -20,6 +20,7 @@ import (
 	wgapp "github.com/steiale/wireguide/internal/app"
 	"github.com/steiale/wireguide/internal/domain"
 	"github.com/steiale/wireguide/internal/elevate"
+	"github.com/steiale/wireguide/internal/farewell"
 	"github.com/steiale/wireguide/internal/history"
 	"github.com/steiale/wireguide/internal/ipc"
 	"github.com/steiale/wireguide/internal/storage"
@@ -53,6 +54,9 @@ func init() {
 	application.RegisterEvent[struct{}]("helper_reset")
 	application.RegisterEvent[ipc.AuthPromptEventPayload]("auth_prompt")
 	application.RegisterEvent[TrayErrorEvent]("tray_error")
+	// "farewell": the farewell state changed behind the frontend's back
+	// (a cancelled "Keep using LockPlus 1" went back to "moved").
+	application.RegisterEvent[struct{}]("farewell")
 }
 
 // Run starts the GUI process. Blocks until the Wails app exits.
@@ -265,11 +269,27 @@ func Run(assetsHandler http.Handler, dataDir string) error {
 	// sync.Once guards against ApplicationStarted firing multiple times
 	// (e.g. activate/reopen on macOS) — we only want one bootstrap goroutine
 	// no matter how many times the event fires.
+	//
+	// v1.2.0 "Farewell": the helper only starts once the user chose "Later"
+	// on the LockPlus 2 screen (see helperControl).
+	helperCtl = &helperControl{app: app, clients: clients, bridge: bridge, settingsStore: settingsStore, dataDir: dataDir}
+	wgapp.SetFarewell(tunnelService, paths.ConfigDir, wgapp.FarewellHooks{
+		StartHelper:  helperCtl.start,
+		RetireHelper: helperCtl.retire,
+	})
 	var bootstrapOnce sync.Once
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(_ *application.ApplicationEvent) {
 		bootstrapOnce.Do(func() {
-			go bootstrapHelper(app, clients, bridge, settingsStore, dataDir)
-			go wgapp.MigrateAutostart(tunnelService)
+			switch farewell.LoadState(paths.ConfigDir).Choice {
+			case farewell.ChoiceLater:
+				helperCtl.start(nil)
+				go wgapp.MigrateAutostart(tunnelService)
+			case farewell.ChoiceMoved:
+				helperCtl.markRetired()
+				slog.Info("farewell: the helper was removed for LockPlus 2; not starting it")
+			default:
+				slog.Info("farewell: waiting for the LockPlus 2 choice before starting the helper")
+			}
 		})
 	})
 
@@ -289,7 +309,11 @@ func Run(assetsHandler http.Handler, dataDir string) error {
 // Splitting this from Run() lets app.Run() reach the AppKit main loop without
 // being blocked by the privileged helper install (which can take several
 // seconds and shows a modal admin password prompt on first launch).
-func bootstrapHelper(app *application.App, clients *ipc.ClientHolder, bridge *eventBridge, settingsStore *storage.SettingsStore, dataDir string) {
+//
+// onCancel (v1.2.0): if set, a cancelled admin prompt calls it instead of the
+// Retry/Quit dialog. A retired helper (the user moved to LockPlus 2 meanwhile)
+// ends the bootstrap silently: no dialog, no quit, no client.
+func bootstrapHelper(app *application.App, clients *ipc.ClientHolder, bridge *eventBridge, settingsStore *storage.SettingsStore, dataDir string, onCancel func()) {
 	// Tell the frontend a connection is being established. The toast plumbing
 	// in App.svelte shows this as "Connecting to helper..." instead of an
 	// alarming "Helper process disconnected" message.
@@ -304,12 +328,28 @@ func bootstrapHelper(app *application.App, clients *ipc.ClientHolder, bridge *ev
 		// timeouts (2s for the initial ping, 60s fresh poll after SpawnHelper).
 		// A deadline on the outer context races with SpawnHelper and cancels
 		// the poll immediately when both expire at the same time.
+		if helperCtl.isRetired() {
+			return
+		}
 		var err error
+		helperCtl.lockInstall()
+		if helperCtl.isRetired() {
+			helperCtl.unlockInstall()
+			return
+		}
 		newClient, err = ensureHelper(context.Background(), dataDir)
+		helperCtl.unlockInstall()
 		if err == nil {
 			break
 		}
 		slog.Warn("helper connection failed", "attempt", attempt+1, "error", err)
+		if helperCtl.isRetired() {
+			return
+		}
+		if onCancel != nil && errors.Is(err, elevate.ErrUserCancelled) {
+			onCancel()
+			return
+		}
 
 		// launchd refused to load the daemon (blocked Login Item / untrusted
 		// signature). Retrying the same osascript install will keep failing —
@@ -350,6 +390,12 @@ func bootstrapHelper(app *application.App, clients *ipc.ClientHolder, bridge *ev
 		failCmd := `display dialog "LockPlus could not start its helper service.\n\nPlease quit any other running copies of LockPlus and try again." buttons {"Quit"} default button "Quit" with title "LockPlus" with icon stop`
 		_, _ = exec.Command("/usr/bin/osascript", "-e", failCmd).Output()
 		app.Quit()
+		return
+	}
+
+	// The user moved to LockPlus 2 while this bootstrap ran: don't use it.
+	if helperCtl.isRetired() {
+		newClient.Close()
 		return
 	}
 

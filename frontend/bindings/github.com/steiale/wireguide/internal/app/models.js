@@ -126,6 +126,98 @@ export class DNSServer {
 }
 
 /**
+ * FarewellStatus is what the "LockPlus 2 is here" screen shows.
+ */
+export class FarewellStatus {
+    /**
+     * Creates a new FarewellStatus instance.
+     * @param {Partial<FarewellStatus>} [$$source = {}] - The source object to create the FarewellStatus.
+     */
+    constructor($$source = {}) {
+        if (!("choice" in $$source)) {
+            /**
+             * Choice: "" (not answered), "later", "moved".
+             * @member
+             * @type {string}
+             */
+            this["choice"] = "";
+        }
+        if (!("helper_installed" in $$source)) {
+            /**
+             * HelperInstalled: the LaunchDaemon plist exists.
+             * @member
+             * @type {boolean}
+             */
+            this["helper_installed"] = false;
+        }
+        if (!("remnants" in $$source)) {
+            /**
+             * Remnants: helper files/state still on disk (empty = clean, as far as
+             * LockPlus 2 can tell).
+             * @member
+             * @type {string[]}
+             */
+            this["remnants"] = [];
+        }
+        if (!("download_ready" in $$source)) {
+            /**
+             * DownloadReady: a verified LockPlus 2 DMG is waiting to be opened.
+             * @member
+             * @type {boolean}
+             */
+            this["download_ready"] = false;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["new_version"] = undefined;
+        }
+        if (!("busy" in $$source)) {
+            /**
+             * Busy: a move or download is running.
+             * @member
+             * @type {boolean}
+             */
+            this["busy"] = false;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * Cancelled: the last move stopped at the admin prompt; nothing removed.
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["cancelled"] = undefined;
+        }
+        if (!("brew" in $$source)) {
+            /**
+             * Brew: installed with Homebrew (the hand-over text differs).
+             * @member
+             * @type {boolean}
+             */
+            this["brew"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new FarewellStatus instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {FarewellStatus}
+     */
+    static createFrom($$source = {}) {
+        const $$createField2_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("remnants" in $$parsedSource) {
+            $$parsedSource["remnants"] = $$createField2_0($$parsedSource["remnants"]);
+        }
+        return new FarewellStatus(/** @type {Partial<FarewellStatus>} */($$parsedSource));
+    }
+}
+
+/**
  * FoundConfig is a WireGuard .conf found on the filesystem.
  */
 export class FoundConfig {
@@ -362,3 +454,4 @@ export class ZipImportResult {
 // Private type creation functions
 const $$createType0 = DNSServer.createFrom;
 const $$createType1 = $Create.Array($$createType0);
+const $$createType2 = $Create.Array($Create.Any);

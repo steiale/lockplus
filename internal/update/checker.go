@@ -29,7 +29,7 @@ const (
 	// bundle's Info.plist cannot be read (e.g. unit tests, non-darwin
 	// builds, or running the bare binary without an enclosing .app).
 	// Keep this in sync with build/darwin/Info.plist on each release.
-	fallbackVersion = "1.1.0"
+	fallbackVersion = "1.2.0"
 
 	// minAssetSize is the minimum acceptable size for a release asset.
 	// A macOS .dmg/.zip containing WireGuide.app is always well over 1 MB;
@@ -84,11 +84,14 @@ var (
 // the process.
 func CurrentVersion() string {
 	versionOnce.Do(func() {
+		// buildSuffix is "-e2e" in farewell_e2e test builds (never in a
+		// release), so a test build is never mistaken for 1.2.0. GUI and
+		// helper are built with the same tags, so their versions still match.
 		if v := readBundleVersion(); v != "" {
-			cachedVersion = v
+			cachedVersion = v + buildSuffix
 			return
 		}
-		cachedVersion = fallbackVersion
+		cachedVersion = fallbackVersion + buildSuffix
 	})
 	return cachedVersion
 }

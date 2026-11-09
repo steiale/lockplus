@@ -145,11 +145,6 @@
     "proceed": "업데이트",
     "cancel": "나중에"
   },
-  "kofi": {
-    "banner_text": "LockPlus가 마음에 드시나요? 무료로 제공되지만, 커피 한 잔이 계속 운영하는 데 도움이 됩니다. (일회성 안내)",
-    "buy_coffee": "커피 사주기",
-    "dismiss": "닫기"
-  },
   "history": {
     "title": "기록",
     "no_history": "아직 연결 기록이 없습니다",

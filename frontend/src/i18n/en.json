@@ -145,11 +145,6 @@
     "proceed": "Update Now",
     "cancel": "Later"
   },
-  "kofi": {
-    "banner_text": "Enjoying LockPlus? It's free — but a coffee keeps it going. (one-time reminder)",
-    "buy_coffee": "Buy me a coffee",
-    "dismiss": "Dismiss"
-  },
   "history": {
     "title": "History",
     "no_history": "No connection history yet",
@@ -246,5 +241,41 @@
     "skip": "Skip",
     "continue": "Continue",
     "selected_configs": "Selected configs"
+  },
+  "farewell": {
+    "title": "LockPlus 2 is here",
+    "subtitle": "Rebuilt natively for macOS on Apple's Network Extension framework. It no longer needs LockPlus 1's background helper.",
+    "migrate_title": "What LockPlus 2 copies on its first launch",
+    "migrate_profiles": "All WireGuard and OpenVPN profiles",
+    "migrate_policy": "Kill switch and DNS protection settings",
+    "migrate_wifi": "Wi-Fi auto-connect rules and trusted networks",
+    "migrate_history": "Connection history",
+    "migrate_credentials": "Saved OpenVPN usernames (and saved passwords, if you allow it)",
+    "migrate_note": "Your LockPlus 1 data stays on this Mac. Nothing is deleted.",
+    "eol": "LockPlus 1.2 is the last version of LockPlus 1. It won't receive further updates.",
+    "move_explain": "Move now: LockPlus 1 disconnects your tunnels and removes its background helper (macOS asks for your administrator password). Then it downloads LockPlus 2 for you.",
+    "later_explain": "Later: keep using LockPlus 1 for now. You can move any time from the banner at the top.",
+    "move_now": "Move to LockPlus 2 now",
+    "later": "Later",
+    "close": "Close",
+    "working": "Disconnecting and removing the LockPlus 1 helper…",
+    "cancelled": "Nothing was removed. Your tunnels were disconnected; LockPlus 1 still works.",
+    "failed": "The helper couldn't be removed: {error}",
+    "removed_title": "The LockPlus 1 helper was removed",
+    "removed_body": "Your Mac no longer runs LockPlus 1's background service. Install LockPlus 2 to connect again; it copies your profiles and settings on first launch.",
+    "remnants": "Some items are still there: {items}. Retry the removal; if that doesn't help, restart your Mac and retry.",
+    "download": "Download LockPlus 2",
+    "downloading": "Downloading and verifying LockPlus 2…",
+    "verified": "LockPlus {version} is downloaded and verified: signed by the LockPlus developer and notarized by Apple.",
+    "open_installer": "Open Installer",
+    "installer_hint": "LockPlus 1 quits. Drag LockPlus to Applications and choose Replace.",
+    "download_failed": "The download didn't work: {error}",
+    "open_page": "Download in Browser",
+    "keep_v1": "Keep using LockPlus 1",
+    "keep_v1_hint": "Reinstalls the helper (administrator password).",
+    "banner": "LockPlus 2 is here, rebuilt natively for macOS. LockPlus 1 gets no further updates.",
+    "banner_action": "Move to LockPlus 2…",
+    "retry_removal": "Retry Removal",
+    "brew_hint": "You installed LockPlus with Homebrew. Replacing the app works the same; Homebrew keeps listing the lockplus cask until it moves to LockPlus 2."
   }
 }

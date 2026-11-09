@@ -173,24 +173,10 @@ func Run(addr string, ownerUID int, dataDir string) error {
 	ovpnBinary := filepath.Join(filepath.Dir(os.Args[0]), "openvpn")
 	ovpnRuntimeDir := filepath.Join(dataDir, "ovpn-run")
 
-	// Startup recovery from a previous helper that died without cleanup():
-	// orphaned root openvpn processes, stale pf rules, orphaned routes,
-	// overridden DNS. Runs before Serve, so no request can race it. The GUI
-	// re-pushes the firewall policy. openvpn goes first: it would otherwise
-	// keep its routes and could re-apply nothing, but holds its utun.
-	if killed := ovpn.KillStaleProcesses(ovpnRuntimeDir, ovpnBinary); len(killed) > 0 {
-		slog.Warn("startup: killed openvpn processes orphaned by a previous helper", "tunnels", killed)
-	}
-	firewall.RecoverStaleState()
-	if recovered := tunnel.RecoverFromCrash(dataDir); len(recovered) > 0 {
-		slog.Warn("recovered from previous crash", "tunnels", recovered)
-	}
-	network.SetDNSJournalPath(filepath.Join(dataDir, network.DNSJournalFile))
-	if restored, err := network.RestoreDNSFromJournal(); err != nil {
-		slog.Warn("startup: DNS journal restore failed", "error", err)
-	} else if restored {
-		slog.Warn("startup: restored original DNS from journal left by previous helper process")
-	}
+	// Startup recovery from a previous helper that died without cleanup().
+	// Runs before Serve, so no request can race it. The GUI re-pushes the
+	// firewall policy.
+	recoverStaleState(dataDir, ovpnBinary, ovpnRuntimeDir)
 
 	// OpenVPN manager: the openvpn binary MUST live next to the helper in the
 	// root-owned /Library/PrivilegedHelperTools/ (copied and codesign-verified
@@ -274,6 +260,54 @@ func Run(addr string, ownerUID int, dataDir string) error {
 	err = h.server.Serve()
 	h.cleanup()
 	return err
+}
+
+// recoverStaleState undoes what a helper that died without cleanup() left
+// behind: orphaned root openvpn processes, stale pf rules (and the pf enable
+// state it changed), orphaned routes, overridden DNS. openvpn goes first: it
+// would otherwise keep its routes and holds its utun. Returns an error only
+// for the DNS journal, the one leftover that is not cleared when restoring it
+// fails (callers must not delete the journal then: it holds the user's DNS).
+//
+// Ordering contract (the farewell uninstall relies on it): the pf flush runs
+// before anything that can fail, and the DNS journal restore — the only error
+// source — stays LAST. An aborted uninstall therefore never leaves anchors
+// loaded. Don't add an earlier error return.
+func recoverStaleState(dataDir, ovpnBinary, ovpnRuntimeDir string) error {
+	if killed := ovpn.KillStaleProcesses(ovpnRuntimeDir, ovpnBinary); len(killed) > 0 {
+		slog.Warn("startup: killed openvpn processes orphaned by a previous helper", "tunnels", killed)
+	}
+	firewall.RecoverStaleState()
+	if recovered := tunnel.RecoverFromCrash(dataDir); len(recovered) > 0 {
+		slog.Warn("recovered from previous crash", "tunnels", recovered)
+	}
+	network.SetDNSJournalPath(filepath.Join(dataDir, network.DNSJournalFile))
+	restored, err := network.RestoreDNSFromJournal()
+	if err != nil {
+		slog.Warn("startup: DNS journal restore failed", "error", err)
+	} else if restored {
+		slog.Warn("startup: restored original DNS from journal left by previous helper process")
+	}
+	return err
+}
+
+// RecoverOnly is the farewell (v1.2.0) uninstall's root cleanup pass: it runs
+// the same recovery as a helper start, without serving, then returns. The
+// uninstall script runs it after `launchctl bootout` stopped the daemon, so it
+// also covers helpers that exited without cleanup (1.0.x had no SIGTERM
+// handler) or crashed. It refuses to run while a helper still serves addr:
+// flushing a live helper's pf rules would drop its kill switch under it.
+func RecoverOnly(addr, dataDir string) error {
+	// launchctl bootout normally returns after the daemon exited; give a
+	// slow teardown up to 20 s before refusing.
+	for i := 0; ipc.SocketLive(addr); i++ {
+		if i >= 40 {
+			return fmt.Errorf("a helper is still serving %s; stop it first", addr)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	ovpnBinary := filepath.Join(filepath.Dir(os.Args[0]), "openvpn")
+	return recoverStaleState(dataDir, ovpnBinary, filepath.Join(dataDir, "ovpn-run"))
 }
 
 // reconnectFn is the reconnect monitor's callback for one tunnel. It takes

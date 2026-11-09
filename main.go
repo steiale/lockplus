@@ -10,7 +10,9 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"log"
+	"os"
 
 	"github.com/steiale/wireguide/internal/gui"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -20,6 +22,23 @@ import (
 var assets embed.FS
 
 func main() {
+	// v1.2.0: `LockPlus.app/Contents/MacOS/lockplus --uninstall-helper`
+	// removes the privileged helper without the GUI (e.g. before a Homebrew
+	// cask switches to LockPlus 2). Same root script as "Move to LockPlus 2".
+	if len(os.Args) == 2 && os.Args[1] == "--uninstall-helper" {
+		if os.Geteuid() == 0 {
+			// Run as the user: macOS asks for the password itself, and the
+			// move must be recorded in that user's LockPlus settings.
+			fmt.Fprintln(os.Stderr, "LockPlus: run --uninstall-helper as your user, not with sudo.")
+			os.Exit(2)
+		}
+		if err := gui.UninstallHelperCLI(); err != nil {
+			fmt.Fprintln(os.Stderr, "LockPlus: helper removal failed:", err)
+			os.Exit(1)
+		}
+		fmt.Println("LockPlus: the helper was removed.")
+		return
+	}
 	if err := gui.Run(application.AssetFileServerFS(assets), systemDataDir()); err != nil {
 		log.Fatal(err)
 	}

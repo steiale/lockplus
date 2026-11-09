@@ -2,7 +2,6 @@
   import { onMount, onDestroy } from 'svelte';
   import { Events } from '@wailsio/runtime';
   import TunnelCards from './lib/TunnelCards.svelte';
-  import KofiBanner from './lib/KofiBanner.svelte';
   import ConflictWarning from './lib/ConflictWarning.svelte';
   import ConfigEditor from './lib/ConfigEditor.svelte';
   import Settings from './lib/Settings.svelte';
@@ -12,6 +11,7 @@
   import RouteVisualization from './lib/RouteVisualization.svelte';
   import UpdateNotice from './lib/UpdateNotice.svelte';
   import Onboarding from './lib/Onboarding.svelte';
+  import Farewell from './lib/Farewell.svelte';
   import { tunnels, selectedTunnel, refreshTunnels, refreshStatus, subscribeToEvents, unsubscribe, initialLoad, connectionStatus } from './stores/tunnels.js';
   import { applyTheme, initThemeWatcher } from './stores/theme.js';
   import { startLogListener, stopLogListener } from './stores/logs.js';
@@ -32,7 +32,6 @@
   let showConflictWarning = false;
   let showZipResult = false;
   let showOnboarding = false;
-  let kofiDismissed = false;
   let currentSettings = null;
   let zipResults = [];
   let conflictList = [];
@@ -56,6 +55,15 @@
   // helperMessage instead of a "starting" spinner.
   let helperGaveUp = false;
   let helperMessage = '';
+
+  // v1.2.0 "Farewell": LockPlus 2 screen. The helper only runs once the
+  // user chose "Later"; until then (and after a move) there is no helper to
+  // wait for, so the "starting" bar is hidden.
+  let farewellStatus = null;
+  let showFarewell = false;
+  let farewellUnsub = null;
+  $: farewellChoice = farewellStatus?.choice ?? null;
+  $: helperExpected = farewellChoice === 'later';
 
   // OpenVPN auth modal state. The backend emits an "auth_prompt" event when an
   // OpenVPN tunnel needs credentials (and none are cached). We show a modal that
@@ -115,7 +123,6 @@
     try {
       s = await TunnelService.GetSettings();
       currentSettings = s;
-      kofiDismissed = s?.kofi_dismissed || false;
       applyTheme(s?.theme || 'system');
       // Apply persisted language. 'auto' means "follow OS locale" — we
       // resolve that via detectLanguage(). Without this, launching the
@@ -126,7 +133,15 @@
     } catch (e) {
       applyTheme('system');
     }
-    if (!s?.onboarding_complete) {
+    try {
+      farewellStatus = await TunnelService.GetFarewellStatus();
+    } catch (e) {
+      console.warn('farewell status failed:', e);
+      farewellStatus = { choice: '', remnants: [] };
+    }
+    if (farewellStatus && farewellStatus.choice !== 'later') {
+      showFarewell = true;
+    } else if (!s?.onboarding_complete) {
       showOnboarding = true;
     }
     initThemeWatcher();
@@ -150,6 +165,12 @@
 
     // Wails v3 native file drop — HTML5 dragdrop doesn't work in WebKit.
     // Event payload: { files: string[], details: {...} }
+    // A cancelled "Keep using LockPlus 1" went back to the moved state.
+    farewellUnsub = Events.On('farewell', async () => {
+      try { farewellStatus = await TunnelService.GetFarewellStatus(); } catch (_) {}
+      showFarewell = true;
+    });
+
     filesDroppedUnsub = Events.On('files-dropped', (event) => {
       importDroppedPaths(event.data?.files || []);
     });
@@ -217,6 +238,7 @@
     unsubscribe();
     stopLogListener();
     if (filesDroppedUnsub) filesDroppedUnsub();
+    if (farewellUnsub) farewellUnsub();
     if (authPromptUnsub) authPromptUnsub();
     if (helperUnsub) helperUnsub();
     if (helperResetUnsub) helperResetUnsub();
@@ -381,24 +403,6 @@
       await refreshStatus(TunnelService);
     } catch (e) {
       showToast(helperReady ? $t('toast.connect_failed', { error: errText(e) }) : $t('toast.helper_starting'));
-    }
-  }
-
-  async function handleDismissKofi() {
-    kofiDismissed = true;
-    try {
-      // Always fetch live settings rather than falling back to the
-      // onMount-time `currentSettings` snapshot — that snapshot is never
-      // refreshed after startup, so `currentSettings || ...` effectively
-      // never took the live-fetch branch once the app had been running for
-      // any length of time. Since SaveSettings is a full-struct overwrite,
-      // spreading the stale snapshot here silently reverted every setting
-      // the user changed during the session (theme, language, etc.) back
-      // to its value at launch, the moment they dismissed this banner.
-      const s = await TunnelService.GetSettings();
-      await TunnelService.SaveSettings({ ...s, kofi_dismissed: true });
-    } catch (e) {
-      console.warn('failed to persist kofi dismissed state:', e);
     }
   }
 
@@ -618,9 +622,14 @@
     <div class="main-content">
       <UpdateNotice {updateInfo} onInstall={handleUpdate} />
 
-      <KofiBanner {TunnelService} dismissed={kofiDismissed} onDismiss={handleDismissKofi} />
+      {#if farewellChoice === 'later' && !showFarewell}
+        <div class="farewell-banner" class:farewell-banner-raised={!helperReady} role="note">
+          <span class="farewell-banner-text">{$t('farewell.banner')}</span>
+          <button class="farewell-banner-btn" on:click={() => showFarewell = true}>{$t('farewell.banner_action')}</button>
+        </div>
+      {/if}
 
-      {#if !helperReady}
+      {#if !helperReady && helperExpected}
         <div class="helper-connecting" class:helper-failed={helperGaveUp} role="status">
           {#if helperGaveUp}
             {helperMessage || $t('helper.unavailable')}
@@ -685,6 +694,17 @@
       conflicts={conflictList}
       on:proceed={handleConflictProceed}
       on:cancel={handleConflictCancel} />
+  {/if}
+
+  {#if showFarewell}
+    <Farewell {TunnelService} status={farewellStatus}
+      dismissable={farewellChoice === 'later'}
+      on:status={(e) => farewellStatus = e.detail}
+      on:close={() => {
+        showFarewell = false;
+        // A new user who chose "Later" still gets the onboarding.
+        if (farewellStatus?.choice === 'later' && !currentSettings?.onboarding_complete) showOnboarding = true;
+      }} />
   {/if}
 
   {#if showOnboarding}
@@ -963,6 +983,43 @@
 
   .rail-icon svg {
     display: block;
+  }
+
+  /* ---------- LockPlus 2 banner (v1.2.0) ---------- */
+  .farewell-banner {
+    position: fixed;
+    bottom: 20px;
+    left: calc(50% + 44px); /* centred in the content area right of the 88px rail */
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: max-content;
+    max-width: calc(100vw - 88px - 40px);
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: var(--bg-card);
+    border: 0.5px solid var(--accent);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    z-index: 198;
+  }
+  /* Above the helper status bar while that one is shown. */
+  .farewell-banner-raised { bottom: 64px; }
+  .farewell-banner-text {
+    flex: 1;
+    font: 400 12px/16px var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif);
+    color: var(--text-primary);
+  }
+  .farewell-banner-btn {
+    flex-shrink: 0;
+    height: 24px;
+    padding: 0 10px;
+    border-radius: var(--radius-btn);
+    border: 0;
+    background: var(--gradient-accent);
+    color: var(--text-inverse);
+    font: 500 12px/16px var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif);
+    cursor: pointer;
   }
 
   /* ---------- Helper connecting bar ---------- */
