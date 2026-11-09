@@ -198,6 +198,33 @@ export class FarewellStatus {
              */
             this["brew"] = false;
         }
+        if (!("supported" in $$source)) {
+            /**
+             * Supported: this Mac runs LockPlus 2 (macOS 26+). Otherwise "Move" is
+             * never offered and nothing is removed; 1.x keeps working.
+             * @member
+             * @type {boolean}
+             */
+            this["supported"] = false;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * Blocked: the last move was refused before anything changed:
+             * "wgplus_running" (the old WireGuide+ app is open) or "wgplus_busy"
+             * (WireGuide+ has a tunnel or its kill switch up).
+             * @member
+             * @type {string | undefined}
+             */
+            this["blocked"] = undefined;
+        }
+        if (!("old_apps" in $$source)) {
+            /**
+             * OldApps: installed WireGuide+.app bundles the user may trash.
+             * @member
+             * @type {string[]}
+             */
+            this["old_apps"] = [];
+        }
 
         Object.assign(this, $$source);
     }
@@ -209,9 +236,13 @@ export class FarewellStatus {
      */
     static createFrom($$source = {}) {
         const $$createField2_0 = $$createType2;
+        const $$createField10_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("remnants" in $$parsedSource) {
             $$parsedSource["remnants"] = $$createField2_0($$parsedSource["remnants"]);
+        }
+        if ("old_apps" in $$parsedSource) {
+            $$parsedSource["old_apps"] = $$createField10_0($$parsedSource["old_apps"]);
         }
         return new FarewellStatus(/** @type {Partial<FarewellStatus>} */($$parsedSource));
     }

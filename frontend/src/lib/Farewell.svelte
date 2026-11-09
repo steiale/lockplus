@@ -18,8 +18,13 @@
   let downloading = false;
   let downloadError = '';
   let primaryBtn;
+  let confirmTrash = false;
 
   $: moved = status?.choice === 'moved';
+  // LockPlus 2 can't run on this Mac (macOS < 26): information only.
+  $: unsupported = status && status.supported === false;
+  $: blockedText = status?.blocked ? $t('farewell.blocked_' + status.blocked) : '';
+  $: oldApps = status?.old_apps || [];
   $: busy = working || downloading || !!status?.busy;
 
   function setStatus(s) {
@@ -114,6 +119,16 @@
     dispatch('close');
   }
 
+  async function trashOldApp() {
+    confirmTrash = false;
+    try {
+      setStatus(await TunnelService.TrashOldApp());
+    } catch (e) {
+      error = errText(e);
+      await refresh();
+    }
+  }
+
   function onKeydown(e) {
     if (e.key === 'Escape' && dismissable && !busy) dispatch('close');
   }
@@ -125,7 +140,13 @@
   <div class="fw-modal" role="dialog" aria-modal="true" aria-labelledby="fw-title" aria-describedby="fw-desc">
     <img src="/appicon.png" class="fw-icon" alt="" />
 
-    {#if !moved}
+    {#if unsupported}
+      <h2 id="fw-title">{$t('farewell.title')}</h2>
+      <p class="fw-sub" id="fw-desc">{$t('farewell.unsupported_body')}</p>
+      <div class="fw-footer">
+        <button class="fw-btn fw-primary" bind:this={primaryBtn} on:click={later} disabled={busy}>{$t('farewell.ok')}</button>
+      </div>
+    {:else if !moved}
       <h2 id="fw-title">{$t('farewell.title')}</h2>
       <p class="fw-sub" id="fw-desc">{$t('farewell.subtitle')}</p>
 
@@ -149,6 +170,7 @@
         <div class="fw-status" role="status"><span class="fw-spinner"></span>{$t('farewell.working')}</div>
       {/if}
       {#if notice}<div class="fw-status" role="status">{notice}</div>{/if}
+      {#if blockedText}<div class="fw-error" role="alert">{blockedText}</div>{/if}
       {#if error}<div class="fw-error" role="alert">{error}</div>{/if}
 
       <div class="fw-footer">
@@ -179,6 +201,20 @@
         {#if status?.brew}<p class="fw-note">{$t('farewell.brew_hint')}</p>{/if}
       {/if}
       {#if downloadError}<div class="fw-error" role="alert">{downloadError}</div>{/if}
+      {#if blockedText}<div class="fw-error" role="alert">{blockedText}</div>{/if}
+
+      {#if oldApps.length}
+        <div class="fw-section">
+          <p class="fw-note">{$t('farewell.old_app', { path: oldApps.join(', ') })}</p>
+          {#if confirmTrash}
+            <p class="fw-note">{$t('farewell.trash_confirm')}</p>
+            <button class="fw-btn fw-secondary" on:click={() => confirmTrash = false}>{$t('farewell.trash_cancel')}</button>
+            <button class="fw-btn fw-secondary" on:click={trashOldApp} disabled={busy}>{$t('farewell.trash_do')}</button>
+          {:else}
+            <button class="fw-btn fw-secondary" on:click={() => confirmTrash = true} disabled={busy}>{$t('farewell.trash_old_app')}</button>
+          {/if}
+        </div>
+      {/if}
 
       <div class="fw-footer">
         <button class="fw-link" on:click={keepV1} title={$t('farewell.keep_v1_hint')} disabled={busy}>{$t('farewell.keep_v1')}</button>

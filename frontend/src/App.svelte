@@ -63,7 +63,7 @@
   let showFarewell = false;
   let farewellUnsub = null;
   $: farewellChoice = farewellStatus?.choice ?? null;
-  $: helperExpected = farewellChoice === 'later';
+  $: helperExpected = farewellChoice === 'later' || farewellStatus?.supported === false;
 
   // OpenVPN auth modal state. The backend emits an "auth_prompt" event when an
   // OpenVPN tunnel needs credentials (and none are cached). We show a modal that
@@ -622,7 +622,7 @@
     <div class="main-content">
       <UpdateNotice {updateInfo} onInstall={handleUpdate} />
 
-      {#if farewellChoice === 'later' && !showFarewell}
+      {#if farewellChoice === 'later' && farewellStatus?.supported !== false && !showFarewell}
         <div class="farewell-banner" class:farewell-banner-raised={!helperReady} role="note">
           <span class="farewell-banner-text">{$t('farewell.banner')}</span>
           <button class="farewell-banner-btn" on:click={() => showFarewell = true}>{$t('farewell.banner_action')}</button>

@@ -710,6 +710,20 @@ export function SetPinInterface(enabled) {
 }
 
 /**
+ * TrashOldApp moves the old WireGuide+.app to the Trash (the frontend asks
+ * for confirmation first). Finder does the move, so macOS may ask once
+ * whether LockPlus may control Finder; if that's refused, the app is shown in
+ * Finder instead. Only bundles found by legacy.OldApps (exact path, bundle ID
+ * io.github.steiale.wireguide-plus) are touched, and never while it runs.
+ * @returns {$CancellablePromise<$models.FarewellStatus>}
+ */
+export function TrashOldApp() {
+    return $Call.ByID(2152976344).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType4($result);
+    }));
+}
+
+/**
  * TunnelExists reports whether a tunnel with the given name is stored.
  * @param {string} name
  * @returns {$CancellablePromise<boolean>}

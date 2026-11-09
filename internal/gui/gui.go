@@ -280,6 +280,14 @@ func Run(assetsHandler http.Handler, dataDir string) error {
 	var bootstrapOnce sync.Once
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(_ *application.ApplicationEvent) {
 		bootstrapOnce.Do(func() {
+			// LockPlus 2 can't run here (macOS < 26): no move is possible,
+			// so 1.x simply keeps working.
+			if !farewell.LockPlus2Supported() {
+				slog.Info("farewell: LockPlus 2 needs a newer macOS; starting the helper as usual", "macos", farewell.MacOSMajor())
+				helperCtl.start(nil)
+				go wgapp.MigrateAutostart(tunnelService)
+				return
+			}
 			switch farewell.LoadState(paths.ConfigDir).Choice {
 			case farewell.ChoiceLater:
 				helperCtl.start(nil)

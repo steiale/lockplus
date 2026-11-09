@@ -6,14 +6,18 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/steiale/wireguide/internal/elevate"
 	"github.com/steiale/wireguide/internal/farewell"
 	"github.com/steiale/wireguide/internal/ipc"
+	"github.com/steiale/wireguide/internal/legacy"
 	"github.com/steiale/wireguide/internal/update"
 )
 
@@ -79,6 +83,15 @@ type FarewellStatus struct {
 	Cancelled bool `json:"cancelled,omitempty"`
 	// Brew: installed with Homebrew (the hand-over text differs).
 	Brew bool `json:"brew"`
+	// Supported: this Mac runs LockPlus 2 (macOS 26+). Otherwise "Move" is
+	// never offered and nothing is removed; 1.x keeps working.
+	Supported bool `json:"supported"`
+	// Blocked: the last move was refused before anything changed:
+	// "wgplus_running" (the old WireGuide+ app is open) or "wgplus_busy"
+	// (WireGuide+ has a tunnel or its kill switch up).
+	Blocked string `json:"blocked,omitempty"`
+	// OldApps: installed WireGuide+.app bundles the user may trash.
+	OldApps []string `json:"old_apps"`
 }
 
 // GetFarewellStatus returns the current farewell state.
@@ -95,9 +108,14 @@ func (s *TunnelService) farewellStatusLocked() FarewellStatus {
 		Remnants:        elevate.HelperRemnants(),
 		Busy:            s.farewell.busy,
 		Brew:            update.IsBrewInstall(),
+		Supported:       farewell.LockPlus2Supported(),
+		OldApps:         legacy.OldApps(bundleIDOf),
 	}
 	if st.Remnants == nil {
 		st.Remnants = []string{}
+	}
+	if st.OldApps == nil {
+		st.OldApps = []string{}
 	}
 	if v := s.farewell.verified; v != nil {
 		if _, err := os.Stat(v.DMG); err == nil {
@@ -196,6 +214,16 @@ func (s *TunnelService) MoveToLockPlus2() (FarewellStatus, error) {
 	dir := s.farewell.configDir
 	prev := farewell.LoadState(dir).Choice
 	hooks := s.farewell.hooks
+	if !farewell.LockPlus2Supported() {
+		return s.statusIdle(), fmt.Errorf("LockPlus 2 needs macOS %d", farewell.MinMacOSMajor)
+	}
+	// WireGuide+ (1.0.1–1.0.56) checks, before anything changes: its app
+	// would reinstall its helper, and its tunnel/kill switch must not be cut.
+	if blocked := wireGuidePlusBlocked(); blocked != "" {
+		st := s.statusIdle()
+		st.Blocked = blocked
+		return st, nil
+	}
 	slog.Info("farewell: moving to LockPlus 2", "previous_choice", prev)
 
 	if hooks.RetireHelper != nil {
@@ -211,6 +239,11 @@ func (s *TunnelService) MoveToLockPlus2() (FarewellStatus, error) {
 		if err := elevate.UninstallHelper(); err != nil {
 			var ue *elevate.UninstallError
 			switch {
+			case errors.Is(err, elevate.ErrLegacyBusy):
+				s.rollbackMove(prev, false)
+				st := s.statusIdle()
+				st.Blocked = "wgplus_busy"
+				return st, nil
 			case errors.Is(err, elevate.ErrUserCancelled):
 				s.rollbackMove(prev, false)
 				st := s.statusIdle()
@@ -292,6 +325,7 @@ func (s *TunnelService) disconnectAllForFarewell() {
 // session stays loaded but never runs again: it is RunAtLoad-only.)
 func (s *TunnelService) removeLoginItems() {
 	removeLegacyLaunchAgent()
+	removeWireGuidePlusAgent()
 	if s.app != nil {
 		if err := s.app.Autostart.Disable(); err != nil {
 			slog.Warn("farewell: removing the login item failed", "error", err)
@@ -381,6 +415,15 @@ func (s *TunnelService) OpenLockPlus2DownloadPage() error {
 
 // UninstallHelperCLI is the GUI-less removal behind `lockplus --uninstall-helper`.
 func UninstallHelperCLI(configDir string) error {
+	if !farewell.LockPlus2Supported() {
+		return fmt.Errorf("LockPlus 2 needs macOS %d; nothing was removed", farewell.MinMacOSMajor)
+	}
+	switch wireGuidePlusBlocked() {
+	case "wgplus_running":
+		return errors.New("quit WireGuide+ first; nothing was removed")
+	case "wgplus_busy":
+		return errors.New("disconnect in WireGuide+ first; nothing was removed")
+	}
 	prev := farewell.LoadState(configDir).Choice
 	if err := farewell.SaveState(configDir, farewell.ChoiceMoved); err != nil {
 		return err
@@ -400,5 +443,103 @@ func UninstallHelperCLI(configDir string) error {
 		return err
 	}
 	removeLegacyLaunchAgent()
+	removeWireGuidePlusAgent()
 	return nil
+}
+
+// --- WireGuide+ (1.0.1–1.0.56) leftovers ---
+
+// bundleIDOf reads CFBundleIdentifier from an Info.plist ("" on error).
+func bundleIDOf(plist string) string {
+	out, err := exec.Command("/usr/bin/plutil", "-extract", "CFBundleIdentifier", "raw", "-o", "-", plist).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// wireGuidePlusRunning: the old WireGuide+ app is open (its process is named
+// after its executable). It would reinstall its helper behind our back.
+var wireGuidePlusRunning = func() bool {
+	return exec.Command("/usr/bin/pgrep", "-x", legacy.WGPlusExecutable).Run() == nil
+}
+
+// wireGuidePlusBlocked returns why the WireGuide+ helper can't be removed now
+// ("" if it can): the old app is open, or its helper has a tunnel or its kill
+// switch up (asked as this user, the helper's owner). The root script checks
+// the helper again right before stopping anything.
+func wireGuidePlusBlocked() string {
+	if wireGuidePlusRunning() {
+		return "wgplus_running"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), legacy.DefaultProbeTimeout)
+	defer cancel()
+	if busy, _ := legacy.Busy(ctx, legacy.WGPlusSocket); busy {
+		return "wgplus_busy"
+	}
+	return ""
+}
+
+// removeWireGuidePlusAgent removes WireGuide+'s "Launch at startup"
+// LaunchAgent, which keeps launching the old app (and through it its helper).
+// Only the exact file is touched, and only if it is a regular file owned by
+// this user with the exact Label and a ProgramArguments[0] inside a
+// WireGuide+ bundle.
+func removeWireGuidePlusAgent() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	p := filepath.Join(home, "Library", "LaunchAgents", legacy.WGPlusAgentLabel+".plist")
+	fi, err := os.Lstat(p)
+	if err != nil || !fi.Mode().IsRegular() {
+		return
+	}
+	if st, ok := fi.Sys().(*syscall.Stat_t); !ok || int(st.Uid) != os.Getuid() {
+		slog.Warn("farewell: WireGuide+ login item not owned by this user; left alone", "path", p)
+		return
+	}
+	read := func(key string) string {
+		out, err := exec.Command("/usr/bin/plutil", "-extract", key, "raw", "-o", "-", p).Output()
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(string(out))
+	}
+	if read("Label") != legacy.WGPlusAgentLabel || !strings.HasSuffix(read("ProgramArguments.0"), ".app/Contents/MacOS/"+legacy.WGPlusExecutable) {
+		slog.Warn("farewell: unexpected WireGuide+ login item; left alone", "path", p)
+		return
+	}
+	_ = exec.Command("/bin/launchctl", "bootout", fmt.Sprintf("gui/%d/%s", os.Getuid(), legacy.WGPlusAgentLabel)).Run()
+	if err := os.Remove(p); err != nil {
+		slog.Warn("farewell: removing the WireGuide+ login item failed", "error", err)
+		return
+	}
+	slog.Info("farewell: removed the WireGuide+ login item")
+}
+
+// TrashOldApp moves the old WireGuide+.app to the Trash (the frontend asks
+// for confirmation first). Finder does the move, so macOS may ask once
+// whether LockPlus may control Finder; if that's refused, the app is shown in
+// Finder instead. Only bundles found by legacy.OldApps (exact path, bundle ID
+// io.github.steiale.wireguide-plus) are touched, and never while it runs.
+func (s *TunnelService) TrashOldApp() (FarewellStatus, error) {
+	if wireGuidePlusRunning() {
+		st := s.GetFarewellStatus()
+		st.Blocked = "wgplus_running"
+		return st, nil
+	}
+	for _, app := range legacy.OldApps(bundleIDOf) {
+		cmd := exec.Command("/usr/bin/osascript",
+			"-e", "on run argv",
+			"-e", `tell application "Finder" to delete (POSIX file (item 1 of argv) as alias)`,
+			"-e", "end run", app)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			slog.Warn("farewell: moving WireGuide+ to the Trash failed; revealing it", "app", app, "error", err, "output", strings.TrimSpace(string(out)))
+			_ = exec.Command("/usr/bin/open", "-R", app).Run()
+			return s.GetFarewellStatus(), fmt.Errorf("couldn't move %s to the Trash; it is shown in Finder", filepath.Base(app))
+		}
+		slog.Info("farewell: moved the old app to the Trash", "app", app)
+	}
+	return s.GetFarewellStatus(), nil
 }

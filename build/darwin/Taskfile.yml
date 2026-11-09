@@ -362,3 +362,24 @@ tasks:
         DMG="lockplus-v${VERSION}-darwin-arm64.dmg"
         shasum -a 256 "${ZIP}" "${DMG}" > SHA256SUMS.txt
         echo "Checksums written: SHA256SUMS.txt"
+      - |
+        # Release asset rules (v1.2.0). Updaters 1.0.28–1.0.62 pick the FIRST
+        # asset (GitHub lists them by name) containing "darwin" + "arm64" —
+        # the .dmg — and verify it only through the one asset whose name
+        # contains "sha256"/"checksum"; a .dmg.sig would be checked against an
+        # older key/format and fail. 1.0.63+ take the .zip + .zip.sig.
+        # Upload exactly these four files: zip, zip.sig, dmg, SHA256SUMS.txt.
+        VERSION=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' build/darwin/Info.plist)
+        ZIP="lockplus-v${VERSION}-darwin-arm64.zip"
+        DMG="lockplus-v${VERSION}-darwin-arm64.dmg"
+        FAIL=""
+        case "${DMG}" in *darwin-arm64*) ;; *) FAIL="${FAIL} dmg-name";; esac
+        FIRST=$(printf '%s\n' "${ZIP}" "${ZIP}.sig" "${DMG}" SHA256SUMS.txt | LC_ALL=C sort -f | grep -i 'darwin' | grep -i 'arm64' | head -1)
+        [ "${FIRST}" = "${DMG}" ] || FAIL="${FAIL} dmg-not-first(${FIRST})"
+        H=$(shasum -a 256 "${DMG}" | awk '{print $1}')
+        grep -qx "${H}  ${DMG}" SHA256SUMS.txt || FAIL="${FAIL} sha256sums-dmg-line"
+        [ ! -e "${DMG}.sig" ] || FAIL="${FAIL} dmg-sig-present"
+        N=$(printf '%s\n' "${ZIP}" "${ZIP}.sig" "${DMG}" SHA256SUMS.txt | grep -ciE 'sha256|checksum')
+        [ "${N}" = 1 ] || FAIL="${FAIL} checksum-assets=${N}"
+        if [ -n "${FAIL}" ]; then echo "ERROR: release asset rules violated:${FAIL}"; exit 1; fi
+        echo "Release asset rules OK: ${DMG} sorts first, SHA256SUMS.txt lists it, no .dmg.sig, one checksum asset."

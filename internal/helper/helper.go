@@ -176,7 +176,7 @@ func Run(addr string, ownerUID int, dataDir string) error {
 	// Startup recovery from a previous helper that died without cleanup().
 	// Runs before Serve, so no request can race it. The GUI re-pushes the
 	// firewall policy.
-	recoverStaleState(dataDir, ovpnBinary, ovpnRuntimeDir)
+	recoverStaleState(dataDir, ovpnBinary, ovpnRuntimeDir, false)
 
 	// OpenVPN manager: the openvpn binary MUST live next to the helper in the
 	// root-owned /Library/PrivilegedHelperTools/ (copied and codesign-verified
@@ -273,11 +273,19 @@ func Run(addr string, ownerUID int, dataDir string) error {
 // before anything that can fail, and the DNS journal restore — the only error
 // source — stays LAST. An aborted uninstall therefore never leaves anchors
 // loaded. Don't add an earlier error return.
-func recoverStaleState(dataDir, ovpnBinary, ovpnRuntimeDir string) error {
+//
+// keepSharedAnchor (farewell only): upstream WireGuide's helper, which uses
+// the same pf anchor, is installed. Its rules and pf state are left alone;
+// only our pf-was-enabled marker is dropped.
+func recoverStaleState(dataDir, ovpnBinary, ovpnRuntimeDir string, keepSharedAnchor bool) error {
 	if killed := ovpn.KillStaleProcesses(ovpnRuntimeDir, ovpnBinary); len(killed) > 0 {
 		slog.Warn("startup: killed openvpn processes orphaned by a previous helper", "tunnels", killed)
 	}
-	firewall.RecoverStaleState()
+	if keepSharedAnchor {
+		firewall.ForgetStaleState()
+	} else {
+		firewall.RecoverStaleState()
+	}
 	if recovered := tunnel.RecoverFromCrash(dataDir); len(recovered) > 0 {
 		slog.Warn("recovered from previous crash", "tunnels", recovered)
 	}
@@ -297,7 +305,7 @@ func recoverStaleState(dataDir, ovpnBinary, ovpnRuntimeDir string) error {
 // also covers helpers that exited without cleanup (1.0.x had no SIGTERM
 // handler) or crashed. It refuses to run while a helper still serves addr:
 // flushing a live helper's pf rules would drop its kill switch under it.
-func RecoverOnly(addr, dataDir string) error {
+func RecoverOnly(addr, dataDir string, keepSharedAnchor bool) error {
 	// launchctl bootout normally returns after the daemon exited; give a
 	// slow teardown up to 20 s before refusing.
 	for i := 0; ipc.SocketLive(addr); i++ {
@@ -307,7 +315,7 @@ func RecoverOnly(addr, dataDir string) error {
 		time.Sleep(500 * time.Millisecond)
 	}
 	ovpnBinary := filepath.Join(filepath.Dir(os.Args[0]), "openvpn")
-	return recoverStaleState(dataDir, ovpnBinary, filepath.Join(dataDir, "ovpn-run"))
+	return recoverStaleState(dataDir, ovpnBinary, filepath.Join(dataDir, "ovpn-run"), keepSharedAnchor)
 }
 
 // reconnectFn is the reconnect monitor's callback for one tunnel. It takes

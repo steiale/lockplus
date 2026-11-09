@@ -188,6 +188,11 @@ func persistPfEnabledState(enabled bool) error {
 	return nil
 }
 
+// ForgetStaleState drops our pf-was-enabled marker without touching pf: the
+// farewell uninstall's choice when upstream WireGuide (same anchor) is
+// installed, so its kill switch and pf state stay as they are.
+func ForgetStaleState() { removePfStateFile() }
+
 func removePfStateFile() {
 	if err := os.Remove(savedPfStateFile); err != nil && !os.IsNotExist(err) {
 		slog.Warn("failed to remove pf state file", "path", savedPfStateFile, "error", err)

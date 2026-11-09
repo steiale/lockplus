@@ -276,6 +276,15 @@
     "banner": "LockPlus 2 ist da, nativ für macOS neu gebaut. LockPlus 1 erhält keine Updates mehr.",
     "banner_action": "Zu LockPlus 2 wechseln …",
     "retry_removal": "Entfernen wiederholen",
-    "brew_hint": "Du hast LockPlus mit Homebrew installiert. Das Ersetzen funktioniert genauso; Homebrew führt das Cask lockplus weiter, bis es auf LockPlus 2 umgestellt wird."
+    "brew_hint": "Du hast LockPlus mit Homebrew installiert. Das Ersetzen funktioniert genauso; Homebrew führt das Cask lockplus weiter, bis es auf LockPlus 2 umgestellt wird.",
+    "unsupported_body": "LockPlus 2 braucht macOS 26. LockPlus 1.2.0 funktioniert hier weiter, erhält aber keine Updates mehr.",
+    "ok": "OK",
+    "blocked_wgplus_running": "WireGuide+ (die alte Version von LockPlus) ist noch geöffnet. Beende WireGuide+ und versuche es dann erneut. Es wurde nichts geändert.",
+    "blocked_wgplus_busy": "WireGuide+ (die alte Version von LockPlus) hat noch einen Tunnel verbunden oder den Kill Switch aktiv. Trenne die Verbindung in WireGuide+ und versuche es dann erneut. Es wurde nichts geändert.",
+    "old_app": "Die alte App WireGuide+ ist noch installiert: {path}. LockPlus 2 braucht sie nicht.",
+    "trash_old_app": "WireGuide+ in den Papierkorb legen …",
+    "trash_confirm": "WireGuide+ in den Papierkorb legen? Deine Profile bleiben auf diesem Mac. macOS fragt eventuell, ob LockPlus den Finder steuern darf.",
+    "trash_cancel": "Abbrechen",
+    "trash_do": "In den Papierkorb legen"
   }
 }

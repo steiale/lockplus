@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/steiale/wireguide/internal/legacy"
 )
 
 func TestUninstallScriptOrderAndScope(t *testing.T) {
@@ -114,5 +116,59 @@ func TestInterpretUninstallOutput(t *testing.T) {
 		if got := interpretUninstallOutput(c.out, c.err); !c.want(got) {
 			t.Errorf("%q: unexpected %v", c.out, got)
 		}
+	}
+}
+
+func TestUninstallScriptLegacyHelpers(t *testing.T) {
+	script := buildUninstallScript("/Applications/LockPlus.app/Contents/MacOS/lockplus-helper")
+	idx := func(s string) int {
+		i := strings.Index(script, s)
+		if i < 0 {
+			t.Fatalf("script lacks %q", s)
+		}
+		return i
+	}
+	firstBootout := idx("launchctl bootout")
+	// WireGuide+ identification and the busy refusal happen before anything is stopped.
+	for _, s := range []string{
+		"plutil -extract Label raw -o - " + shellQuote(legacy.WGPlusPlist),
+		"plutil -extract ProgramArguments.0 raw -o - " + shellQuote(legacy.WGPlusPlist),
+		`"$(stat -f %u ` + shellQuote(legacy.WGPlusPlist) + `)" = 0`,
+		"pfctl -a " + shellQuote(legacy.WGPlusAnchor) + " -sr",
+		shellQuote(cleanupBinary) + " --probe-wgplus",
+		"UNINSTALL_ABORTED_LEGACY_BUSY",
+		"/usr/bin/codesign --verify --strict -R=" + shellQuote(ourTeamRequirement) + " " + shellQuote(legacyBinary),
+	} {
+		if i := idx(s); i > firstBootout {
+			t.Errorf("%q must come before the first bootout", s)
+		}
+	}
+	// Upstream WireGuide's helper is only touched when it is ours.
+	if !strings.Contains(script, "[ $CWG_OURS = 1 ] && launchctl bootout system/"+legacyLabel) ||
+		!strings.Contains(script, "[ $CWG_OURS = 1 ] && rm -f "+shellQuote(legacyPlist)+" "+shellQuote(legacyBinary)) {
+		t.Error("com.wireguide.helper must only be booted out and removed when CWG_OURS")
+	}
+	if strings.Contains(script, "launchctl bootout system/"+legacyLabel) && strings.Count(script, "bootout system/"+legacyLabel) != 1 {
+		t.Error("unguarded bootout of com.wireguide.helper")
+	}
+	// The shared anchor is never flushed while upstream is installed.
+	for _, m := range regexp.MustCompile(`[^;]*pfctl -a com\.apple/wireguide -Fa`).FindAllString(script, -1) {
+		if !strings.Contains(m, "FOREIGN = 0") && !strings.Contains(script[strings.Index(script, m)-200:strings.Index(script, m)], "FOREIGN = 0") {
+			t.Errorf("unguarded flush of the shared anchor: %q", m)
+		}
+	}
+	// rm -rf only on our own two directories.
+	for _, m := range regexp.MustCompile(`rm -rf [^;]*`).FindAllString(script, -1) {
+		if m != "rm -rf "+shellQuote(socketDir) && m != "rm -rf "+shellQuote(systemDataDir) {
+			t.Errorf("rm -rf outside the known paths: %q", m)
+		}
+	}
+	// WireGuide+ dirs are only rmdir'ed (empty), never rm -rf'ed.
+	if !strings.Contains(script, "rmdir "+shellQuote(legacy.WGPlusSocketDir)+" "+shellQuote(legacy.WGPlusDataDir)) {
+		t.Error("WireGuide+ directories must be removed with rmdir")
+	}
+	re := regexp.MustCompile(wgpProcRE)
+	if !re.MatchString(legacy.WGPlusBinary+" --helper --socket=x") || re.MatchString("/bin/sh -c "+script) {
+		t.Error("wgpProcRE must match the daemon and not the script itself")
 	}
 }
