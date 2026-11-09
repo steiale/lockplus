@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/steiale/wireguide/internal/legacy"
 )
@@ -84,13 +85,28 @@ const ourTeamRequirement = teamRequirement
 
 // legacyHelperIsOurs reports whether com.wireguide.helper's binary is signed
 // by our team (LockPlus 1.0.0). Anything else is upstream WireGuide's.
+// The codesign result is cached per (size, mtime) — status is polled.
 var legacyHelperIsOurs = func() bool {
 	fi, err := os.Lstat(legacyBinary)
 	if err != nil || !fi.Mode().IsRegular() {
 		return false
 	}
-	return exec.Command("/usr/bin/codesign", "--verify", "--strict", "-R="+ourTeamRequirement, legacyBinary).Run() == nil
+	key := fmt.Sprintf("%d/%d", fi.Size(), fi.ModTime().UnixNano())
+	legacyOursMu.Lock()
+	defer legacyOursMu.Unlock()
+	if key == legacyOursKey {
+		return legacyOursVal
+	}
+	legacyOursKey = key
+	legacyOursVal = exec.Command("/usr/bin/codesign", "--verify", "--strict", "-R="+ourTeamRequirement, legacyBinary).Run() == nil
+	return legacyOursVal
 }
+
+var (
+	legacyOursMu  sync.Mutex
+	legacyOursKey string
+	legacyOursVal bool
+)
 
 // HelperRemnants lists everything of the LockPlus and WireGuide+ helpers
 // still present, checked without privileges: files, sockets, and the state
@@ -119,6 +135,10 @@ func HelperRemnants() []string {
 // ErrLegacyBusy: the WireGuide+ helper still has a tunnel up or its kill
 // switch on; nothing was changed. Disconnect in WireGuide+ first.
 var ErrLegacyBusy = errors.New("WireGuide+ still has a tunnel connected or its kill switch on")
+
+// ErrLegacyProbe: whether WireGuide+ is busy couldn't be determined; nothing
+// was changed (fail closed).
+var ErrLegacyProbe = errors.New("could not check whether WireGuide+ is still connected")
 
 // UninstallError means the root script ran but could not finish the removal.
 // Aborted reports that nothing was removed and the helper is back (or never
@@ -191,18 +211,24 @@ func buildUninstallScript(exe string) string {
 	// 2. Decide what is ours, before changing anything.
 	//    WireGuide+: plist (root-owned regular file, exact Label, exact
 	//    ProgramArguments[0]) and/or binary (root-owned regular file).
-	b.WriteString(`WGP_PLIST=0; WGP_BIN=0; `)
-	w(`if [ -e %s ] || [ -L %s ]; then if %s && [ "$(plutil -extract Label raw -o - %s 2>/dev/null)" = %s ] && [ "$(plutil -extract ProgramArguments.0 raw -o - %s 2>/dev/null)" = %s ]; then WGP_PLIST=1; else echo "WGPLUS_SKIPPED: unexpected plist"; fi; fi; `,
+	//    An unexpected plist makes the whole WireGuide+ install "unknown":
+	//    nothing of it is touched (no binary removal under a live plist).
+	b.WriteString(`WGP_PLIST=0; WGP_BIN=0; WGP_UNKNOWN=0; `)
+	w(`if [ -e %s ] || [ -L %s ]; then if %s && [ "$(plutil -extract Label raw -o - %s 2>/dev/null)" = %s ] && [ "$(plutil -extract ProgramArguments.0 raw -o - %s 2>/dev/null)" = %s ]; then WGP_PLIST=1; else WGP_UNKNOWN=1; echo "WGPLUS_SKIPPED: unexpected plist"; fi; fi; `,
 		q(legacy.WGPlusPlist), q(legacy.WGPlusPlist), isRootFile(legacy.WGPlusPlist), q(legacy.WGPlusPlist), q(legacy.WGPlusLabel), q(legacy.WGPlusPlist), q(legacy.WGPlusBinary))
-	w(`if [ -e %s ] || [ -L %s ]; then if %s; then WGP_BIN=1; else echo "WGPLUS_SKIPPED: unexpected binary"; fi; fi; `,
+	w(`if [ $WGP_UNKNOWN = 0 ] && { [ -e %s ] || [ -L %s ]; }; then if %s; then WGP_BIN=1; else echo "WGPLUS_SKIPPED: unexpected binary"; fi; fi; `,
 		q(legacy.WGPlusBinary), q(legacy.WGPlusBinary), isRootFile(legacy.WGPlusBinary))
 	//    Refuse while WireGuide+ has a tunnel or kill switch up: rules in its
 	//    anchors, or its helper says so (asked as the socket's owner).
 	w(`if [ $WGP_PLIST = 1 ] || [ $WGP_BIN = 1 ]; then `)
-	w(`if [ -n "$(pfctl -a %s -sr 2>/dev/null)$(pfctl -a %s -sr 2>/dev/null)" ]; then %s; fi; `,
-		q(legacy.WGPlusAnchor), q(legacy.WGPlusAnchorDNS), abortUntouched("UNINSTALL_ABORTED_LEGACY_BUSY: wireguide-plus firewall"))
-	w(`%s --probe-wgplus >/dev/null 2>&1; PRC=$?; if [ $PRC -ne 0 ]; then %s; fi; fi; `,
-		q(cleanupBinary), abortUntouched("UNINSTALL_ABORTED_LEGACY_BUSY: wireguide-plus tunnel"))
+	//    Rules in its (inert) anchors only count while its helper runs; a
+	//    crashed helper's leftovers are flushed in step 5.
+	w(`if { launchctl print system/%s >/dev/null 2>&1 || pgrep -f %s >/dev/null 2>&1; } && [ -n "$(pfctl -a %s -sr 2>/dev/null)$(pfctl -a %s -sr 2>/dev/null)" ]; then %s; fi; `,
+		legacy.WGPlusLabel, q(wgpProcRE), q(legacy.WGPlusAnchor), q(legacy.WGPlusAnchorDNS), abortUntouched("UNINSTALL_ABORTED_LEGACY_BUSY: wireguide-plus firewall"))
+	//    Probe exit: 0 idle/unreachable, 10 busy, anything else = couldn't tell
+	//    (fail closed).
+	w(`%s --probe-wgplus >/dev/null 2>&1; PRC=$?; if [ $PRC -eq 10 ]; then %s; elif [ $PRC -ne 0 ]; then %s; fi; fi; `,
+		q(cleanupBinary), abortUntouched("UNINSTALL_ABORTED_LEGACY_BUSY: wireguide-plus tunnel"), abortUntouched("UNINSTALL_ABORTED_LEGACY_PROBE: could not check wireguide-plus"))
 	//    com.wireguide.helper: ours only if its binary is signed by our team.
 	//    Otherwise it is upstream WireGuide's (or unknowable): leave it and
 	//    its pf anchor (shared with us) completely alone.
@@ -254,10 +280,15 @@ func buildUninstallScript(exe string) string {
 	//    through the shared anchor right now.
 	w(`if [ $WGP_PLIST = 1 ] || [ $WGP_BIN = 1 ]; then pfctl -a %s -Fa >/dev/null 2>&1; pfctl -a %s -Fa >/dev/null 2>&1; `,
 		q(legacy.WGPlusAnchor), q(legacy.WGPlusAnchorDNS))
-	w(`if %s && [ "$(cat %s 2>/dev/null)" = 0 ] && [ $FOREIGN = 0 ]; then pfctl -d >/dev/null 2>&1; fi; `, isRootFile(legacy.WGPlusPfWasOn), q(legacy.WGPlusPfWasOn))
+	//    Its stale pf-was-enabled is dropped, never acted on: pf may have been
+	//    enabled since by something else (Internet Sharing, a pf frontend),
+	//    and leaving pf on with Apple's pf.conf blocks nothing.
 	w(`[ $WGP_PLIST = 1 ] && rm -f %s; [ $WGP_BIN = 1 ] && rm -f %s; `, q(legacy.WGPlusPlist), q(legacy.WGPlusBinary))
-	w(`rm -f %s %s %s; rmdir %s %s 2>/dev/null; fi; `,
-		q(legacy.WGPlusSocket), q(legacy.WGPlusLog), q(legacy.WGPlusPfWasOn), q(legacy.WGPlusSocketDir), q(legacy.WGPlusDataDir))
+	w(`rm -f %s %s; rmdir %s 2>/dev/null; `, q(legacy.WGPlusSocket), q(legacy.WGPlusLog), q(legacy.WGPlusSocketDir))
+	//    Its root data dir holds only helper state (pf-was-enabled, ovpn-run,
+	//    tunnel-states): removed when it is a real root-owned directory.
+	w(`if [ ! -L %s ] && [ -d %s ] && [ "$(stat -f %%u %s)" = 0 ]; then rm -rf %s; fi; fi; `,
+		q(legacy.WGPlusDataDir), q(legacy.WGPlusDataDir), q(legacy.WGPlusDataDir), q(legacy.WGPlusDataDir))
 	//    Our own com.wireguide.helper (1.0.0).
 	w(`[ $CWG_OURS = 1 ] && rm -f %s %s; `, q(legacyPlist), q(legacyBinary))
 
@@ -282,9 +313,14 @@ func buildUninstallScript(exe string) string {
 		w(`[ -e %s ] && FAIL="$FAIL "%s; `, q(f), q(f))
 	}
 	w(`[ $FOREIGN = 0 ] && for A in %s %s/dns; do [ -n "$(pfctl -a $A -sr 2>/dev/null)" ] && FAIL="$FAIL pf:$A"; done; `, sharedAnchor, sharedAnchor)
+	// Upstream installed: its anchor is never flushed, but rules in it with
+	// no upstream helper running belong to nobody (e.g. a 1.0.6x LockPlus
+	// helper without SIGTERM teardown) — say so instead of reporting OK.
+	w(`[ $FOREIGN = 1 ] && ! launchctl print system/%s >/dev/null 2>&1 && [ -n "$(pfctl -a %s -sr 2>/dev/null)$(pfctl -a %s/dns -sr 2>/dev/null)" ] && FAIL="$FAIL SHARED_ANCHOR_RULES_LEFT"; `,
+		legacyLabel, sharedAnchor, sharedAnchor)
 	w(`if [ $WGP_PLIST = 1 ] || [ $WGP_BIN = 1 ]; then launchctl print system/%s >/dev/null 2>&1 && FAIL="$FAIL launchd:%s"; pgrep -f %s >/dev/null 2>&1 && FAIL="$FAIL wgp-process"; `,
 		legacy.WGPlusLabel, legacy.WGPlusLabel, q(wgpProcRE))
-	for _, f := range []string{legacy.WGPlusPlist, legacy.WGPlusBinary, legacy.WGPlusSocket, legacy.WGPlusPfWasOn} {
+	for _, f := range []string{legacy.WGPlusPlist, legacy.WGPlusBinary, legacy.WGPlusSocketDir, legacy.WGPlusDataDir} {
 		w(`[ -e %s ] && FAIL="$FAIL "%s; `, q(f), q(f))
 	}
 	b.WriteString(`fi; `)
@@ -307,10 +343,16 @@ func interpretUninstallOutput(out string, err error) error {
 	case strings.Contains(out, "UNINSTALL_ABORTED_LEGACY_BUSY"):
 		slog.Warn("helper removal refused: WireGuide+ is busy", "output", out)
 		return ErrLegacyBusy
+	case strings.Contains(out, "UNINSTALL_ABORTED_LEGACY_PROBE"):
+		slog.Warn("helper removal refused: WireGuide+ state unknown", "output", out)
+		return ErrLegacyProbe
 	case strings.Contains(out, "UNINSTALL_ABORTED"):
 		down := strings.Contains(out, "UNINSTALL_ABORTED_HELPER_DOWN")
 		slog.Error("helper removal aborted", "helper_down", down, "output", out)
 		return &UninstallError{Output: out, Aborted: true, HelperDown: down, Err: err}
+	case strings.Contains(out, "SHARED_ANCHOR_RULES_LEFT"):
+		slog.Error("helper removed, but firewall rules shared with WireGuide are still loaded", "output", out)
+		return &UninstallError{Output: "firewall rules in com.apple/wireguide (shared with WireGuide) are still loaded; disconnect in WireGuide or restart your Mac", Err: err}
 	case strings.Contains(out, "UNINSTALL_INCOMPLETE"):
 		slog.Error("helper removal incomplete", "output", out)
 		return &UninstallError{Output: out, Err: err}

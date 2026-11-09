@@ -105,6 +105,12 @@ func TestInterpretUninstallOutput(t *testing.T) {
 			return errors.As(e, &u) && u.Aborted && u.HelperDown
 		}},
 		{"context canceled", exitErr, func(e error) bool { return !errors.Is(e, ErrUserCancelled) }},
+		{"UNINSTALL_ABORTED_LEGACY_PROBE: x", exitErr, func(e error) bool { return errors.Is(e, ErrLegacyProbe) }},
+		{"UNINSTALL_ABORTED_LEGACY_BUSY: x", exitErr, func(e error) bool { return errors.Is(e, ErrLegacyBusy) }},
+		{"UNINSTALL_INCOMPLETE: SHARED_ANCHOR_RULES_LEFT", exitErr, func(e error) bool {
+			var u *UninstallError
+			return errors.As(e, &u) && !u.Aborted && strings.Contains(u.Output, "restart your Mac")
+		}},
 		{"UNINSTALL_INCOMPLETE: pf:com.apple/wireguide", exitErr, func(e error) bool {
 			var u *UninstallError
 			return errors.As(e, &u) && !u.Aborted
@@ -153,19 +159,36 @@ func TestUninstallScriptLegacyHelpers(t *testing.T) {
 	}
 	// The shared anchor is never flushed while upstream is installed.
 	for _, m := range regexp.MustCompile(`[^;]*pfctl -a com\.apple/wireguide -Fa`).FindAllString(script, -1) {
-		if !strings.Contains(m, "FOREIGN = 0") && !strings.Contains(script[strings.Index(script, m)-200:strings.Index(script, m)], "FOREIGN = 0") {
+		if !strings.Contains(m, "FOREIGN = 0") && !strings.Contains(script[max(0, strings.Index(script, m)-200):strings.Index(script, m)], "FOREIGN = 0") {
 			t.Errorf("unguarded flush of the shared anchor: %q", m)
 		}
 	}
 	// rm -rf only on our own two directories.
 	for _, m := range regexp.MustCompile(`rm -rf [^;]*`).FindAllString(script, -1) {
-		if m != "rm -rf "+shellQuote(socketDir) && m != "rm -rf "+shellQuote(systemDataDir) {
+		if m != "rm -rf "+shellQuote(socketDir) && m != "rm -rf "+shellQuote(systemDataDir) && m != "rm -rf "+shellQuote(legacy.WGPlusDataDir) {
 			t.Errorf("rm -rf outside the known paths: %q", m)
 		}
 	}
-	// WireGuide+ dirs are only rmdir'ed (empty), never rm -rf'ed.
-	if !strings.Contains(script, "rmdir "+shellQuote(legacy.WGPlusSocketDir)+" "+shellQuote(legacy.WGPlusDataDir)) {
-		t.Error("WireGuide+ directories must be removed with rmdir")
+	// WireGuide+ socket dir only via rmdir; its data dir only when it is a
+	// real root-owned directory.
+	if !strings.Contains(script, "rmdir "+shellQuote(legacy.WGPlusSocketDir)) {
+		t.Error("WireGuide+ socket dir must be removed with rmdir")
+	}
+	d := shellQuote(legacy.WGPlusDataDir)
+	if !strings.Contains(script, "if [ ! -L "+d+" ] && [ -d "+d+" ] && [ \"$(stat -f %u "+d+")\" = 0 ]; then rm -rf "+d+"; fi") {
+		t.Error("WireGuide+ data dir rm -rf must be guarded (not a symlink, a directory, root-owned)")
+	}
+	// Its stale pf-was-enabled is never acted on.
+	if strings.Contains(script, "cat "+shellQuote(legacy.WGPlusPfWasOn)) {
+		t.Error("WireGuide+ pf-was-enabled must not drive pfctl -d")
+	}
+	// An unexpected plist blocks the binary removal too.
+	if !strings.Contains(script, "WGP_UNKNOWN=1") || !strings.Contains(script, "if [ $WGP_UNKNOWN = 0 ] &&") {
+		t.Error("an unexpected WireGuide+ plist must make the install unknown")
+	}
+	// Probe: 10 busy, anything else non-zero fails closed.
+	if !strings.Contains(script, "if [ $PRC -eq 10 ]; then") || !strings.Contains(script, "UNINSTALL_ABORTED_LEGACY_PROBE") {
+		t.Error("probe exit codes must fail closed")
 	}
 	re := regexp.MustCompile(wgpProcRE)
 	if !re.MatchString(legacy.WGPlusBinary+" --helper --socket=x") || re.MatchString("/bin/sh -c "+script) {

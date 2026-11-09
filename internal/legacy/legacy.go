@@ -37,26 +37,29 @@ const (
 var WGPlusPaths = []string{WGPlusPlist, WGPlusBinary, WGPlusSocketDir, WGPlusDataDir}
 
 // Busy reports whether the helper serving socket has a tunnel up (connecting,
-// connected, reconnecting) or its kill switch holding traffic. An unreachable
-// helper is not busy: its tunnels die with it (wireguard-go runs in-process).
-// The helper only answers its owner uid, so call this as that user.
-func Busy(ctx context.Context, socket string) (busy, reachable bool) {
-	if fi, err := os.Lstat(socket); err != nil || fi.Mode()&os.ModeSocket == 0 {
-		return false, false
+// connected, reconnecting) or its kill switch holding traffic. Only "no socket"
+// or "nothing listening" is a definite idle (its tunnels die with it:
+// wireguard-go runs in-process); a live helper that can't be asked returns
+// reachable=true with err set, which callers deciding about removal must
+// treat as "can't tell". The helper only answers its owner uid, so call this
+// as that user.
+func Busy(ctx context.Context, socket string) (busy, reachable bool, err error) {
+	if fi, lerr := os.Lstat(socket); lerr != nil || fi.Mode()&os.ModeSocket == 0 {
+		return false, false, nil
 	}
 	if !ipc.SocketLive(socket) {
-		return false, false
+		return false, false, nil
 	}
 	c, err := ipc.NewClient(socket)
 	if err != nil {
-		return false, false
+		return false, true, err
 	}
 	defer c.Close()
 	var st json.RawMessage
 	if err := c.CallWithContext(ctx, ipc.MethodStatus, nil, &st); err != nil {
-		return false, true
+		return false, true, err
 	}
-	return StatusBusy(st), true
+	return StatusBusy(st), true, nil
 }
 
 // StatusBusy interprets a Tunnel.Status reply of any 1.x version.

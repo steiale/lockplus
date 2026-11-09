@@ -18,7 +18,8 @@ var osProductVersion = func() string {
 }
 
 // MacOSMajor returns the running macOS major version (0 if unknown). The
-// 16.x compatibility version some APIs report for macOS 26 maps to 26.
+// sysctl reports the real version; 16.x (the SYSTEM_VERSION_COMPAT value of
+// SystemVersion.plist/sw_vers) is mapped to 26 only defensively.
 func MacOSMajor() int {
 	v := strings.TrimSpace(osProductVersion())
 	major, err := strconv.Atoi(strings.SplitN(v, ".", 2)[0])

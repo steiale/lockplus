@@ -236,13 +236,26 @@ func (s *TunnelService) MoveToLockPlus2() (FarewellStatus, error) {
 	s.disconnectAllForFarewell()
 
 	if elevate.HelperInstalled() || len(elevate.HelperRemnants()) > 0 {
+		// Re-check WireGuide+ right before the prompt (it may have been
+		// opened or connected meanwhile).
+		if blocked := wireGuidePlusBlocked(); blocked != "" {
+			s.rollbackMove(prev, false)
+			st := s.statusIdle()
+			st.Blocked = blocked + "_late"
+			return st, nil
+		}
 		if err := elevate.UninstallHelper(); err != nil {
 			var ue *elevate.UninstallError
 			switch {
-			case errors.Is(err, elevate.ErrLegacyBusy):
+			case errors.Is(err, elevate.ErrLegacyBusy), errors.Is(err, elevate.ErrLegacyProbe):
+				// Refused by the root script before anything was stopped —
+				// but our own tunnels were already disconnected.
 				s.rollbackMove(prev, false)
 				st := s.statusIdle()
-				st.Blocked = "wgplus_busy"
+				st.Blocked = "wgplus_busy_late"
+				if errors.Is(err, elevate.ErrLegacyProbe) {
+					st.Blocked = "wgplus_probe"
+				}
 				return st, nil
 			case errors.Is(err, elevate.ErrUserCancelled):
 				s.rollbackMove(prev, false)
@@ -432,6 +445,7 @@ func UninstallHelperCLI(configDir string) error {
 	// root work.
 	if !elevate.HelperInstalled() && len(elevate.HelperRemnants()) == 0 {
 		removeLegacyLaunchAgent()
+		removeWireGuidePlusAgent()
 		return nil
 	}
 	(&TunnelService{}).disconnectAllForFarewell()
@@ -474,7 +488,9 @@ func wireGuidePlusBlocked() string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), legacy.DefaultProbeTimeout)
 	defer cancel()
-	if busy, _ := legacy.Busy(ctx, legacy.WGPlusSocket); busy {
+	// Lenient here (a live helper that can't be asked passes); the root
+	// script's probe, run right before anything is stopped, fails closed.
+	if busy, _, _ := legacy.Busy(ctx, legacy.WGPlusSocket); busy {
 		return "wgplus_busy"
 	}
 	return ""
@@ -524,8 +540,12 @@ func removeWireGuidePlusAgent() {
 // Finder instead. Only bundles found by legacy.OldApps (exact path, bundle ID
 // io.github.steiale.wireguide-plus) are touched, and never while it runs.
 func (s *TunnelService) TrashOldApp() (FarewellStatus, error) {
+	if !s.tryBusy() {
+		return s.GetFarewellStatus(), nil
+	}
+	defer s.clearBusy()
 	if wireGuidePlusRunning() {
-		st := s.GetFarewellStatus()
+		st := s.statusIdle()
 		st.Blocked = "wgplus_running"
 		return st, nil
 	}
@@ -537,9 +557,9 @@ func (s *TunnelService) TrashOldApp() (FarewellStatus, error) {
 		if out, err := cmd.CombinedOutput(); err != nil {
 			slog.Warn("farewell: moving WireGuide+ to the Trash failed; revealing it", "app", app, "error", err, "output", strings.TrimSpace(string(out)))
 			_ = exec.Command("/usr/bin/open", "-R", app).Run()
-			return s.GetFarewellStatus(), fmt.Errorf("couldn't move %s to the Trash; it is shown in Finder", filepath.Base(app))
+			return s.statusIdle(), fmt.Errorf("couldn't move %s to the Trash; it is shown in Finder", filepath.Base(app))
 		}
 		slog.Info("farewell: moved the old app to the Trash", "app", app)
 	}
-	return s.GetFarewellStatus(), nil
+	return s.statusIdle(), nil
 }

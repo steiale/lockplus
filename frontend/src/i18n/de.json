@@ -280,11 +280,14 @@
     "unsupported_body": "LockPlus 2 braucht macOS 26. LockPlus 1.2.0 funktioniert hier weiter, erhält aber keine Updates mehr.",
     "ok": "OK",
     "blocked_wgplus_running": "WireGuide+ (die alte Version von LockPlus) ist noch geöffnet. Beende WireGuide+ und versuche es dann erneut. Es wurde nichts geändert.",
-    "blocked_wgplus_busy": "WireGuide+ (die alte Version von LockPlus) hat noch einen Tunnel verbunden oder den Kill Switch aktiv. Trenne die Verbindung in WireGuide+ und versuche es dann erneut. Es wurde nichts geändert.",
+    "blocked_wgplus_busy": "WireGuide+ (die alte Version von LockPlus) hat noch einen Tunnel verbunden oder den Kill Switch aktiv. Trenne die Verbindung in WireGuide+ (oder starte den Mac neu) und versuche es dann erneut. Es wurde nichts geändert.",
     "old_app": "Die alte App WireGuide+ ist noch installiert: {path}. LockPlus 2 braucht sie nicht.",
     "trash_old_app": "WireGuide+ in den Papierkorb legen …",
     "trash_confirm": "WireGuide+ in den Papierkorb legen? Deine Profile bleiben auf diesem Mac. macOS fragt eventuell, ob LockPlus den Finder steuern darf.",
     "trash_cancel": "Abbrechen",
-    "trash_do": "In den Papierkorb legen"
+    "trash_do": "In den Papierkorb legen",
+    "blocked_wgplus_running_late": "WireGuide+ (die alte Version von LockPlus) wurde inzwischen geöffnet. Beende WireGuide+ und versuche es dann erneut. Deine LockPlus-Tunnel wurden getrennt; entfernt wurde nichts.",
+    "blocked_wgplus_busy_late": "WireGuide+ (die alte Version von LockPlus) hat noch einen Tunnel verbunden oder den Kill Switch aktiv. Trenne die Verbindung in WireGuide+ (oder starte den Mac neu) und versuche es dann erneut. Deine LockPlus-Tunnel wurden getrennt; WireGuide+ wurde nicht verändert.",
+    "blocked_wgplus_probe": "LockPlus konnte nicht prüfen, ob WireGuide+ (die alte Version von LockPlus) noch verbunden ist. Starte den Mac neu und versuche es dann erneut. Deine LockPlus-Tunnel wurden getrennt; WireGuide+ wurde nicht verändert."
   }
 }

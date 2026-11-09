@@ -11,6 +11,8 @@ import (
 	"flag"
 	"log"
 	"os"
+	"os/user"
+	"strconv"
 	"syscall"
 
 	"github.com/steiale/wireguide/internal/helper"
@@ -66,9 +68,13 @@ func systemDataDir() string {
 	return "/Library/Application Support/lockplus"
 }
 
-// probeWireGuidePlus implements --probe-wgplus. As root it switches to the
-// (non-root) owner of the WireGuide+ socket before dialing; the socket path is
-// a constant in a root-owned directory tree (/var/run).
+// probeWireGuidePlus implements --probe-wgplus. Exit 0 = idle (no socket or
+// nothing listening), 10 = busy, 11 = couldn't switch to the socket owner,
+// 12 = a live helper that couldn't be asked (callers fail closed on 11/12).
+// As root it first becomes the (non-root) owner of the WireGuide+ socket,
+// the only peer that helper answers; a root-owned socket is asked as root.
+// The socket path is a constant under /var/run (root:daemon 775, not
+// writable by users).
 func probeWireGuidePlus() int {
 	if os.Geteuid() == 0 {
 		fi, err := os.Lstat(legacy.WGPlusSocket)
@@ -76,22 +82,47 @@ func probeWireGuidePlus() int {
 			return 0
 		}
 		st, ok := fi.Sys().(*syscall.Stat_t)
-		if !ok || st.Uid == 0 {
-			return 0
-		}
-		if err := syscall.Setgid(int(st.Gid)); err != nil {
-			log.Println("probe: setgid:", err)
+		if !ok {
 			return 11
 		}
-		if err := syscall.Setuid(int(st.Uid)); err != nil {
-			log.Println("probe: setuid:", err)
-			return 11
+		if st.Uid != 0 {
+			uid := int(st.Uid)
+			gid := -1
+			if u, err := user.LookupId(strconv.Itoa(uid)); err == nil {
+				if g, err := strconv.Atoi(u.Gid); err == nil {
+					gid = g
+				}
+			}
+			if gid < 0 {
+				gid = 20 // staff
+			}
+			if err := syscall.Setgroups([]int{gid}); err != nil {
+				log.Println("probe: setgroups:", err)
+				return 11
+			}
+			if err := syscall.Setgid(gid); err != nil {
+				log.Println("probe: setgid:", err)
+				return 11
+			}
+			if err := syscall.Setuid(uid); err != nil {
+				log.Println("probe: setuid:", err)
+				return 11
+			}
+			if syscall.Getuid() != uid || syscall.Geteuid() != uid || syscall.Getegid() != gid {
+				log.Println("probe: privilege drop incomplete")
+				return 11
+			}
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), legacy.DefaultProbeTimeout)
 	defer cancel()
-	if busy, _ := legacy.Busy(ctx, legacy.WGPlusSocket); busy {
+	busy, reachable, err := legacy.Busy(ctx, legacy.WGPlusSocket)
+	switch {
+	case busy:
 		return 10
+	case reachable && err != nil:
+		log.Println("probe:", err)
+		return 12
 	}
 	return 0
 }
