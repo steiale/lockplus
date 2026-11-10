@@ -237,8 +237,16 @@ Profiles that need a one-time code can't connect without you, so they can't be t
 <summary><b>Was this written with AI?</b></summary>
 
 Mostly, yes, under my direction; see [How LockPlus is built](#how-lockplus-is-built). AI agents wrote most of the code,
-AI review passes checked it, and tests and VM runs verified it. AI-assisted security research is how vulnerabilities
-are found today: Apple's iOS 27.2 security notes credit OpenAI Codex Security and Anthropic Research for finding
+AI review passes checked it, and tests and VM runs verified it.
+
+What AI wrote is the app *around* the VPN, not the VPN protocols. The tunnels and their encryption come from upstream
+[wireguard-go](https://git.zx2c4.com/wireguard-go/about/) (unmodified) and [OpenVPN 3](https://github.com/OpenVPN/openvpn3)
+with OpenSSL (one small published patch, see [License and third-party notices](#license-and-third-party-notices)).
+The kill switch is enforced by macOS (`includeAllNetworks`). The AI-written part is LockPlus's own code: the app, the
+import and its checks, the bridge between Swift and wireguard-go, and the extension code that sets up routes, DNS and
+the kill switch flag. That is what the security review passes covered.
+
+AI-assisted security research is how vulnerabilities are found today: Apple's iOS 27.2 security notes credit OpenAI Codex Security and Anthropic Research for finding
 vulnerabilities ([support.apple.com/en-us/149230](https://support.apple.com/en-us/149230)). It is still not a substitute
 for an independent human audit, which LockPlus hasn't had.
 
