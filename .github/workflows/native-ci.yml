@@ -89,10 +89,10 @@ jobs:
     continue-on-error: true
     env: { DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer }
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1 (first: its clean step would delete a download made before it)
+        with: { persist-credentials: false }
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333   # v8.0.2
         with: { name: unit-xctestproducts, path: Unit.xctestproducts }
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1 (for the assertion script)
-        with: { persist-credentials: false }
       - run: |
           xcodebuild test-without-building -testProductsPath Unit.xctestproducts -destination 'platform=macOS,arch=arm64' \
             -resultBundlePath Unit.xcresult
