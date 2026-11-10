@@ -37,10 +37,13 @@ struct GlyphTests {
         for name in GlyphState.connectingFrames { #expect(NSImage(named: name) != nil, "\(name)") }
     }
 
-    @Test("All states share one width, so the status item never jumps")
+    /// The status item can't jump: it uses one fixed canvas (`statusCanvas`). The raw symbols only need to be close:
+    /// macOS's rasterisation differs by build (CI's 27.0.1 image drew `paused` 18 pt wide, 19 pt here), and NSMenu
+    /// aligns titles after its widest image, so 1 pt never moves a menu row.
+    @Test("All states have about one width (within 1 pt)")
     func sameWidth() throws {
         let widths = try GlyphState.allCases.map { try #require(LockGlyphImage.template($0, pointSize: 15)).size.width }
-        #expect(Set(widths.map { Int($0.rounded()) }).count == 1, "\(widths)")
+        #expect((widths.max() ?? 0) - (widths.min() ?? 0) <= 1.0, "\(widths)")
     }
 
     @Test("Status-item images share one canvas (no vertical jump between states)")
