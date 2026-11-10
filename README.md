@@ -218,9 +218,11 @@ removes it again (dragging the app to the Trash doesn't).
 <details>
 <summary><b>Can I connect two tunnels at once?</b></summary>
 
-No, LockPlus 2 runs one tunnel at a time. That's a design decision, not a macOS limit: the kill switch sends all
-traffic through one tunnel, which two tunnels at once can't share, and LockPlus is built around one connection whose
-state it can always tell you exactly. LockPlus 1 could run several WireGuard tunnels at once.
+No, LockPlus 2 runs one tunnel at a time. The kill switch sends all traffic through one tunnel, which two tunnels at
+once can't share, and LockPlus is built around one connection whose state it can always tell you exactly. Whether
+macOS reliably runs several VPN tunnels from one app isn't documented: Apple's documentation says only one VPN
+configuration can be enabled at a time, while others report it working on macOS 26. I'm testing it before deciding
+on parallel split tunnels for 2.1. LockPlus 1 could run several WireGuard tunnels at once.
 
 </details>
 
