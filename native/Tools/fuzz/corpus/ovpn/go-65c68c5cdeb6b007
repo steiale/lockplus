@@ -1,0 +1,4 @@
+client
+remote vpn.example.com 1194
+dev tun0
+dev-type tun

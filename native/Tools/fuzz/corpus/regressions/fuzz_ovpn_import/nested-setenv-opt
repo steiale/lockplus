@@ -1,0 +1,21 @@
+client
+dev tun
+proto udp
+remote vpn.example.invalid 1194
+setenv opt setenv opt socks-proxy 127.0.0.1 1080
+<ca>
+-----BEGIN CERTIFICATE-----
+MIIB
+-----END CERTIFICATE-----
+</ca>
+<cert>
+-----BEGIN CERTIFICATE-----
+MIIB
+-----ter.passwd
+END CERTIFICATE-----
+</cert>
+<key>
+-----BEGIN PRIVATE KEY-----
+MIIB
+-----END PRIVATE KEY-----
+</key>

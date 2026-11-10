@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>LockPlus</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
+	<key>LPTunnelBundleIdentifier</key>
+	<string>$(LP_EXT_ID)</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>© Alexander Steiner</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>LockPlus uses your location only to read the current Wi-Fi network name when you add it to Auto-Connect.</string>
+	<!-- Sparkle 2.10.1 (DESIGN §2.5, §12.1). SUFeedURL is final (owner decision 2026-10-27: repo steiale/lockplus-updates on GitHub Pages).
+	     SUPublicEDKey is final (generated 2026-10-27 with `generate_keys --account lockplus-native`; private key in the
+	     owner's login keychain + offline backup, §12.1).
+	     UpdateController never starts the updater while either is a placeholder. -->
+	<key>SUFeedURL</key>
+	<string>https://steiale.github.io/lockplus-updates/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>GcsDevcj56QL4jCoBO0/3w6ja8def0EvupkqPn6EukQ=</string>
+	<key>SUVerifyUpdateBeforeExtraction</key>
+	<true/>
+	<key>SURequireSignedFeed</key>
+	<true/>
+	<key>SUSignedFeedFailureExpirationInterval</key>
+	<integer>1728000</integer>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUAutomaticallyUpdate</key>
+	<false/>
+	<!-- §2.5 decision (owner may revisit): no silent install-on-quit, so the "Updating tunnel component" moment is visible. -->
+	<key>SUAllowsAutomaticUpdates</key>
+	<false/>
+	<key>SUEnableSystemProfiling</key>
+	<false/>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+</dict>
+</plist>

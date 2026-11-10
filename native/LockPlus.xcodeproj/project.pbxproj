@@ -1,0 +1,879 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		4A4B9364EF7ECEAEF2F45E2D /* io.github.steiale.lockplus.mac.resume.plist in Embed Launch Agents */ = {isa = PBXBuildFile; fileRef = 0171E17D095A976465B687CE /* io.github.steiale.lockplus.mac.resume.plist */; };
+		01D8F1FB0D2196E993C9F0DB /* LPXPCClient in Frameworks */ = {isa = PBXBuildFile; productRef = C0379D5664FCE71CDBB06050 /* LPXPCClient */; };
+		06451991D2CC4825A1C4841D /* LPWire in Frameworks */ = {isa = PBXBuildFile; productRef = 83032EA72AB233FBAD7FF241 /* LPWire */; };
+		19E2FA4634FF76C489ABB331 /* LPModel in Frameworks */ = {isa = PBXBuildFile; productRef = 51413AAA58488F6634DF9348 /* LPModel */; };
+		22B521A25C20D11C5ED5F5C0 /* WireGuardKitGo in Frameworks */ = {isa = PBXBuildFile; productRef = 8197727F33A5D6448A86F858 /* WireGuardKitGo */; };
+		24C2CC3C9D5B6005C5F69D4B /* LPWire in Frameworks */ = {isa = PBXBuildFile; productRef = 16A85D71CE7C03C1B6921258 /* LPWire */; };
+		27D2E3BFF986993C2B10BA45 /* LPParsing in Frameworks */ = {isa = PBXBuildFile; productRef = 589335AB37047C022E543995 /* LPParsing */; };
+		2C36062F81C8253A47EF3BE1 /* LPRouteProbe in Frameworks */ = {isa = PBXBuildFile; productRef = 315CDFA8E34730EF52FF5F8F /* LPRouteProbe */; };
+		3B70A6209A14FD57FC856A2A /* OpenVPN3Shim in Frameworks */ = {isa = PBXBuildFile; productRef = 490EFD7DD502EB56A4AD592E /* OpenVPN3Shim */; };
+		494A30B092E1B4E33BF82A8D /* LPRouteProbe in Frameworks */ = {isa = PBXBuildFile; productRef = 2F333F974F408BD8C93C2227 /* LPRouteProbe */; };
+		5E4A9537A84A9EE699E2B36B /* TunnelEngine in Frameworks */ = {isa = PBXBuildFile; productRef = F381B82E18B806FBA45AB1C6 /* TunnelEngine */; };
+		7CBF3E6E5CE6D6984D7ACEF3 /* io.github.steiale.lockplus.mac.tunnel.systemextension in Embed System Extensions */ = {isa = PBXBuildFile; fileRef = B67DAE5E76C3D088BCC0C64B /* io.github.steiale.lockplus.mac.tunnel.systemextension */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		9F723ED75FB71332BFAC533C /* LPWire in Frameworks */ = {isa = PBXBuildFile; productRef = 88946D4BD4A218AE4372B086 /* LPWire */; };
+		CD216513D40651D73B5B2CEC /* LPModel in Frameworks */ = {isa = PBXBuildFile; productRef = 714F412B74D59F8EC850AB70 /* LPModel */; };
+		D3809C1F504D70D0D872F921 /* OpenVPN3Options in Frameworks */ = {isa = PBXBuildFile; productRef = 4187340E10E2A992DF107CD3 /* OpenVPN3Options */; };
+		F2AD78F51918CA750154D4A8 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 794DF2971E49413ADA7101D8 /* Sparkle */; };
+		5A1F0C3E9B7D24E68C0A1B2D /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 7C2E4A9F1D3B58C60E1F2A3B /* ZIPFoundation */; };
+		D974F1DA2EDFDC5CE9F8F1D9 /* LPParsing in Frameworks */ = {isa = PBXBuildFile; productRef = 1BF9666B08EBDC2E9E8246CA /* LPParsing */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B82450C662723C4B84C896D8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E4CF091925A4B165B1026291;
+			remoteInfo = LockPlus;
+		};
+		CF4F348FD5C5D3E7BC341892 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 42CF1D48B3D5920BBEBC6BE7;
+			remoteInfo = LockPlusTunnel;
+		};
+		F97F11B0C4297CB7ED3F0D6D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8E33AFEEDC60F0CCE3F9FABA;
+			remoteInfo = WireGuardGoBridgemacOS;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B4E80B2D79E9A79177A02D88 /* Embed System Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7CBF3E6E5CE6D6984D7ACEF3 /* io.github.steiale.lockplus.mac.tunnel.systemextension in Embed System Extensions */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			dstPath = "$(SYSTEM_EXTENSIONS_FOLDER_PATH)";
+			dstSubfolderSpec = 16;
+			name = "Embed System Extensions";
+		};
+		E7790508B86B9EFE4E8D14E1 /* Embed Launch Agents */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4A4B9364EF7ECEAEF2F45E2D /* io.github.steiale.lockplus.mac.resume.plist in Embed Launch Agents */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			dstPath = Contents/Library/LaunchAgents;
+			dstSubfolderSpec = 1;
+			name = "Embed Launch Agents";
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		0171E17D095A976465B687CE /* io.github.steiale.lockplus.mac.resume.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = LaunchAgents/io.github.steiale.lockplus.mac.resume.plist; sourceTree = "<group>"; };
+		01C731214D77A9437D3BCE85 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		1BC9081441B005E8821F9925 /* LockPlus.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LockPlus.entitlements; sourceTree = "<group>"; };
+		1D6E1FBF528A214257C7F427 /* GoBridge.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = GoBridge.xcconfig; sourceTree = "<group>"; };
+		20876089B6600513F0936071 /* UnitRelease.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = UnitRelease.xctestplan; sourceTree = "<group>"; };
+		3025F3E1EE01CCC94C159EB0 /* ExportOptions-DeveloperID.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "ExportOptions-DeveloperID.plist"; sourceTree = "<group>"; };
+		3B5B21E46EB9FB25887CAF28 /* Repro.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Repro.xcconfig; sourceTree = "<group>"; };
+		3ECED78C860171441C17DC11 /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = App.xcconfig; sourceTree = "<group>"; };
+		42CB65822AF994B173F38954 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		5AD51EEDC14873B2C9E7E0AA /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		73D1433842EBC367DE370E48 /* toolchain.lock */ = {isa = PBXFileReference; lastKnownFileType = text; path = toolchain.lock; sourceTree = "<group>"; };
+		7D59C34589ED4F7A807D0BD1 /* Tests.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Tests.xcconfig; sourceTree = "<group>"; };
+		7F6C13191173FB3123EE4E6A /* LockPlusTunnel-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "LockPlusTunnel-Info.plist"; sourceTree = "<group>"; };
+		8E48004E954702739A78B863 /* LockPlus-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "LockPlus-Info.plist"; sourceTree = "<group>"; };
+		9A3869C32439914C492B1DAD /* FaultInjection.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = FaultInjection.xcconfig; sourceTree = "<group>"; };
+		B4769B11E8E610620B1D6498 /* Tunnel.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Tunnel.xcconfig; sourceTree = "<group>"; };
+		B67DAE5E76C3D088BCC0C64B /* io.github.steiale.lockplus.mac.tunnel.systemextension */ = {isa = PBXFileReference; explicitFileType = "wrapper.system-extension"; includeInIndex = 0; path = io.github.steiale.lockplus.mac.tunnel.systemextension; sourceTree = BUILT_PRODUCTS_DIR; };
+		B8C67A0CE3A03605402FC497 /* ASan.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = ASan.xcconfig; sourceTree = "<group>"; };
+		CF0D0F14DC1DAAA1591E71E0 /* Unit.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = Unit.xctestplan; sourceTree = "<group>"; };
+		D0E49A879EEA4822BED8C486 /* RequirementTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RequirementTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D1736A0A09ACC331E026E533 /* LockPlusTunnel.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LockPlusTunnel.entitlements; sourceTree = "<group>"; };
+		D6E27852D701FCD0ACCE3646 /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
+		D6E8B0E52327809E834C9746 /* LockPlus.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LockPlus.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DAEAD0DE40671110B3E80FAD /* LockPlus.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LockPlus.entitlements; sourceTree = "<group>"; };
+		F1CCF738BF015C7F973561D5 /* LockPlusTunnel.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LockPlusTunnel.entitlements; sourceTree = "<group>"; };
+		F2ABCA5B0F838C562D14FCF9 /* LockPlusTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LockPlusTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		F5C66A5AD977544C61C6783C /* AppTests.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = AppTests.xcconfig; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		BB599765B49AAA37A3381AB8 /* Exceptions for "App" folder in "LockPlus" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				UI/Tests,
+				UI/Tools,
+			);
+			target = E4CF091925A4B165B1026291 /* LockPlus */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		2C129E13B1B631014442280B /* Tunnel */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Tunnel;
+			sourceTree = "<group>";
+		};
+		3DD3D9707DC56671F8AA223F /* RequirementTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Tests/RequirementTests;
+			sourceTree = "<group>";
+		};
+		9DCD2023BB7F15FB2D257518 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		A66F538515F72C93472CE5C5 /* LockPlusTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Tests/LockPlusTests;
+			sourceTree = "<group>";
+		};
+		E268454ACB097AD37F7C31A6 /* App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				BB599765B49AAA37A3381AB8 /* Exceptions for "App" folder in "LockPlus" target */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		5488E504E68C508B20F9FFE2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				24C2CC3C9D5B6005C5F69D4B /* LPWire in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A0653B449B48C64BC1FAA071 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CD216513D40651D73B5B2CEC /* LPModel in Frameworks */,
+				9F723ED75FB71332BFAC533C /* LPWire in Frameworks */,
+				27D2E3BFF986993C2B10BA45 /* LPParsing in Frameworks */,
+				494A30B092E1B4E33BF82A8D /* LPRouteProbe in Frameworks */,
+				5E4A9537A84A9EE699E2B36B /* TunnelEngine in Frameworks */,
+				22B521A25C20D11C5ED5F5C0 /* WireGuardKitGo in Frameworks */,
+				3B70A6209A14FD57FC856A2A /* OpenVPN3Shim in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A59F63B36F5F6CA97177E2CF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				19E2FA4634FF76C489ABB331 /* LPModel in Frameworks */,
+				06451991D2CC4825A1C4841D /* LPWire in Frameworks */,
+				01D8F1FB0D2196E993C9F0DB /* LPXPCClient in Frameworks */,
+				D974F1DA2EDFDC5CE9F8F1D9 /* LPParsing in Frameworks */,
+				2C36062F81C8253A47EF3BE1 /* LPRouteProbe in Frameworks */,
+				D3809C1F504D70D0D872F921 /* OpenVPN3Options in Frameworks */,
+				F2AD78F51918CA750154D4A8 /* Sparkle in Frameworks */,
+				5A1F0C3E9B7D24E68C0A1B2D /* ZIPFoundation in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FD205D2919761C02204B7575 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		032F8C223C9EF8C070C56858 /* Release */ = {
+			isa = PBXGroup;
+			children = (
+				1BC9081441B005E8821F9925 /* LockPlus.entitlements */,
+				F1CCF738BF015C7F973561D5 /* LockPlusTunnel.entitlements */,
+			);
+			path = Release;
+			sourceTree = "<group>";
+		};
+		44EAD92AD1FE9930BBA60D8E /* Entitlements */ = {
+			isa = PBXGroup;
+			children = (
+				DAEAD0DE40671110B3E80FAD /* LockPlus.entitlements */,
+				D1736A0A09ACC331E026E533 /* LockPlusTunnel.entitlements */,
+				032F8C223C9EF8C070C56858 /* Release */,
+			);
+			path = Entitlements;
+			sourceTree = "<group>";
+		};
+		725E3FF6647B49F88D35D7DB /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		8916C45310B24E205C92B70E /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D6E8B0E52327809E834C9746 /* LockPlus.app */,
+				B67DAE5E76C3D088BCC0C64B /* io.github.steiale.lockplus.mac.tunnel.systemextension */,
+				D0E49A879EEA4822BED8C486 /* RequirementTests.xctest */,
+				F2ABCA5B0F838C562D14FCF9 /* LockPlusTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A334400D411209EE7B5C4164 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				73D1433842EBC367DE370E48 /* toolchain.lock */,
+				42CB65822AF994B173F38954 /* Base.xcconfig */,
+				D6E27852D701FCD0ACCE3646 /* Version.xcconfig */,
+				01C731214D77A9437D3BCE85 /* Debug.xcconfig */,
+				5AD51EEDC14873B2C9E7E0AA /* Release.xcconfig */,
+				9A3869C32439914C492B1DAD /* FaultInjection.xcconfig */,
+				3ECED78C860171441C17DC11 /* App.xcconfig */,
+				B4769B11E8E610620B1D6498 /* Tunnel.xcconfig */,
+				1D6E1FBF528A214257C7F427 /* GoBridge.xcconfig */,
+				7D59C34589ED4F7A807D0BD1 /* Tests.xcconfig */,
+				F5C66A5AD977544C61C6783C /* AppTests.xcconfig */,
+				3B5B21E46EB9FB25887CAF28 /* Repro.xcconfig */,
+				B8C67A0CE3A03605402FC497 /* ASan.xcconfig */,
+				3025F3E1EE01CCC94C159EB0 /* ExportOptions-DeveloperID.plist */,
+				44EAD92AD1FE9930BBA60D8E /* Entitlements */,
+				F4FC127C627C8F764B990D20 /* Info */,
+				0171E17D095A976465B687CE /* io.github.steiale.lockplus.mac.resume.plist */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		AB48CFA305015276AB5620D4 = {
+			isa = PBXGroup;
+			children = (
+				E268454ACB097AD37F7C31A6 /* App */,
+				2C129E13B1B631014442280B /* Tunnel */,
+				9DCD2023BB7F15FB2D257518 /* Shared */,
+				3DD3D9707DC56671F8AA223F /* RequirementTests */,
+				A66F538515F72C93472CE5C5 /* LockPlusTests */,
+				C5D97EAFEE1A97533055379D /* TestPlans */,
+				A334400D411209EE7B5C4164 /* Config */,
+				725E3FF6647B49F88D35D7DB /* Packages */,
+				8916C45310B24E205C92B70E /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		C5D97EAFEE1A97533055379D /* TestPlans */ = {
+			isa = PBXGroup;
+			children = (
+				CF0D0F14DC1DAAA1591E71E0 /* Unit.xctestplan */,
+				20876089B6600513F0936071 /* UnitRelease.xctestplan */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		F4FC127C627C8F764B990D20 /* Info */ = {
+			isa = PBXGroup;
+			children = (
+				8E48004E954702739A78B863 /* LockPlus-Info.plist */,
+				7F6C13191173FB3123EE4E6A /* LockPlusTunnel-Info.plist */,
+			);
+			path = Info;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXLegacyTarget section */
+		8E33AFEEDC60F0CCE3F9FABA /* WireGuardGoBridgemacOS */ = {
+			isa = PBXLegacyTarget;
+			buildArgumentsString = "$(ACTION)";
+			buildConfigurationList = 03CB04A4E456874F927E1A5D /* Build configuration list for PBXLegacyTarget "WireGuardGoBridgemacOS" */;
+			buildPhases = (
+			);
+			buildToolPath = /usr/bin/make;
+			buildWorkingDirectory = "$(PROJECT_DIR)/Vendor/wireguard-apple/Sources/WireGuardKitGo";
+			dependencies = (
+			);
+			name = WireGuardGoBridgemacOS;
+			passBuildSettingsInEnvironment = 1;
+			productName = WireGuardGoBridgemacOS;
+		};
+/* End PBXLegacyTarget section */
+
+/* Begin PBXNativeTarget section */
+		42CF1D48B3D5920BBEBC6BE7 /* LockPlusTunnel */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5C77A4E4F2E6220734121E31 /* Build configuration list for PBXNativeTarget "LockPlusTunnel" */;
+			buildPhases = (
+				18D634FF7534DA13B1B0ED83 /* Sources */,
+				A0653B449B48C64BC1FAA071 /* Frameworks */,
+				3FF1882F0D4BC9E9501F0BC5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4BDEF5BE7C347E1B8287C5D8 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				2C129E13B1B631014442280B /* Tunnel */,
+				9DCD2023BB7F15FB2D257518 /* Shared */,
+			);
+			name = LockPlusTunnel;
+			packageProductDependencies = (
+				714F412B74D59F8EC850AB70 /* LPModel */,
+				88946D4BD4A218AE4372B086 /* LPWire */,
+				589335AB37047C022E543995 /* LPParsing */,
+				2F333F974F408BD8C93C2227 /* LPRouteProbe */,
+				F381B82E18B806FBA45AB1C6 /* TunnelEngine */,
+				8197727F33A5D6448A86F858 /* WireGuardKitGo */,
+				490EFD7DD502EB56A4AD592E /* OpenVPN3Shim */,
+			);
+			productName = LockPlusTunnel;
+			productReference = B67DAE5E76C3D088BCC0C64B /* io.github.steiale.lockplus.mac.tunnel.systemextension */;
+			productType = "com.apple.product-type.system-extension";
+		};
+		5C1260FC45126791D9B39A44 /* LockPlusTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CB1055EC5F6C2EF61513B1CD /* Build configuration list for PBXNativeTarget "LockPlusTests" */;
+			buildPhases = (
+				16BEC5C9F54122A788C94F42 /* Sources */,
+				FD205D2919761C02204B7575 /* Frameworks */,
+				C7274DC6D45FBE0C7B5EE8E5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8A3229DAA4CCC07F84F3E020 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A66F538515F72C93472CE5C5 /* LockPlusTests */,
+			);
+			name = LockPlusTests;
+			packageProductDependencies = (
+			);
+			productName = LockPlusTests;
+			productReference = F2ABCA5B0F838C562D14FCF9 /* LockPlusTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		D8098181093CF994BE47C9FE /* RequirementTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 96CDDA78B87CF6D3A8E43822 /* Build configuration list for PBXNativeTarget "RequirementTests" */;
+			buildPhases = (
+				DF5362C169530170B23BFCC2 /* Sources */,
+				5488E504E68C508B20F9FFE2 /* Frameworks */,
+				F967C3707711DFD0F3366D9A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				3DD3D9707DC56671F8AA223F /* RequirementTests */,
+				9DCD2023BB7F15FB2D257518 /* Shared */,
+			);
+			name = RequirementTests;
+			packageProductDependencies = (
+				16A85D71CE7C03C1B6921258 /* LPWire */,
+			);
+			productName = RequirementTests;
+			productReference = D0E49A879EEA4822BED8C486 /* RequirementTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		E4CF091925A4B165B1026291 /* LockPlus */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 156247CF29DE943C51288CC8 /* Build configuration list for PBXNativeTarget "LockPlus" */;
+			buildPhases = (
+				944A5EF6CFDE9D34419ADC24 /* Sources */,
+				A59F63B36F5F6CA97177E2CF /* Frameworks */,
+				859142A61571419411C9B51A /* Resources */,
+				B4E80B2D79E9A79177A02D88 /* Embed System Extensions */,
+				E7790508B86B9EFE4E8D14E1 /* Embed Launch Agents */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				26DF976A92853F372A7E1CA5 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				E268454ACB097AD37F7C31A6 /* App */,
+				9DCD2023BB7F15FB2D257518 /* Shared */,
+			);
+			name = LockPlus;
+			packageProductDependencies = (
+				51413AAA58488F6634DF9348 /* LPModel */,
+				83032EA72AB233FBAD7FF241 /* LPWire */,
+				C0379D5664FCE71CDBB06050 /* LPXPCClient */,
+				1BF9666B08EBDC2E9E8246CA /* LPParsing */,
+				315CDFA8E34730EF52FF5F8F /* LPRouteProbe */,
+				4187340E10E2A992DF107CD3 /* OpenVPN3Options */,
+				794DF2971E49413ADA7101D8 /* Sparkle */,
+				7C2E4A9F1D3B58C60E1F2A3B /* ZIPFoundation */,
+			);
+			productName = LockPlus;
+			productReference = D6E8B0E52327809E834C9746 /* LockPlus.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		98F54143AB4E86B28C3AFEE0 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2710;
+				LastUpgradeCheck = 2710;
+				TargetAttributes = {
+					E4CF091925A4B165B1026291 = {
+						CreatedOnToolsVersion = 27.1;
+					};
+					42CF1D48B3D5920BBEBC6BE7 = {
+						CreatedOnToolsVersion = 27.1;
+					};
+					D8098181093CF994BE47C9FE = {
+						CreatedOnToolsVersion = 27.1;
+					};
+					5C1260FC45126791D9B39A44 = {
+						CreatedOnToolsVersion = 27.1;
+						TestTargetID = E4CF091925A4B165B1026291;
+					};
+					8E33AFEEDC60F0CCE3F9FABA = {
+						CreatedOnToolsVersion = 27.1;
+					};
+				};
+			};
+			buildConfigurationList = 7A00C421653FA271614C6FDB /* Build configuration list for PBXProject "LockPlus" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+				de,
+			);
+			mainGroup = AB48CFA305015276AB5620D4;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A584B9D43C10328E4FFF4CF9 /* XCLocalSwiftPackageReference "Packages/LockPlusCore" */,
+				7F77F101A71D6C1813BD1886 /* XCLocalSwiftPackageReference "Packages/TunnelEngine" */,
+				8BBDEA75531BE35665E73D94 /* XCLocalSwiftPackageReference "Packages/OpenVPN3Shim" */,
+				F8BD9FF7FA1B0BD57E4CF043 /* XCLocalSwiftPackageReference "Vendor/wireguard-apple" */,
+				DC0AF781F62B40CB88CECA21 /* XCRemoteSwiftPackageReference "Sparkle" */,
+				9E3D5B7A2C4F61D80A2B3C4D /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 8916C45310B24E205C92B70E /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				E4CF091925A4B165B1026291 /* LockPlus */,
+				42CF1D48B3D5920BBEBC6BE7 /* LockPlusTunnel */,
+				8E33AFEEDC60F0CCE3F9FABA /* WireGuardGoBridgemacOS */,
+				D8098181093CF994BE47C9FE /* RequirementTests */,
+				5C1260FC45126791D9B39A44 /* LockPlusTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		3FF1882F0D4BC9E9501F0BC5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		859142A61571419411C9B51A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C7274DC6D45FBE0C7B5EE8E5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F967C3707711DFD0F3366D9A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		16BEC5C9F54122A788C94F42 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		18D634FF7534DA13B1B0ED83 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		944A5EF6CFDE9D34419ADC24 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DF5362C169530170B23BFCC2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		26DF976A92853F372A7E1CA5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 42CF1D48B3D5920BBEBC6BE7 /* LockPlusTunnel */;
+			targetProxy = CF4F348FD5C5D3E7BC341892 /* PBXContainerItemProxy */;
+		};
+		4BDEF5BE7C347E1B8287C5D8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8E33AFEEDC60F0CCE3F9FABA /* WireGuardGoBridgemacOS */;
+			targetProxy = F97F11B0C4297CB7ED3F0D6D /* PBXContainerItemProxy */;
+		};
+		8A3229DAA4CCC07F84F3E020 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E4CF091925A4B165B1026291 /* LockPlus */;
+			targetProxy = B82450C662723C4B84C896D8 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0142BC4819B83D82D28A9D1A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F5C66A5AD977544C61C6783C /* AppTests.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		09CCEFD6AB5005BC70905E6D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = B4769B11E8E610620B1D6498 /* Tunnel.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		0C4B7DE8041ED8E9B4D2E330 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 3ECED78C860171441C17DC11 /* App.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		0D27F0F1ED01637BB7D6AD5A /* FaultInjection */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9A3869C32439914C492B1DAD /* FaultInjection.xcconfig */;
+			buildSettings = {
+			};
+			name = FaultInjection;
+		};
+		2CE6936CBE0E506FD581F271 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7D59C34589ED4F7A807D0BD1 /* Tests.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		367C0FB3C5DDD26C15A25FF9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5AD51EEDC14873B2C9E7E0AA /* Release.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		47026F4F149B22F9BE1435A1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = B4769B11E8E610620B1D6498 /* Tunnel.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		5340345F6D83D2FF1CD496AF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 01C731214D77A9437D3BCE85 /* Debug.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		72C6823996155008FC483CD5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F5C66A5AD977544C61C6783C /* AppTests.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		9446D01201FC9E9C6783AB20 /* FaultInjection */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = B4769B11E8E610620B1D6498 /* Tunnel.xcconfig */;
+			buildSettings = {
+			};
+			name = FaultInjection;
+		};
+		97298273D67CB34C16E9CB9C /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7D59C34589ED4F7A807D0BD1 /* Tests.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		9E8E52E12E39556B6368A718 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 1D6E1FBF528A214257C7F427 /* GoBridge.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		B374FB0CA73D5A8DED879BA9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 3ECED78C860171441C17DC11 /* App.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		B5BB01D58CFCA28183162EC3 /* FaultInjection */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7D59C34589ED4F7A807D0BD1 /* Tests.xcconfig */;
+			buildSettings = {
+			};
+			name = FaultInjection;
+		};
+		B6400E204EB95C83FE475E19 /* FaultInjection */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 3ECED78C860171441C17DC11 /* App.xcconfig */;
+			buildSettings = {
+			};
+			name = FaultInjection;
+		};
+		C6F676AC7D9E6718F61448E0 /* FaultInjection */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F5C66A5AD977544C61C6783C /* AppTests.xcconfig */;
+			buildSettings = {
+			};
+			name = FaultInjection;
+		};
+		E1CD6474715F8F5A2859E39E /* FaultInjection */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 1D6E1FBF528A214257C7F427 /* GoBridge.xcconfig */;
+			buildSettings = {
+			};
+			name = FaultInjection;
+		};
+		F7A80C8FA0288B0231DC8CB8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 1D6E1FBF528A214257C7F427 /* GoBridge.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		03CB04A4E456874F927E1A5D /* Build configuration list for PBXLegacyTarget "WireGuardGoBridgemacOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F7A80C8FA0288B0231DC8CB8 /* Debug */,
+				9E8E52E12E39556B6368A718 /* Release */,
+				E1CD6474715F8F5A2859E39E /* FaultInjection */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		156247CF29DE943C51288CC8 /* Build configuration list for PBXNativeTarget "LockPlus" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B374FB0CA73D5A8DED879BA9 /* Debug */,
+				0C4B7DE8041ED8E9B4D2E330 /* Release */,
+				B6400E204EB95C83FE475E19 /* FaultInjection */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5C77A4E4F2E6220734121E31 /* Build configuration list for PBXNativeTarget "LockPlusTunnel" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				09CCEFD6AB5005BC70905E6D /* Debug */,
+				47026F4F149B22F9BE1435A1 /* Release */,
+				9446D01201FC9E9C6783AB20 /* FaultInjection */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		7A00C421653FA271614C6FDB /* Build configuration list for PBXProject "LockPlus" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5340345F6D83D2FF1CD496AF /* Debug */,
+				367C0FB3C5DDD26C15A25FF9 /* Release */,
+				0D27F0F1ED01637BB7D6AD5A /* FaultInjection */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		96CDDA78B87CF6D3A8E43822 /* Build configuration list for PBXNativeTarget "RequirementTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2CE6936CBE0E506FD581F271 /* Debug */,
+				97298273D67CB34C16E9CB9C /* Release */,
+				B5BB01D58CFCA28183162EC3 /* FaultInjection */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CB1055EC5F6C2EF61513B1CD /* Build configuration list for PBXNativeTarget "LockPlusTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0142BC4819B83D82D28A9D1A /* Debug */,
+				72C6823996155008FC483CD5 /* Release */,
+				C6F676AC7D9E6718F61448E0 /* FaultInjection */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		7F77F101A71D6C1813BD1886 /* XCLocalSwiftPackageReference "Packages/TunnelEngine" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/TunnelEngine;
+		};
+		8BBDEA75531BE35665E73D94 /* XCLocalSwiftPackageReference "Packages/OpenVPN3Shim" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/OpenVPN3Shim;
+		};
+		A584B9D43C10328E4FFF4CF9 /* XCLocalSwiftPackageReference "Packages/LockPlusCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/LockPlusCore;
+		};
+		F8BD9FF7FA1B0BD57E4CF043 /* XCLocalSwiftPackageReference "Vendor/wireguard-apple" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "Vendor/wireguard-apple";
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		DC0AF781F62B40CB88CECA21 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = exactVersion;
+				version = 2.10.1;
+			};
+		};
+		9E3D5B7A2C4F61D80A2B3C4D /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/weichsel/ZIPFoundation";
+			requirement = {
+				kind = exactVersion;
+				version = 0.9.20;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		794DF2971E49413ADA7101D8 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC0AF781F62B40CB88CECA21 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+		16A85D71CE7C03C1B6921258 /* LPWire */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A584B9D43C10328E4FFF4CF9 /* XCLocalSwiftPackageReference "Packages/LockPlusCore" */;
+			productName = LPWire;
+		};
+		1BF9666B08EBDC2E9E8246CA /* LPParsing */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A584B9D43C10328E4FFF4CF9 /* XCLocalSwiftPackageReference "Packages/LockPlusCore" */;
+			productName = LPParsing;
+		};
+		2F333F974F408BD8C93C2227 /* LPRouteProbe */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A584B9D43C10328E4FFF4CF9 /* XCLocalSwiftPackageReference "Packages/LockPlusCore" */;
+			productName = LPRouteProbe;
+		};
+		315CDFA8E34730EF52FF5F8F /* LPRouteProbe */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A584B9D43C10328E4FFF4CF9 /* XCLocalSwiftPackageReference "Packages/LockPlusCore" */;
+			productName = LPRouteProbe;
+		};
+		4187340E10E2A992DF107CD3 /* OpenVPN3Options */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8BBDEA75531BE35665E73D94 /* XCLocalSwiftPackageReference "Packages/OpenVPN3Shim" */;
+			productName = OpenVPN3Options;
+		};
+		490EFD7DD502EB56A4AD592E /* OpenVPN3Shim */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8BBDEA75531BE35665E73D94 /* XCLocalSwiftPackageReference "Packages/OpenVPN3Shim" */;
+			productName = OpenVPN3Shim;
+		};
+		51413AAA58488F6634DF9348 /* LPModel */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A584B9D43C10328E4FFF4CF9 /* XCLocalSwiftPackageReference "Packages/LockPlusCore" */;
+			productName = LPModel;
+		};
+		589335AB37047C022E543995 /* LPParsing */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A584B9D43C10328E4FFF4CF9 /* XCLocalSwiftPackageReference "Packages/LockPlusCore" */;
+			productName = LPParsing;
+		};
+		714F412B74D59F8EC850AB70 /* LPModel */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A584B9D43C10328E4FFF4CF9 /* XCLocalSwiftPackageReference "Packages/LockPlusCore" */;
+			productName = LPModel;
+		};
+		8197727F33A5D6448A86F858 /* WireGuardKitGo */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F8BD9FF7FA1B0BD57E4CF043 /* XCLocalSwiftPackageReference "Vendor/wireguard-apple" */;
+			productName = WireGuardKitGo;
+		};
+		83032EA72AB233FBAD7FF241 /* LPWire */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A584B9D43C10328E4FFF4CF9 /* XCLocalSwiftPackageReference "Packages/LockPlusCore" */;
+			productName = LPWire;
+		};
+		88946D4BD4A218AE4372B086 /* LPWire */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A584B9D43C10328E4FFF4CF9 /* XCLocalSwiftPackageReference "Packages/LockPlusCore" */;
+			productName = LPWire;
+		};
+		C0379D5664FCE71CDBB06050 /* LPXPCClient */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A584B9D43C10328E4FFF4CF9 /* XCLocalSwiftPackageReference "Packages/LockPlusCore" */;
+			productName = LPXPCClient;
+		};
+		F381B82E18B806FBA45AB1C6 /* TunnelEngine */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7F77F101A71D6C1813BD1886 /* XCLocalSwiftPackageReference "Packages/TunnelEngine" */;
+			productName = TunnelEngine;
+		};
+		7C2E4A9F1D3B58C60E1F2A3B /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9E3D5B7A2C4F61D80A2B3C4D /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+}

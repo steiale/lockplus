@@ -1,0 +1,3 @@
+client
+remote a.example 1194
+persist-remote-ip

@@ -1,0 +1,106 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: LockPlus Vendor <vendor@localhost>
+Date: Fri, 30 Oct 2026 08:48:04 +0100
+Subject: [PATCH] LockPlus: ClientOptions can leave openvpn3's process-wide
+ state alone
+
+ClientOptions' constructor writes two process-wide globals: the data-channel
+algorithm table (CryptoAlgs::allow_default_dc_algs) and the SSL factory's static
+log level (set_debug_level). A live client keeps reading both: IV_CIPHERS on every
+handshake, legal_dc_cipher on every data-channel key, the log level in the verify
+callback; eval_config and ParseClientConfig read the table too. LockPlus' extension
+also evaluates profiles (validateProfile, provisionProfile: eval_config plus a
+ClientOptions construction) while a session runs in the same process.
+ThreadSanitizer reports the concurrent writes and reads, and an evaluation with the
+default settings (AEAD only) would also drop a live session's CBC cipher, allowed
+by enableNonPreferredDCAlgorithms, from both.
+
+- ClientOptions::Config::apply_process_globals (default true = upstream
+  behaviour): false skips both writes. The evaluation's result doesn't depend on
+  them (ProtoConfig::load reads only the algorithms' modes).
+- ClientOptions::process_globals_mutex(): every construction holds it; the
+  embedder holds it around eval_config, ParseClientConfig::parse and its own
+  reads of the table, so none of them overlaps a client's connect_setup writes.
+---
+ openvpn/client/cliopt.hpp | 30 ++++++++++++++++++++++++++----
+ 1 file changed, 26 insertions(+), 4 deletions(-)
+
+diff --git a/openvpn/client/cliopt.hpp b/openvpn/client/cliopt.hpp
+index c534c46..6150ee4 100644
+--- a/openvpn/client/cliopt.hpp
++++ b/openvpn/client/cliopt.hpp
+@@ -18,6 +18,7 @@
+ #ifndef OPENVPN_CLIENT_CLIOPT_H
+ #define OPENVPN_CLIENT_CLIOPT_H
+ 
++#include <mutex>
+ #include <string>
+ #include <tuple>
+ #include <unordered_set>
+@@ -174,6 +175,12 @@ class ClientOptions : public RC<thread_unsafe_refcount>
+ #endif
+         Stop *stop = nullptr;
+ 
++        // LockPlus: false constructs the options without writing openvpn3's process-wide state (the data-channel
++        // algorithm table in CryptoAlgs and the SSL factory's static log level). For a profile evaluation that runs
++        // beside a live client in the same process: that client keeps reading both (IV_CIPHERS on every handshake,
++        // legal_dc_cipher on every key), and an evaluation with other settings must neither change nor race them.
++        bool apply_process_globals = true;
++
+         // callbacks -- must remain in scope for lifetime of ClientOptions object
+         ExternalPKIBase *external_pki = nullptr;
+         SocketProtect *socket_protect = nullptr;
+@@ -193,6 +200,15 @@ class ClientOptions : public RC<thread_unsafe_refcount>
+ #endif
+     };
+ 
++    // LockPlus: held by every ClientOptions construction. The embedder holds it too around everything else that
++    // reads the process-wide state while another thread may construct ClientOptions: OpenVPNClient::eval_config and
++    // ParseClientConfig::parse (ProtoConfig::load reads the algorithm table) and its own reads of the table.
++    static std::mutex &process_globals_mutex()
++    {
++        static std::mutex m;
++        return m;
++    }
++
+     ClientOptions(const OptionList &opt, // only needs to remain in scope for duration of constructor call
+                   const Config &config)
+         : clientconf(config.clientconf),
+@@ -215,6 +231,10 @@ class ClientOptions : public RC<thread_unsafe_refcount>
+           extern_transport_factory(config.extern_transport_factory)
+ #endif
+     {
++        // LockPlus: constructions read (and, unless !apply_process_globals, write) the process-wide state above;
++        // two of them on different threads (a client's connect_setup and a profile evaluation) are serialized.
++        const std::lock_guard<std::mutex> process_globals_lock(process_globals_mutex());
++
+         // parse general client options
+         const ParseClientConfig pcc(opt);
+ 
+@@ -253,9 +273,10 @@ class ClientOptions : public RC<thread_unsafe_refcount>
+         cp_main = proto_config(opt, config, pcc, false);
+         cp_relay = proto_config(opt, config, pcc, true); // may be null
+ 
+-        CryptoAlgs::allow_default_dc_algs<SSLLib::CryptoAPI>(cp_main->ssl_factory->libctx(),
+-                                                             !config.clientconf.enableNonPreferredDCAlgorithms,
+-                                                             config.clientconf.enableLegacyAlgorithms);
++        if (config.apply_process_globals)
++            CryptoAlgs::allow_default_dc_algs<SSLLib::CryptoAPI>(cp_main->ssl_factory->libctx(),
++                                                                 !config.clientconf.enableNonPreferredDCAlgorithms,
++                                                                 config.clientconf.enableLegacyAlgorithms);
+ 
+ #if (defined(ENABLE_KOVPN) || defined(ENABLE_OVPNDCO) || defined(ENABLE_OVPNDCOWIN)) && !defined(OPENVPN_FORCE_TUN_NULL) && !defined(OPENVPN_EXTERNAL_TUN_FACTORY)
+         if (config.clientconf.dco)
+@@ -1305,7 +1326,8 @@ class ClientOptions : public RC<thread_unsafe_refcount>
+         cc->set_external_pki_callback(config.external_pki, config.clientconf.external_pki_alias);
+         cc->set_frame(frame);
+         cc->set_flags(SSLConst::LOG_VERIFY_STATUS);
+-        cc->set_debug_level(config.clientconf.sslDebugLevel);
++        if (config.apply_process_globals) // LockPlus: a static log level shared by every SSL context
++            cc->set_debug_level(config.clientconf.sslDebugLevel);
+         cc->set_rng(rng);
+         cc->set_local_cert_enabled(pcc.clientCertEnabled() && !config.clientconf.disableClientCert);
+         /* load depends on private key password and legacy algorithms */
+-- 
+2.54.0 (Apple Git-157)
+

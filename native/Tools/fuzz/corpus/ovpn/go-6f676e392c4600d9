@@ -1,0 +1,23 @@
+client
+dev tun
+<connection>
+remote a.example 1194 udp
+connect-timeout 5
+</connection>
+<connection>
+remote b.example 443
+proto tcp-client
+http-proxy p.example 3128
+</connection>
+<auth-user-pass>
+user
+pass
+</auth-user-pass>
+<tls-crypt>
+x
+</tls-crypt>
+<http-proxy-user-pass>
+u
+p
+</http-proxy-user-pass>
+peer-fingerprint AB:CD

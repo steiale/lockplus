@@ -1,0 +1,4 @@
+client
+remote vpn.example.com 1194
+pull-filter ignore "dhcp-option"
+dhcp-option DNS 9.9.9.9

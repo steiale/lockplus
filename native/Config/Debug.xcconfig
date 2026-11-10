@@ -1,0 +1,17 @@
+// Config/Debug.xcconfig — project level, Debug (DESIGN §2.6, §5.3).
+#include "Base.xcconfig"
+
+// Dev stamp: only CFBundleVersion carries it (200000.<unix minutes>); MARKETING_VERSION is never stamped.
+// DevStamp.xcconfig is written by the LockPlus scheme's Build pre-action or Tools/dev/build.sh; git-ignored.
+LP_DEV_STAMP = 0
+#include? "DevStamp.xcconfig"
+CURRENT_PROJECT_VERSION = $(LP_BUILD_NUMBER).$(LP_DEV_STAMP)
+
+// LP_DEV_SIGNING admits Apple Development peers in ActiveRequirements.swift (O7; Fable sign-off before P2a ends).
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG LP_DEV_SIGNING
+GCC_PREPROCESSOR_DEFINITIONS = DEBUG=1 $(inherited)
+SWIFT_OPTIMIZATION_LEVEL = -Onone
+GCC_OPTIMIZATION_LEVEL = 0
+DEBUG_INFORMATION_FORMAT = dwarf
+ENABLE_TESTABILITY = YES
+MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE

@@ -1,0 +1,113 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Alex Steiner <alex@steiale.io>
+Date: Mon, 26 Oct 2026 20:30:27 +0100
+Subject: [PATCH 08/11] W6: wgIsClosed liveness and wgDebugCloseDevice
+ (FaultInjection only)
+
+wgIsClosed(h) is a non-blocking select on Device.Wait(): 1 once wireguard-go closed the device itself (the e7bbed1
+zombie, L-LC-1) or for an unknown handle. wgDebugCloseDevice(h) closes a device like a TUN read error does; it is
+compiled only with -tags lp_fault_injection, which the Makefile passes when CONFIGURATION is FaultInjection.
+---
+ Sources/WireGuardKitGo/Makefile              |  4 +++-
+ Sources/WireGuardKitGo/api-apple-fault.go    | 20 ++++++++++++++++
+ Sources/WireGuardKitGo/api-apple-liveness.go | 25 ++++++++++++++++++++
+ Sources/WireGuardKitGo/wireguard.h           |  6 +++++
+ 4 files changed, 54 insertions(+), 1 deletion(-)
+ create mode 100644 Sources/WireGuardKitGo/api-apple-fault.go
+ create mode 100644 Sources/WireGuardKitGo/api-apple-liveness.go
+
+diff --git a/Sources/WireGuardKitGo/Makefile b/Sources/WireGuardKitGo/Makefile
+index b401f47..65bde9d 100644
+--- a/Sources/WireGuardKitGo/Makefile
++++ b/Sources/WireGuardKitGo/Makefile
+@@ -21,6 +21,8 @@ CFLAGS_PREFIX := -mmacosx-version-min=$(MACOSX_DEPLOYMENT_TARGET) -isysroot $(SD
+ # LockPlus: never let go.mod's toolchain line switch Go (B6); no VCS stamping, no build id (reproducibility).
+ export GOTOOLCHAIN := local
+ export GOFLAGS := -buildvcs=false -modcacherw
++# LockPlus W6: wgDebugCloseDevice exists only in the FaultInjection configuration (Xcode exports CONFIGURATION).
++GO_TAGS := $(if $(filter FaultInjection,$(CONFIGURATION)),-tags lp_fault_injection,)
+ GOARCH_arm64 := arm64
+ GOARCH_x86_64 := amd64
+ GOOS_macosx := darwin
+@@ -50,7 +52,7 @@ $(BUILDDIR)/libwg-go-$(1).a: export CGO_LDFLAGS := $(CFLAGS_PREFIX) $(ARCH)
+ $(BUILDDIR)/libwg-go-$(1).a: export GOOS := $(GOOS_$(PLATFORM_NAME))
+ $(BUILDDIR)/libwg-go-$(1).a: export GOARCH := $(GOARCH_$(1))
+ $(BUILDDIR)/libwg-go-$(1).a: $(PREPARED) go.mod go.sum $(wildcard *.go)
+-	go build -ldflags="-w -buildid=" -trimpath -v -o "$(BUILDDIR)/libwg-go-$(1).a" -buildmode c-archive
++	go build -ldflags="-w -buildid=" -trimpath $(GO_TAGS) -v -o "$(BUILDDIR)/libwg-go-$(1).a" -buildmode c-archive
+ 	rm -f "$(BUILDDIR)/libwg-go-$(1).h"
+ endef
+ $(foreach ARCH,$(ARCHS),$(eval $(call libwg-go-a,$(ARCH))))
+diff --git a/Sources/WireGuardKitGo/api-apple-fault.go b/Sources/WireGuardKitGo/api-apple-fault.go
+new file mode 100644
+index 0000000..9093224
+--- /dev/null
++++ b/Sources/WireGuardKitGo/api-apple-fault.go
+@@ -0,0 +1,20 @@
++//go:build lp_fault_injection
++
++/* SPDX-License-Identifier: MIT
++ *
++ * LockPlus W6, FaultInjection configuration only (Makefile: -tags lp_fault_injection when CONFIGURATION is
++ * FaultInjection): closes the device the way a TUN read error does, for the L-LC-1 zombie-tunnel test.
++ */
++
++package main
++
++import "C" // cgo: required for //export in this file
++
++//export wgDebugCloseDevice
++func wgDebugCloseDevice(tunnelHandle int32) {
++	th, ok := lookupHandle(tunnelHandle)
++	if !ok {
++		return
++	}
++	go th.Device.Close() // like device/send.go on a TUN read error: the handle stays in the map
++}
+diff --git a/Sources/WireGuardKitGo/api-apple-liveness.go b/Sources/WireGuardKitGo/api-apple-liveness.go
+new file mode 100644
+index 0000000..adb7e1a
+--- /dev/null
++++ b/Sources/WireGuardKitGo/api-apple-liveness.go
+@@ -0,0 +1,25 @@
++/* SPDX-License-Identifier: MIT
++ *
++ * LockPlus W6 (DESIGN §9.2, L-LC-1): wireguard-go closes a device itself on a TUN read error (device/send.go) and
++ * tells nobody; this export lets the extension poll for it (1 Hz).
++ */
++
++package main
++
++import "C" // cgo: required for //export in this file
++
++// wgIsClosed returns 1 when the device has closed (or the handle is unknown), 0 while it runs. Non-blocking.
++//
++//export wgIsClosed
++func wgIsClosed(tunnelHandle int32) int32 {
++	th, ok := lookupHandle(tunnelHandle)
++	if !ok {
++		return 1
++	}
++	select {
++	case <-th.Device.Wait():
++		return 1
++	default:
++		return 0
++	}
++}
+diff --git a/Sources/WireGuardKitGo/wireguard.h b/Sources/WireGuardKitGo/wireguard.h
+index 78eb433..175ed67 100644
+--- a/Sources/WireGuardKitGo/wireguard.h
++++ b/Sources/WireGuardKitGo/wireguard.h
+@@ -26,5 +26,11 @@ extern int wgSendHandshake(int handle, int64_t *sent_ns);
+ extern int64_t wgSetEndpoint(int handle, const char *public_key_hex, const char *endpoint);
+ /* LockPlus W5: per-peer public_key, endpoint, last_handshake_time_sec/nsec, tx_bytes, rx_bytes; no keys. Caller frees. */
+ extern char *wgGetStats(int handle);
++/* LockPlus W6: 1 when the device closed itself (or the handle is unknown), 0 while running. Non-blocking. */
++extern int wgIsClosed(int handle);
++/* LockPlus W6, FaultInjection builds only (Go build tag lp_fault_injection); not declared for other builds. */
++#ifdef LP_FAULT_INJECTION
++extern void wgDebugCloseDevice(int handle);
++#endif
+ 
+ #endif

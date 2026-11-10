@@ -1,0 +1,3 @@
+client
+remote vpn.example.com 1194
+http-proxy p.example 8080 /etc/x basic

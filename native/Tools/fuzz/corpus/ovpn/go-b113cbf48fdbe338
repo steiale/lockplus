@@ -1,0 +1,4 @@
+<connection>
+'remote' h.example 443
+</connection>
+auth-user-pass

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- DESIGN §10.4 (N3): registered with SMAppService.agent(plistName:) only while a pause is active.
+     StartCalendarInterval {} = every minute; fires missed during sleep are coalesced into one at wake (TBD-by-S5;
+     fallback StartInterval 60). RunAtLoad covers login after a reboot. No ProcessType: Background throttling would
+     compete with the 5 s budget (ref/xpc-servicemanagement C14). -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>io.github.steiale.lockplus.mac.resume</string>
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/LockPlus</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>LockPlus</string>
+		<string>--resume-protection</string>
+	</array>
+	<key>StartCalendarInterval</key>
+	<dict/>
+	<key>RunAtLoad</key>
+	<true/>
+</dict>
+</plist>

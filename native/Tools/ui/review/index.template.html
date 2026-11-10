@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>LockPlus UI review</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{--bg:#f4f6f5;--fg:#13202a;--mut:#5b6b75;--card:#fff;--line:#d5dcdf;--acc:#2f7d6b}
+@media (prefers-color-scheme:dark){:root{--bg:#10171d;--fg:#e6ecef;--mut:#93a3ad;--card:#18222a;--line:#2b3943;--acc:#6fc2ac}}
+body{margin:0;font:14px/1.45 -apple-system,system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+header{position:sticky;top:0;z-index:20;background:var(--card);border-bottom:1px solid var(--line);padding:8px 16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+header h1{font-size:16px;margin:0}
+main{max-width:1500px;margin:0 auto;padding:16px}
+button,select,textarea,input{font:inherit}
+.pill{padding:2px 8px;border-radius:10px;background:var(--line)}
+#saved{color:var(--mut)}
+#general textarea{width:100%;height:90px}
+h2{margin:36px 0 8px;border-bottom:2px solid var(--acc);padding-bottom:4px}
+.toc td,.toc th{padding:2px 10px 2px 0;text-align:left;vertical-align:top}
+.toc a{color:var(--acc);text-decoration:none;font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin:14px 0}
+.sid{font-size:30px;font-weight:700;color:var(--acc);letter-spacing:.5px}
+.card h3{display:inline;margin-left:12px;font-size:17px}
+.when{color:var(--mut);margin:4px 0 10px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cell{position:relative}
+.cell .lab{font-size:11px;color:var(--mut);text-transform:uppercase}
+.imgwrap{position:relative;display:inline-block;max-width:100%;border:1px solid var(--line);background:#888}
+.imgwrap img{display:block;max-width:100%;height:auto}
+.pin{position:absolute;transform:translate(-50%,-50%);width:20px;height:20px;border-radius:50%;background:#d6361f;color:#fff;font:700 12px/20px sans-serif;text-align:center;box-shadow:0 0 0 2px #fff;pointer-events:none}
+.legend{margin:8px 0;color:var(--mut)}
+.legend b{color:#d6361f}
+.c textarea{width:100%;height:60px;box-sizing:border-box}
+.c .row{display:flex;gap:8px;align-items:center;margin-top:4px}
+.reg{margin-top:4px}.reg input{width:70%}
+.hidden{display:none}
+#stamp{padding:10px 16px;font:600 15px/1.3 -apple-system,sans-serif;background:#1d2b36;color:#fff}
+#stamp.dirty{background:#b3261e}#stamp.unknown{background:#7a5c00}
+.orph{border-color:#d6361f}
+.st-open{background:#f3c969}.st-done{background:#9fd8a8}.st-wontdo{background:#c9c9c9}
+</style></head><body>
+<div id="stamp"></div>
+<header>
+ <h1>LockPlus UI review</h1>
+ <label><input type="checkbox" id="onlyOpen"> Open items only</label>
+ <button id="expMd">Export Markdown</button><button id="expJson">Export JSON</button>
+ <span id="saved"></span>
+ <span class="pill" id="counts"></span>
+</header>
+<main>
+<section id="general" class="card c"><div class="sid" style="font-size:20px">General comments</div>
+ <textarea id="g-text" placeholder="Overall comments, themes, decisions..."></textarea>
+ <div class="row"><select id="g-status"><option value="open">open</option><option value="done">done</option><option value="wontdo">won't do</option></select></div></section>
+<section><h2>Contents</h2><table class="toc" id="toc"></table></section>
+<div id="screens"></div>
+<section id="orphans" class="hidden"><h2>Orphaned comments (screen no longer exists)</h2><div id="orph"></div></section>
+</main>
+<script>
+const DATA = /*__DATA__*/null;
+(() => {
+  const el = document.getElementById("stamp"), st = DATA.stamp;
+  if (!st) { el.className = "unknown"; el.textContent = "Render stamp missing: these screenshots predate the stamp, treat them as possibly stale."; return; }
+  const dirty = st.uncommitted_ui_files > 0;
+  el.className = dirty ? "dirty" : "";
+  el.textContent = `Rendered ${st.rendered} from commit ${st.commit}, build ${st.build}` +
+    (dirty ? `. WARNING: ${st.uncommitted_ui_files} UI file(s) were uncommitted at render time, so the screens may not match that commit.` : ". Working tree clean (UI).");
+})();
+const LS = "lp-ux-comments";
+const STAT = {open:"open", done:"done", wontdo:"won't do"};
+let doc = {general:{text:"",status:"open"}, comments:{}};
+let server = false, timer = null;
+const $ = (s, r=document) => r.querySelector(s);
+const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const known = new Set(DATA.screens.map(s => s.id));
+const base = k => k.replace(/-[a-z]$/, "");
+
+function setSaved(t){ $("#saved").textContent = t; }
+function persist(){
+  try { localStorage.setItem(LS, JSON.stringify(doc)); } catch(e){}
+  setSaved("saving…");
+  clearTimeout(timer);
+  timer = setTimeout(async () => {
+    if (!server) { setSaved("saved locally (server not running: use Export)"); return; }
+    try {
+      const r = await fetch("/comments", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(doc)});
+      if (!r.ok) throw new Error(r.status);
+      const saved = await r.json();
+      for (const k in saved.comments) if (doc.comments[k]) doc.comments[k].updated = saved.comments[k].updated;
+      setSaved("saved " + new Date().toLocaleTimeString());
+    } catch(e) { setSaved("save failed, kept locally (" + e.message + ")"); }
+  }, 1000);
+  counts();
+}
+function set(id, text, status){
+  if (text.trim() === "") delete doc.comments[id]; else doc.comments[id] = {text, status};
+  persist(); filter();
+}
+function counts(){
+  const v = Object.values(doc.comments);
+  $("#counts").textContent = v.filter(c=>c.status==="open").length + " open, " + v.filter(c=>c.status==="done").length + " done, " + v.filter(c=>c.status==="wontdo").length + " won't do";
+  document.querySelectorAll("[data-toc]").forEach(a => {
+    const c = doc.comments[a.dataset.toc]; a.textContent = c ? "●" : "";
+    a.className = c ? "st-" + c.status : "";
+  });
+}
+function box(id, label){
+  const c = doc.comments[id] || {text:"", status:"open"};
+  const d = document.createElement("div"); d.className = "c"; d.dataset.cid = id;
+  d.innerHTML = `<textarea placeholder="Comment on ${id}"></textarea><div class="row"><select>${Object.entries(STAT).map(([k,v])=>`<option value="${k}">${v}</option>`).join("")}</select></div>`;
+  const ta = $("textarea", d), sel = $("select", d);
+  ta.value = c.text; sel.value = c.status;
+  const go = () => set(id, ta.value, sel.value);
+  ta.addEventListener("input", go); sel.addEventListener("change", go);
+  return d;
+}
+function build(){
+  const toc = $("#toc"), host = $("#screens");
+  toc.innerHTML = "<tr><th>ID</th><th>Screen</th><th>When it appears</th><th></th></tr>";
+  for (const [sec, name] of Object.entries(DATA.sections)) {
+    const tr = document.createElement("tr"); tr.innerHTML = `<td colspan=4><b>${sec} · ${esc(name)}</b></td>`; toc.appendChild(tr);
+    const h = document.createElement("h2"); h.textContent = `${sec} · ${name}`; host.appendChild(h);
+    for (const s of DATA.screens.filter(x => String(x.section) === sec)) {
+      const t = document.createElement("tr");
+      t.innerHTML = `<td><a href="#${s.id}">${s.id}</a></td><td>${esc(s.title)}</td><td>${esc(s.when)}</td><td data-toc="${s.id}"></td>`; toc.appendChild(t);
+      const card = document.createElement("section"); card.className = "card"; card.id = s.id; card.dataset.sid = s.id;
+      const pins = s.regions.map(r => `<span class="pin" style="left:${r.x*100}%;top:${r.y*100}%">${r.id}</span>`).join("");
+      const cell = (key, lab) => s.images[key] ? `<div class="cell"><div class="lab">${s.id} · ${lab}</div><div class="imgwrap"><img loading="lazy" src="${s.images[key]}" alt="${s.id} ${lab}">${pins}</div></div>` : "";
+      card.innerHTML = `<div><span class="sid">${s.id}</span><h3>${esc(s.title)}</h3></div>
+        <div class="when">${esc(s.when)} <i>${esc(s.ref||"")}</i></div>
+        <div class="grid">${cell("light-en","light · EN")}${cell("dark-en","dark · EN")}${cell("light-de","light · DE")}${cell("dark-de","dark · DE")}</div>
+        ${s.regions.length ? `<div class="legend">${s.regions.map(r=>`<b>${s.id}-${r.id}</b> ${esc(r.label)}`).join(" · ")}</div>` : ""}
+        <div class="cbox"></div>`;
+      $(".cbox", card).appendChild(box(s.id));
+      for (const r of s.regions) {
+        const rid = `${s.id}-${r.id}`, d = document.createElement("div"); d.className = "reg c"; d.dataset.cid = rid;
+        d.innerHTML = `<b>${rid}</b> ${esc(r.label)}: <input type="text"> <select>${Object.entries(STAT).map(([k,v])=>`<option value="${k}">${v}</option>`).join("")}</select>`;
+        const c = doc.comments[rid]; if (c) { $("input", d).value = c.text; $("select", d).value = c.status; }
+        const go = () => set(rid, $("input", d).value, $("select", d).value);
+        $("input", d).addEventListener("input", go); $("select", d).addEventListener("change", go);
+        $(".cbox", card).appendChild(d);
+      }
+      host.appendChild(card);
+    }
+  }
+  const og = $("#g-text"), gs = $("#g-status");
+  og.value = doc.general.text; gs.value = doc.general.status;
+  const gg = () => { doc.general = {text: og.value, status: gs.value}; persist(); };
+  og.addEventListener("input", gg); gs.addEventListener("change", gg);
+  orphans(); counts(); filter();
+}
+function orphans(){
+  const o = $("#orph"); o.innerHTML = "";
+  const ks = Object.keys(doc.comments).filter(k => !known.has(base(k)));
+  $("#orphans").classList.toggle("hidden", !ks.length);
+  for (const k of ks) { const w = document.createElement("div"); w.className = "card orph"; w.innerHTML = `<div class="sid" style="font-size:20px">${k}</div>`; w.appendChild(box(k)); o.appendChild(w); }
+}
+function filter(){
+  const only = $("#onlyOpen").checked;
+  document.querySelectorAll(".card[data-sid]").forEach(c => {
+    const open = [c.dataset.sid, ...DATA.screens.find(s=>s.id===c.dataset.sid).regions.map(r=>c.dataset.sid+"-"+r.id)].some(k => doc.comments[k] && doc.comments[k].status === "open");
+    c.classList.toggle("hidden", only && !open);
+  });
+}
+function download(name, text, type){
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], {type})); a.download = name; a.click();
+}
+function md(){
+  let o = "# UI review comments\n\n"; if (doc.general.text.trim()) o += `## General [${STAT[doc.general.status]}]\n\n${doc.general.text}\n\n`;
+  for (const k of Object.keys(doc.comments).sort()) { const c = doc.comments[k]; const s = DATA.screens.find(x => x.id === base(k)); o += `## ${k}${s ? ": " + s.title : " (orphaned)"} [${STAT[c.status]}]\n\n${c.text}\n\n`; }
+  return o;
+}
+$("#onlyOpen").addEventListener("change", filter);
+$("#expMd").onclick = () => download("lockplus-ui-comments.md", md(), "text/markdown");
+$("#expJson").onclick = () => download("lockplus-ui-comments.json", JSON.stringify(doc, null, 1), "application/json");
+(async () => {
+  try { doc = JSON.parse(localStorage.getItem(LS)) || doc; } catch(e){}
+  try {
+    const r = await fetch("/comments", {cache:"no-store"});
+    if (r.ok) { const d = await r.json(); server = true; if (d && d.comments && (Object.keys(d.comments).length || !Object.keys(doc.comments).length)) doc = d; setSaved("server connected"); }
+  } catch(e){ setSaved("offline: comments are kept in this browser; use Export"); }
+  doc.general = doc.general || {text:"", status:"open"}; doc.comments = doc.comments || {};
+  build();
+})();
+</script></body></html>

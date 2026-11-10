@@ -1,0 +1,15 @@
+// Config/Tunnel.xcconfig — target LockPlusTunnel, the NEPacketTunnelProvider system extension (DESIGN §2.2, T6, T9).
+PRODUCT_BUNDLE_IDENTIFIER = $(LP_EXT_ID)
+PRODUCT_NAME = $(PRODUCT_BUNDLE_IDENTIFIER)     // bundle = io.github.steiale.lockplus.mac.tunnel.systemextension
+PRODUCT_MODULE_NAME = LockPlusTunnel            // NEProviderClasses = LockPlusTunnel.PacketTunnelProvider
+INFOPLIST_FILE = Config/Info/LockPlusTunnel-Info.plist
+CODE_SIGN_ENTITLEMENTS = Config/Entitlements/LockPlusTunnel.entitlements
+ENABLE_APP_SANDBOX = YES
+SKIP_INSTALL = YES                              // else a "Generic Xcode Archive"
+// NOT $(inherited): drop the app-extension rpath ../../../../Frameworks, which does not exist after activation copies
+// the extension out (ref/toolchain T6). CI asserts LC_RPATH == /usr/lib/swift + @executable_path/../Frameworks.
+LD_RUNPATH_SEARCH_PATHS = @executable_path/../Frameworks
+ENABLE_DEBUG_DYLIB = NO
+// The Go c-archive and the arm64-only OpenSSL XCFramework cannot link as arm64e (S14).
+ENABLE_POINTER_AUTHENTICATION = NO
+ENABLE_PREVIEWS = NO

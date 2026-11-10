@@ -40,4 +40,5 @@ build/darwin/Assets.car
 
 # Release artifacts
 *.zip
+!native/Tools/fuzz/corpus/zip/*.zip
 dist/

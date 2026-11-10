@@ -1,0 +1,6 @@
+# native/Config/toolchain.lock — changed only in a PR titled "toolchain: …" (DESIGN §2.1, ref/toolchain §1)
+# Sourced by zsh/bash scripts and CI; release.sh and every CI job refuse a mismatch (Tools/build/check-toolchain.sh).
+XCODE_VERSION=27.2
+XCODE_BUILD=27B52
+SWIFT_VERSION_EXPECTED=6.4
+GO_VERSION=1.27.3

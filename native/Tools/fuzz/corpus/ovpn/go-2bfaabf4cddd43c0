@@ -1,0 +1,21 @@
+client
+dev tun
+proto udp
+remote vpn.example.invalid 1194
+cipher AES-256-GCM
+cipher AES-128-GCM
+<ca>
+-----BEGIN CERTIFICATE-----
+MIIB
+-----END CERTIFICATE-----
+</ca>
+<cert>
+-----BEGIN CERTIFICATE-----
+MIIB
+-----END CERTIFICATE-----
+</cert>
+<key>
+-----BEGIN PRIVATE KEY-----
+MIIB
+-----END PRIVATE KEY-----
+</key>

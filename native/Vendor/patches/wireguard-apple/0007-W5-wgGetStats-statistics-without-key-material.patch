@@ -1,0 +1,112 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Alex Steiner <alex@steiale.io>
+Date: Mon, 26 Oct 2026 20:30:17 +0100
+Subject: [PATCH 07/11] W5: wgGetStats (statistics without key material)
+
+Per peer: public_key, endpoint, last_handshake_time_sec/nsec, tx_bytes, rx_bytes, through uapiFilter. wgGetConfig
+(which carries private_key/preshared_key in hex, K14) stays only for the upstream Swift adapter and is not used by
+LockPlus.
+---
+ Sources/WireGuardKitGo/api-apple-stats.go     | 26 +++++++++++
+ .../api-apple-uapifilter_test.go              | 46 +++++++++++++++++++
+ Sources/WireGuardKitGo/wireguard.h            |  2 +
+ 3 files changed, 74 insertions(+)
+ create mode 100644 Sources/WireGuardKitGo/api-apple-stats.go
+ create mode 100644 Sources/WireGuardKitGo/api-apple-uapifilter_test.go
+
+diff --git a/Sources/WireGuardKitGo/api-apple-stats.go b/Sources/WireGuardKitGo/api-apple-stats.go
+new file mode 100644
+index 0000000..66ea80a
+--- /dev/null
++++ b/Sources/WireGuardKitGo/api-apple-stats.go
+@@ -0,0 +1,26 @@
++/* SPDX-License-Identifier: MIT
++ *
++ * LockPlus W5 (DESIGN §9.2, invariant 10): runtime statistics without key material.
++ */
++
++package main
++
++// #include <stdlib.h>
++import "C"
++
++// wgGetStats returns, per peer, public_key, endpoint, last_handshake_time_sec/nsec, tx_bytes and rx_bytes as UAPI
++// lines (malloc'ed; the caller frees). Unlike wgGetConfig it never contains private_key or preshared_key.
++// NULL for an unknown handle or an IPC error.
++//
++//export wgGetStats
++func wgGetStats(tunnelHandle int32) *C.char {
++	th, ok := lookupHandle(tunnelHandle)
++	if !ok {
++		return nil
++	}
++	f := newUAPIFilter("public_key", "endpoint", "last_handshake_time_sec", "last_handshake_time_nsec", "tx_bytes", "rx_bytes")
++	if err := th.Device.IpcGetOperation(f); err != nil {
++		return nil
++	}
++	return C.CString(string(f.lines()))
++}
+diff --git a/Sources/WireGuardKitGo/api-apple-uapifilter_test.go b/Sources/WireGuardKitGo/api-apple-uapifilter_test.go
+new file mode 100644
+index 0000000..fe067ed
+--- /dev/null
++++ b/Sources/WireGuardKitGo/api-apple-uapifilter_test.go
+@@ -0,0 +1,46 @@
++/* SPDX-License-Identifier: MIT
++ *
++ * LockPlus W5: uapiFilter keeps only the requested lines, across split writes, and zeroes what it was handed.
++ */
++
++package main
++
++import (
++	"bytes"
++	"testing"
++)
++
++const sample = "private_key=1111111111111111111111111111111111111111111111111111111111111111\nlisten_port=51820\n" +
++	"public_key=2222222222222222222222222222222222222222222222222222222222222222\n" +
++	"preshared_key=3333333333333333333333333333333333333333333333333333333333333333\nprotocol_version=1\n" +
++	"endpoint=192.0.2.1:51820\nlast_handshake_time_sec=1700000000\nlast_handshake_time_nsec=5\n" +
++	"tx_bytes=148\nrx_bytes=92\npersistent_keepalive_interval=25\nallowed_ip=0.0.0.0/0\n"
++
++func TestUAPIFilterDropsKeysAcrossSplitWrites(t *testing.T) {
++	for split := 1; split < len(sample); split += 7 {
++		f := newUAPIFilter("public_key", "endpoint", "last_handshake_time_sec", "last_handshake_time_nsec", "tx_bytes", "rx_bytes")
++		a, b := []byte(sample[:split]), []byte(sample[split:])
++		f.Write(a)
++		f.Write(b)
++		got := string(f.lines())
++		want := "public_key=2222222222222222222222222222222222222222222222222222222222222222\nendpoint=192.0.2.1:51820\n" +
++			"last_handshake_time_sec=1700000000\nlast_handshake_time_nsec=5\ntx_bytes=148\nrx_bytes=92\n"
++		if got != want {
++			t.Fatalf("split %d: got %q", split, got)
++		}
++		if bytes.Contains([]byte(got), []byte("1111")) || bytes.Contains([]byte(got), []byte("3333")) {
++			t.Fatalf("split %d: key material leaked", split)
++		}
++		if bytes.ContainsFunc(append(a, b...), func(r rune) bool { return r != 0 }) {
++			t.Fatalf("split %d: input not zeroed", split)
++		}
++	}
++}
++
++func TestUAPIFilterDropsUnterminatedTail(t *testing.T) {
++	f := newUAPIFilter("public_key")
++	f.Write([]byte("public_key=ab\npublic_key=cd"))
++	if got := string(f.lines()); got != "public_key=ab\n" {
++		t.Fatalf("got %q", got)
++	}
++}
+diff --git a/Sources/WireGuardKitGo/wireguard.h b/Sources/WireGuardKitGo/wireguard.h
+index 41ba759..78eb433 100644
+--- a/Sources/WireGuardKitGo/wireguard.h
++++ b/Sources/WireGuardKitGo/wireguard.h
+@@ -24,5 +24,7 @@ extern const char *wgVersion();
+    endpoint switch (0 or a negative IPC errno). */
+ extern int wgSendHandshake(int handle, int64_t *sent_ns);
+ extern int64_t wgSetEndpoint(int handle, const char *public_key_hex, const char *endpoint);
++/* LockPlus W5: per-peer public_key, endpoint, last_handshake_time_sec/nsec, tx_bytes, rx_bytes; no keys. Caller frees. */
++extern char *wgGetStats(int handle);
+ 
+ #endif

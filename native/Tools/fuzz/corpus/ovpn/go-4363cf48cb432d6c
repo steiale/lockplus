@@ -1,0 +1,6 @@
+client
+remote vpn.example.com 1194
+<connection>
+remote 127.0.0.1 1
+</connection>x
+lockplus-probe

@@ -1,0 +1,5 @@
+// Config/ASan.xcconfig — test builds only, never archived for release (DESIGN §2.2 "ASan builds", §12.4 `asan`).
+// Passed with -xcconfig, so it reaches every package target (S14). libwg-go.a is Go and stays uninstrumented.
+// The extension's __asan_default_options lives in Tunnel/ASanSupport.c behind __has_feature(address_sanitizer), so no
+// compilation condition is needed here; sign-inside-out.sh copies the runtime into the extension's Contents/Frameworks.
+ENABLE_ADDRESS_SANITIZER = YES

@@ -1,0 +1,8 @@
+// Config/Tests.xcconfig — host-less unit test bundles (RequirementTests). Host-less so they run with
+// CODE_SIGNING_ALLOWED=NO (S14: the linker's ad hoc signature suffices).
+PRODUCT_NAME = $(TARGET_NAME)
+PRODUCT_BUNDLE_IDENTIFIER = $(LP_APP_ID).tests.$(TARGET_NAME:c99extidentifier)
+GENERATE_INFOPLIST_FILE = YES
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/../Frameworks @loader_path/../Frameworks
+ENABLE_HARDENED_RUNTIME = NO
+CODE_SIGN_ENTITLEMENTS =

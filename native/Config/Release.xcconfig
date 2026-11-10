@@ -1,0 +1,11 @@
+// Config/Release.xcconfig — project level, Release. Built unsigned by Tools/build/build-unsigned.sh, then signed
+// inside-out with Developer ID. LP_DEV_SIGNING and DevStamp.xcconfig must never appear here (verify.sh checks).
+#include "Base.xcconfig"
+
+SWIFT_ACTIVE_COMPILATION_CONDITIONS =
+SWIFT_OPTIMIZATION_LEVEL = -O
+SWIFT_COMPILATION_MODE = wholemodule
+GCC_OPTIMIZATION_LEVEL = s
+DEBUG_INFORMATION_FORMAT = dwarf-with-dsym
+ENABLE_NS_ASSERTIONS = NO
+ENABLE_TESTABILITY = NO

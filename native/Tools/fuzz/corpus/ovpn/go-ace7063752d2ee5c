@@ -1,0 +1,6 @@
+client
+remote vpn.example.com 1194
+user nobody
+group nobody
+providers legacy default
+cipher AES-256-CBC

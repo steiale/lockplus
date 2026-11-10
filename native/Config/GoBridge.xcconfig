@@ -1,0 +1,12 @@
+// Config/GoBridge.xcconfig — External Build System target WireGuardGoBridgemacOS (/usr/bin/make in
+// Vendor/wireguard-apple/Sources/WireGuardKitGo; DESIGN §2.2, ref/toolchain T10). Build settings reach make as
+// environment variables (ARCHS, SDKROOT, CONFIGURATION_BUILD_DIR, MACOSX_DEPLOYMENT_TARGET, ...).
+SDKROOT = macosx
+// make writes into the vendored tree and CONFIGURATION_TEMP_DIR; script sandboxing would block it.
+ENABLE_USER_SCRIPT_SANDBOXING = NO
+// Offline and pinned: modules come from Vendor/gomodcache (Tools/bootstrap/vendor.sh). GOTOOLCHAIN=local: never
+// download another Go; toolchain.lock pins go1.27.3.
+GOMODCACHE = $(PROJECT_DIR)/Vendor/gomodcache
+GOPROXY = off
+GOFLAGS = -modcacherw
+GOTOOLCHAIN = local

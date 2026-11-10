@@ -1,0 +1,3 @@
+client
+remote vpn.example.com 1194
+setenv DYLD_INSERT_LIBRARIES /x.dylib

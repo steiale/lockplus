@@ -1,0 +1,13 @@
+// Config/App.xcconfig — target LockPlus (DESIGN §2.2, ref/toolchain §3.3).
+PRODUCT_BUNDLE_IDENTIFIER = $(LP_APP_ID)
+PRODUCT_NAME = LockPlus
+PRODUCT_MODULE_NAME = LockPlus
+INFOPLIST_FILE = Config/Info/LockPlus-Info.plist
+CODE_SIGN_ENTITLEMENTS = Config/Entitlements/LockPlus.entitlements
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/../Frameworks
+ENABLE_APP_SANDBOX = NO                         // reads user-chosen files, legacy Go data and the helper socket (§2.4)
+ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon
+ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor
+ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES
+SWIFT_EMIT_LOC_STRINGS = YES
+ENABLE_PREVIEWS = YES

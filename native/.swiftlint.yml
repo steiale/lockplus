@@ -1,0 +1,126 @@
+# SwiftLint for LockPlus native (DESIGN §12.4). CI runs `swiftlint lint --strict` (the runner image ships SwiftLint)
+# AND Tools/build/lint.sh, which implements the same custom rules with perl so they also run where SwiftLint is not
+# installed (the dev Mac today). Keep the two in sync. A regex can't infer isolation: REVIEW-CHECKLIST.md carries the
+# rest (§0 MUST, draft 7 and 7.3).
+included:
+  - App
+  - Tunnel
+  - Shared
+  - Tests
+  - Packages/LockPlusCore/Sources
+  - Packages/LockPlusCore/Tests
+  - Packages/TunnelEngine/Sources
+  - Packages/TunnelEngine/Tests
+excluded:
+  - build
+  - Vendor
+  - spike
+  - Packages/OpenVPN3Shim/Vendor
+  - "**/*.generated.swift"
+
+disabled_rules:
+  - line_length          # 120-col house style is enforced by review, not by lint
+  - identifier_name
+  - type_name
+  - nesting
+  - function_body_length
+  - type_body_length
+  - file_length
+  - cyclomatic_complexity
+  - large_tuple
+  - todo
+
+custom_rules:
+  # §0 MUST (draft 7): every closure handed to an XPC, NetworkExtension or Dispatch API is @Sendable (or built in a
+  # nonisolated function). From a @MainActor type, an inferred-isolated closure traps on the framework's queue
+  # (S5.2, S15 crashes). Applied everywhere: @Sendable is always correct for these parameters.
+  lp_sendable_framework_closure:
+    name: "@Sendable framework closure"
+    regex: '((saveToPreferences|loadFromPreferences|removeFromPreferences|loadAllFromPreferences|sendProviderMessage|setTunnelNetworkSettings|addObserver)\s*(\((?:[^()]|\([^()]*\))*\))?|remoteObjectProxyWithErrorHandler\s*\(?|(interruptionHandler|invalidationHandler)\s*=|fetchLastDisconnectError|setEventHandler\s*\(?|setCancelHandler\s*\(?|setRegistrationHandler\s*\(?|\.async(After)?\s*(\((?:[^()]|\([^()]*\))*\))?)\s*\{(?!\s*@Sendable)'
+    message: "Closures handed to XPC/NE/Dispatch must be @Sendable (§0 MUST; S5/S15 crashes)"
+    severity: error
+    match_kinds: [keyword, identifier, typeidentifier, attribute.builtin]
+
+  # §0 MUST (draft 7.3, D73-11): top-level code in main.swift is MainActor-isolated in Swift 6; a closure literal
+  # there traps when a C library/runtime calls it on its own thread. main.swift contains no closures at all.
+  lp_main_swift_closure:
+    name: "No closure in main.swift"
+    included: ".*/main\\.swift"
+    regex: '\{'
+    message: "No closure literals in main.swift: hooks go in nonisolated functions in another file (D73-11)"
+    severity: error
+    match_kinds: [keyword, identifier, typeidentifier, parameter, attribute.builtin, number, string_interpolation_anchor]
+
+  # §0 MUST (draft 7.3): C-callback trampolines are defined in a nonisolated context and touch only Sendable state.
+  lp_c_callback_nonisolated:
+    name: "C callback in nonisolated context"
+    regex: '^(?!.*\bnonisolated\b)(?!.*SAFETY).*@convention\(c\)'
+    message: "@convention(c) closures must be declared on a line that is nonisolated (or carry a SAFETY note) (§0)"
+    severity: error
+
+  lp_no_filepath:
+    name: "No #filePath"
+    included: ".*/(App|Tunnel|Shared)/.*\\.swift|.*/Packages/[^/]+/Sources/.*\\.swift"
+    regex: '#filePath'
+    message: "#filePath leaks absolute paths into binaries (reproducible builds, ref/toolchain §3.1)"
+    severity: error
+
+  lp_no_exit_in_tunnel:
+    name: "No exit( in the extension"
+    included: ".*/Tunnel/.*\\.swift|.*/TunnelEngine/Sources/.*\\.swift"
+    regex: '\bexit\s*\('
+    message: "Never exit() in the extension: it kills the other engine and the listener (§9.2 'Do not carry')"
+    severity: error
+
+  lp_no_settings_level_policy:
+    name: "No settings-level kill-switch flags"
+    regex: '(NetworkSettings|networkSettings|settings)\.(includeAllNetworks|excludeLocalNetworks|enforceRoutes)\b'
+    message: "Kill-switch policy lives only in the NE configuration's protocol flags (invariant 4, L-LC-4)"
+    severity: error
+
+  lp_no_cancellation_shield:
+    name: "No withTaskCancellationShield"
+    regex: 'withTaskCancellationShield'
+    message: "withTaskCancellationShield (27.0) is unused by design (§7.1)"
+    severity: error
+
+  lp_no_secret_in_logger:
+    name: "No secret interpolation in Logger"
+    regex: '(log|logger|Logger)[^\n]*\\\([^)]*(password|passphrase|secret|privateKey|private_key|presharedKey|psk|token|credential)'
+    message: "Never interpolate secrets into Logger (invariant 1, §14)"
+    severity: error
+
+  # Draft 9 (S2): extension deadlines run on the injected clock (StrictSuspendingClock in production); asyncAfter fired
+  # 3–5 s late at 50–300 s in the sysex.
+  lp_strict_deadlines:
+    name: "Strict deadlines in the extension"
+    included: ".*/Tunnel/.*\\.swift|.*/TunnelEngine/Sources/TunnelEngine/.*\\.swift"
+    excluded: ".*/Core/StrictClock\\.swift"
+    regex: '\.asyncAfter\b|\bTask\.sleep\b|\bSuspendingClock\(\)'
+    message: "Extension deadlines use the injected clock (StrictSuspendingClock in production), never asyncAfter/Task.sleep/SuspendingClock() (S2)"
+    severity: error
+
+  # Draft 9 (S2 E3): cancelTunnelWithError is open under includeAllNetworks and NE never calls stopTunnel after it.
+  lp_cancel_tunnel_only_in_host:
+    name: "cancelTunnelWithError only in RealProviderHost"
+    included: ".*/Tunnel/.*\\.swift|.*/TunnelEngine/Sources/TunnelEngine/.*\\.swift"
+    excluded: ".*/Host/ProviderHost\\.swift"
+    regex: 'cancelTunnelWithError'
+    message: "Only RealProviderHost calls cancelTunnelWithError; the controller cancels only without the kill switch (§7.2)"
+    severity: error
+    match_kinds: [identifier]
+
+  # Draft 9 (S2 E10): no provider DNS under includeAllNetworks; the only lookup is GetAddrInfoResolver (kill switch off).
+  lp_no_provider_dns:
+    name: "No name resolution in the extension"
+    included: ".*/Tunnel/.*\\.swift|.*/TunnelEngine/Sources/TunnelEngine/.*\\.swift"
+    excluded: ".*/WireGuard/WireGuardBackend\\.swift"
+    regex: '\bgetaddrinfo\s*\(|\bgethostbyname|DNSServiceGetAddrInfo|\bCFHost'
+    message: "No name resolution in the extension except GetAddrInfoResolver (§9.3, S2 E10)"
+    severity: error
+
+  lp_no_sync_xpc_proxy:
+    name: "No synchronous XPC proxy"
+    regex: 'synchronousRemoteObjectProxyWithErrorHandler|remoteObjectProxy\b(?!WithErrorHandler)'
+    message: "Use remoteObjectProxyWithErrorHandler + the one-shot gate (§5.4); sync proxies block without bound"
+    severity: error

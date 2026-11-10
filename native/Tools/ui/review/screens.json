@@ -1,0 +1,2547 @@
+{
+ "sections": {
+  "1": "Menu bar",
+  "2": "Main window and hero",
+  "3": "Sidebar and library",
+  "4": "Editor, import, passwords",
+  "5": "Sign-in prompts",
+  "6": "Settings",
+  "7": "Onboarding",
+  "8": "Activity, Auto-Connect, Diagnostics, Logs",
+  "9": "Update and tunnel-component states",
+  "10": "Sheets, dialogs, alerts",
+  "11": "Glyph reference",
+  "12": "The shipping lock"
+ },
+ "screens": [
+  {
+   "id": "S-1.01",
+   "section": 1,
+   "base": "menubar-icon-monochrome",
+   "title": "Menu bar icon, every state (monochrome)",
+   "when": "Always visible in the menu bar; rates only while protected.",
+   "ref": "UI-CONCEPT 6.1",
+   "regions": []
+  },
+  {
+   "id": "S-1.02",
+   "section": 1,
+   "base": "menubar-icon-color",
+   "title": "Menu bar icon, every state (colour tile)",
+   "when": "Settings > Menu Bar > Icon style: Color.",
+   "ref": "UI-CONCEPT 6.1",
+   "regions": []
+  },
+  {
+   "id": "S-1.03",
+   "section": 1,
+   "base": "menu-full-protected",
+   "title": "Menu, protected",
+   "when": "Click the icon while connected. (Drawn from the controller's real item list; see artefacts.)",
+   "ref": "UI-CONCEPT 6.2",
+   "regions": [
+    {
+     "id": "a",
+     "x": 0.5,
+     "y": 0.15,
+     "label": "Header card"
+    },
+    {
+     "id": "b",
+     "x": 0.82,
+     "y": 0.1,
+     "label": "On/off switch"
+    },
+    {
+     "id": "c",
+     "x": 0.3,
+     "y": 0.33,
+     "label": "Disconnect item"
+    },
+    {
+     "id": "d",
+     "x": 0.35,
+     "y": 0.5,
+     "label": "Profile list"
+    },
+    {
+     "id": "e",
+     "x": 0.4,
+     "y": 0.76,
+     "label": "Pause submenu"
+    },
+    {
+     "id": "f",
+     "x": 0.35,
+     "y": 0.9,
+     "label": "Open, Settings, Quit"
+    }
+   ]
+  },
+  {
+   "id": "S-1.04",
+   "section": 1,
+   "base": "menu-full-protected-pause-submenu",
+   "title": "Menu, protected, Pause submenu open",
+   "when": "Hover Pause Protection. (Drawn from the controller's real item list; see artefacts.)",
+   "ref": "UI-CONCEPT 6.2",
+   "regions": []
+  },
+  {
+   "id": "S-1.05",
+   "section": 1,
+   "base": "menu-full-not-protected",
+   "title": "Menu, not protected",
+   "when": "Click the icon while disconnected. (Drawn from the controller's real item list; see artefacts.)",
+   "ref": "UI-CONCEPT 6.2",
+   "regions": []
+  },
+  {
+   "id": "S-1.06",
+   "section": 1,
+   "base": "menu-full-blocked",
+   "title": "Menu, blocked",
+   "when": "Kill switch on and reconnecting (row 10); pause items sit under the header. (Drawn from the controller's real item list; see artefacts.)",
+   "ref": "UI-CONCEPT 6.2, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.07",
+   "section": 1,
+   "base": "menu-full-paused",
+   "title": "Menu, paused",
+   "when": "After Pause Protection. (Drawn from the controller's real item list; see artefacts.)",
+   "ref": "UI-CONCEPT 6.2",
+   "regions": []
+  },
+  {
+   "id": "S-1.08",
+   "section": 1,
+   "base": "menu-full-preparing",
+   "title": "Menu, preparing to connect",
+   "when": "Row 12a: the disabled line plus Cancel. (Drawn from the controller's real item list; see artefacts.)",
+   "ref": "UI-CONCEPT 6.6 row 12a",
+   "regions": []
+  },
+  {
+   "id": "S-1.09",
+   "section": 1,
+   "base": "menu-full-waiting-for-stop",
+   "title": "Menu, waiting for another profile to disconnect",
+   "when": "Row 12a during a switch. (Drawn from the controller's real item list; see artefacts.)",
+   "ref": "UI-CONCEPT 6.6 row 12a",
+   "regions": []
+  },
+  {
+   "id": "S-1.10",
+   "section": 1,
+   "base": "menu-full-waiting-for-network",
+   "title": "Menu, waiting for a network",
+   "when": "Row 12a, no network at Connect. (Drawn from the controller's real item list; see artefacts.)",
+   "ref": "UI-CONCEPT 6.6 row 12a",
+   "regions": []
+  },
+  {
+   "id": "S-1.11",
+   "section": 1,
+   "base": "menu-full-network-restart",
+   "title": "Menu, connects when a network is available",
+   "when": "Row 12a after a refused kill-switch start. (Drawn from the controller's real item list; see artefacts.)",
+   "ref": "UI-CONCEPT 6.6 row 12a",
+   "regions": []
+  },
+  {
+   "id": "S-1.12",
+   "section": 1,
+   "base": "menu-full-sign-in-pending",
+   "title": "Menu, sign-in waiting",
+   "when": "A prompt waits for a user gesture: 'Enter Code for ...' in bold. (Drawn from the controller's real item list; see artefacts.)",
+   "ref": "UI-CONCEPT 6.5",
+   "regions": []
+  },
+  {
+   "id": "S-1.13",
+   "section": 1,
+   "base": "menu-full-extension-approval",
+   "title": "Menu, tunnel component not allowed",
+   "when": "Row 1. (Drawn from the controller's real item list; see artefacts.)",
+   "ref": "UI-CONCEPT 6.6 row 1",
+   "regions": []
+  },
+  {
+   "id": "S-1.14",
+   "section": 1,
+   "base": "menu-full-update-available",
+   "title": "Menu, update available",
+   "when": "Sparkle's gentle reminder. (Drawn from the controller's real item list; see artefacts.)",
+   "ref": "UI-CONCEPT 6.2",
+   "regions": []
+  },
+  {
+   "id": "S-1.15",
+   "section": 1,
+   "base": "menu-full-tunnel-component-not-updated",
+   "title": "Menu, tunnel component not updated",
+   "when": "The extension update failed; profiles still connect. (Drawn from the controller's real item list; see artefacts.)",
+   "ref": "UI-CONCEPT E2E-4 U15",
+   "regions": []
+  },
+  {
+   "id": "S-1.16",
+   "section": 1,
+   "base": "menu-full-no-network",
+   "title": "Menu, no network",
+   "when": "Row 14 with 'no network'. (Drawn from the controller's real item list; see artefacts.)",
+   "ref": "UI-CONCEPT 6.6 row 14",
+   "regions": []
+  },
+  {
+   "id": "S-1.17",
+   "section": 1,
+   "base": "menu-full-many-profiles",
+   "title": "Menu, more than 8 profiles",
+   "when": "More Profiles submenu appears. (Drawn from the controller's real item list; see artefacts.)",
+   "ref": "UI-CONCEPT 6.2",
+   "regions": []
+  },
+  {
+   "id": "S-1.18",
+   "section": 1,
+   "base": "menu-full-empty-library",
+   "title": "Menu, no profiles",
+   "when": "Import Profile... replaces Connect. (Drawn from the controller's real item list; see artefacts.)",
+   "ref": "UI-CONCEPT 6.2",
+   "regions": []
+  },
+  {
+   "id": "S-1.19",
+   "section": 1,
+   "base": "menu-full-locked-profiles",
+   "title": "Menu, profiles from another Mac are locked",
+   "when": "Library locked after a restore. (Drawn from the controller's real item list; see artefacts.)",
+   "ref": "UI-CONCEPT 6.8",
+   "regions": []
+  },
+  {
+   "id": "S-1.20",
+   "section": 1,
+   "base": "notification-connected",
+   "title": "Notification, connected",
+   "when": "Setting 'Connect and disconnect' only. (Drawn from the notification text; see artefacts.)",
+   "ref": "UI-CONCEPT 6.5, 6.13",
+   "regions": []
+  },
+  {
+   "id": "S-1.21",
+   "section": 1,
+   "base": "notification-disconnected",
+   "title": "Notification, disconnected",
+   "when": "Setting 'Connect and disconnect' only. (Drawn from the notification text; see artefacts.)",
+   "ref": "UI-CONCEPT 6.5, 6.13",
+   "regions": []
+  },
+  {
+   "id": "S-1.22",
+   "section": 1,
+   "base": "notification-reconnected",
+   "title": "Notification, reconnected after restart",
+   "when": "Setting 'Connect and disconnect' only. (Drawn from the notification text; see artefacts.)",
+   "ref": "UI-CONCEPT 6.5, 6.13",
+   "regions": []
+  },
+  {
+   "id": "S-1.23",
+   "section": 1,
+   "base": "notification-stopped",
+   "title": "Notification, protection stopped",
+   "when": "Always (default 'Only problems'), while no LockPlus window is key. (Drawn from the notification text; see artefacts.)",
+   "ref": "UI-CONCEPT 6.5, 6.13",
+   "regions": []
+  },
+  {
+   "id": "S-1.24",
+   "section": 1,
+   "base": "notification-sign-in",
+   "title": "Notification, sign-in needed",
+   "when": "A prompt waits; no window is key. (Drawn from the notification text; see artefacts.)",
+   "ref": "UI-CONCEPT 6.5, 6.13",
+   "regions": []
+  },
+  {
+   "id": "S-1.25",
+   "section": 1,
+   "base": "notification-new-code",
+   "title": "Notification, new one-time code needed",
+   "when": "A reconnect needs a code; no window is key. (Drawn from the notification text; see artefacts.)",
+   "ref": "UI-CONCEPT 6.5, 6.13",
+   "regions": []
+  },
+  {
+   "id": "S-1.26",
+   "section": 1,
+   "base": "menu-header-row1",
+   "title": "Menu header, Row 1: tunnel component not allowed yet",
+   "when": "The system extension awaits approval in System Settings (first launch, or after a reinstall).",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.27",
+   "section": 1,
+   "base": "menu-header-row1-disabled",
+   "title": "Menu header, Row 1: tunnel component turned off",
+   "when": "The user switched LockPlus's network extension off in System Settings.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.28",
+   "section": 1,
+   "base": "menu-header-row1-removed",
+   "title": "Menu header, Row 1: tunnel component removed during an update",
+   "when": "The app was replaced in Finder and macOS dropped the extension.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.29",
+   "section": 1,
+   "base": "menu-header-row1-damaged",
+   "title": "Menu header, Row 1: tunnel component damaged",
+   "when": "Activation failed hard; Reinstall is offered.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.30",
+   "section": 1,
+   "base": "menu-header-row1-reboot",
+   "title": "Menu header, Row 1: restart needed",
+   "when": "macOS finishes the extension install at the next restart.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.31",
+   "section": 1,
+   "base": "menu-header-row2",
+   "title": "Menu header, Row 2: paused",
+   "when": "After Pause Protection; counts down to automatic resume.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.32",
+   "section": 1,
+   "base": "menu-header-row3",
+   "title": "Menu header, Row 3: sign in to connect (kill switch on)",
+   "when": "The server asks for a code or password during a connect; traffic is blocked meanwhile.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.33",
+   "section": 1,
+   "base": "menu-header-row3-approval",
+   "title": "Menu header, Row 3: waiting for sign-in approval",
+   "when": "A push approval is pending on the user's phone (up to 10 min).",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.34",
+   "section": 1,
+   "base": "menu-header-row3-nokillswitch",
+   "title": "Menu header, Row 3: sign in to connect (no kill switch)",
+   "when": "As row 3 on a profile without kill switch.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.35",
+   "section": 1,
+   "base": "menu-header-row3a",
+   "title": "Menu header, Row 3a: blocked, could not connect (retrying)",
+   "when": "Kill-switch connect failed before Connected; held and retrying.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.36",
+   "section": 1,
+   "base": "menu-header-row3b",
+   "title": "Menu header, Row 3b: auto-connect paused after a failed start",
+   "when": "An auto-connect start failed with a non-retryable error.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.37",
+   "section": 1,
+   "base": "menu-header-rowswitch",
+   "title": "Menu header, Switching profiles",
+   "when": "Another profile is chosen while one is connected; not protected for a moment.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.38",
+   "section": 1,
+   "base": "menu-header-row4",
+   "title": "Menu header, Row 4: connecting",
+   "when": "The tunnel is establishing.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.39",
+   "section": 1,
+   "base": "menu-header-row4a",
+   "title": "Menu header, Row 4a: reconnecting to the tunnel process",
+   "when": "The tunnel process crashed; macOS still reports connected.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.40",
+   "section": 1,
+   "base": "menu-header-row4a-unresponsive",
+   "title": "Menu header, Row 4a: tunnel process not responding",
+   "when": "The XPC link is unavailable while macOS says connected.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.41",
+   "section": 1,
+   "base": "menu-header-row5",
+   "title": "Menu header, Row 5: protected, DNS not verified",
+   "when": "Connected, but the DNS check could not confirm the tunnel resolver.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.42",
+   "section": 1,
+   "base": "menu-header-row5-overridden",
+   "title": "Menu header, Row 5: protected, DNS overridden",
+   "when": "Another profile's resolver owns DNS.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.43",
+   "section": 1,
+   "base": "menu-header-row6",
+   "title": "Menu header, Row 6: protected",
+   "when": "Connected and verified. The main resting state.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.44",
+   "section": 1,
+   "base": "menu-header-row6-reconnected",
+   "title": "Menu header, Row 6 with 'reconnected after restart' strip",
+   "when": "The session came back by itself within 2 minutes of a tunnel-process crash.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.45",
+   "section": 1,
+   "base": "menu-header-row7",
+   "title": "Menu header, Row 7: blocked after a failure",
+   "when": "Kill switch on and the engine stopped with a fatal error; no retries.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.46",
+   "section": 1,
+   "base": "menu-header-row8",
+   "title": "Menu header, Row 8: auto-connect paused (reasserting)",
+   "when": "On-demand reconnect failed with a non-retryable error.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.47",
+   "section": 1,
+   "base": "menu-header-row9",
+   "title": "Menu header, Row 9: new code needed to reconnect",
+   "when": "A reconnect needs a one-time code; traffic is blocked meanwhile.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.48",
+   "section": 1,
+   "base": "menu-header-row10",
+   "title": "Menu header, Row 10: blocked, reconnecting",
+   "when": "Kill switch on and the connection dropped; retries with countdown.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.49",
+   "section": 1,
+   "base": "menu-header-row11",
+   "title": "Menu header, Row 11: reconnecting (no kill switch)",
+   "when": "Connection dropped; traffic flows unprotected meanwhile.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.50",
+   "section": 1,
+   "base": "menu-header-row12",
+   "title": "Menu header, Row 12: disconnecting",
+   "when": "A disconnect is in progress.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.51",
+   "section": 1,
+   "base": "menu-header-row12a",
+   "title": "Menu header, Row 12a: preparing to connect",
+   "when": "LockPlus's own start work before any NEVPNStatus exists.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.52",
+   "section": 1,
+   "base": "menu-header-row12a-wait",
+   "title": "Menu header, Row 12a: waiting for another profile to disconnect",
+   "when": "A profile switch waits until macOS has stopped the old session.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.53",
+   "section": 1,
+   "base": "menu-header-row12a-restart",
+   "title": "Menu header, Row 12a: waiting for the tunnel process to restart",
+   "when": "After a seen crash, macOS or LockPlus restarts the profile (up to 30 s).",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.54",
+   "section": 1,
+   "base": "menu-header-row12a-mayrestart",
+   "title": "Menu header, Row 12a: checking whether it restarts",
+   "when": "An unexpected stop that may be a crash; hedged copy, up to 10 s.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.55",
+   "section": 1,
+   "base": "menu-header-row12a-endedearly",
+   "title": "Menu header, Row 12a: the start ended early",
+   "when": "LockPlus's own start ended before any status was read.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.56",
+   "section": 1,
+   "base": "menu-header-row12a-nonet",
+   "title": "Menu header, Row 12a: waiting for a network",
+   "when": "Connect pressed while the Mac has no network; nothing starts until one is available.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.57",
+   "section": 1,
+   "base": "menu-header-row12a-netrestart",
+   "title": "Menu header, Row 12a: connects when a network is available",
+   "when": "macOS refused a kill-switch start for want of a network and connects by itself later.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.58",
+   "section": 1,
+   "base": "menu-header-row13a",
+   "title": "Menu header, Row 13a: auto-connect paused (start latch)",
+   "when": "On-demand starts fail fast until the user acts.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.59",
+   "section": 1,
+   "base": "menu-header-row14",
+   "title": "Menu header, Row 14: stopped unexpectedly",
+   "when": "The tunnel process stopped; not protected.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.60",
+   "section": 1,
+   "base": "menu-header-row14-nonet",
+   "title": "Menu header, Row 14: no network",
+   "when": "macOS ended the session because the Mac has no network.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.61",
+   "section": 1,
+   "base": "menu-header-row14-killswitch-not-applied",
+   "title": "Menu header, Row 14: kill switch could not be applied",
+   "when": "LockPlus refuses to connect unprotected.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.62",
+   "section": 1,
+   "base": "menu-header-row14-server-unreachable",
+   "title": "Menu header, Row 14: server only reachable via an unusable network",
+   "when": "The server is reachable only through a non-primary interface (e.g. a VM bridge).",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.63",
+   "section": 1,
+   "base": "menu-header-row15",
+   "title": "Menu header, Row 15: not protected",
+   "when": "Disconnected, no error. The other main resting state.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.64",
+   "section": 1,
+   "base": "menu-header-row15-nas",
+   "title": "Menu header, Row 15: not protected, split-tunnel profile",
+   "when": "A split-tunnel profile ('Route protection' wording elsewhere).",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.65",
+   "section": 1,
+   "base": "menu-header-row15-repairing",
+   "title": "Menu header, Not protected, protection settings being restored",
+   "when": "macOS rewrote the VPN configuration; LockPlus restores the kill-switch flags first.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.66",
+   "section": 1,
+   "base": "menu-header-row15-notverified",
+   "title": "Menu header, Not protected, profile not yet verified",
+   "when": "An OpenVPN profile imported before the engine was available; Connect disabled.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-1.67",
+   "section": 1,
+   "base": "menu-header-row3-longname",
+   "title": "Menu header, Row 3: sign in to connect, 35-character profile name",
+   "when": "Long-name fixture: the header grows to its text, never truncated.",
+   "ref": "UI-CONCEPT 6.2",
+   "regions": []
+  },
+  {
+   "id": "S-1.68",
+   "section": 1,
+   "base": "menu-header-row3b-longname",
+   "title": "Menu header, Row 3b: auto-connect paused after a failed start, 35-character profile name",
+   "when": "Long-name fixture: the header grows to its text, never truncated.",
+   "ref": "UI-CONCEPT 6.2",
+   "regions": []
+  },
+  {
+   "id": "S-1.69",
+   "section": 1,
+   "base": "menu-header-rowswitch-longname",
+   "title": "Menu header, Switching profiles, 35-character profile name",
+   "when": "Long-name fixture: the header grows to its text, never truncated.",
+   "ref": "UI-CONCEPT 6.2",
+   "regions": []
+  },
+  {
+   "id": "S-1.70",
+   "section": 1,
+   "base": "menu-header-row4-longname",
+   "title": "Menu header, Row 4: connecting, 35-character profile name",
+   "when": "Long-name fixture: the header grows to its text, never truncated.",
+   "ref": "UI-CONCEPT 6.2",
+   "regions": []
+  },
+  {
+   "id": "S-1.71",
+   "section": 1,
+   "base": "menu-header-row4a-unresponsive-longname",
+   "title": "Menu header, Row 4a: tunnel process not responding, 35-character profile name",
+   "when": "Long-name fixture: the header grows to its text, never truncated.",
+   "ref": "UI-CONCEPT 6.2",
+   "regions": []
+  },
+  {
+   "id": "S-1.72",
+   "section": 1,
+   "base": "menu-header-row6-longname",
+   "title": "Menu header, Row 6: protected, 35-character profile name",
+   "when": "Long-name fixture: the header grows to its text, never truncated.",
+   "ref": "UI-CONCEPT 6.2",
+   "regions": []
+  },
+  {
+   "id": "S-1.73",
+   "section": 1,
+   "base": "menu-header-row9-longname",
+   "title": "Menu header, Row 9: new code needed to reconnect, 35-character profile name",
+   "when": "Long-name fixture: the header grows to its text, never truncated.",
+   "ref": "UI-CONCEPT 6.2",
+   "regions": []
+  },
+  {
+   "id": "S-1.74",
+   "section": 1,
+   "base": "menu-header-row10-longname",
+   "title": "Menu header, Row 10: blocked, reconnecting, 35-character profile name",
+   "when": "Long-name fixture: the header grows to its text, never truncated.",
+   "ref": "UI-CONCEPT 6.2",
+   "regions": []
+  },
+  {
+   "id": "S-1.75",
+   "section": 1,
+   "base": "menu-header-row11-longname",
+   "title": "Menu header, Row 11: reconnecting (no kill switch), 35-character profile name",
+   "when": "Long-name fixture: the header grows to its text, never truncated.",
+   "ref": "UI-CONCEPT 6.2",
+   "regions": []
+  },
+  {
+   "id": "S-1.76",
+   "section": 1,
+   "base": "menu-header-row12a-longname",
+   "title": "Menu header, Row 12a: preparing to connect, 35-character profile name",
+   "when": "Long-name fixture: the header grows to its text, never truncated.",
+   "ref": "UI-CONCEPT 6.2",
+   "regions": []
+  },
+  {
+   "id": "S-1.77",
+   "section": 1,
+   "base": "menu-header-row12a-restart-longname",
+   "title": "Menu header, Row 12a: waiting for the tunnel process to restart, 35-character profile name",
+   "when": "Long-name fixture: the header grows to its text, never truncated.",
+   "ref": "UI-CONCEPT 6.2",
+   "regions": []
+  },
+  {
+   "id": "S-1.78",
+   "section": 1,
+   "base": "menu-header-row14-longname",
+   "title": "Menu header, Row 14: stopped unexpectedly, 35-character profile name",
+   "when": "Long-name fixture: the header grows to its text, never truncated.",
+   "ref": "UI-CONCEPT 6.2",
+   "regions": []
+  },
+  {
+   "id": "S-1.79",
+   "section": 1,
+   "base": "menu-header-row15-longname",
+   "title": "Menu header, Row 15: not protected, 35-character profile name",
+   "when": "Long-name fixture: the header grows to its text, never truncated.",
+   "ref": "UI-CONCEPT 6.2",
+   "regions": []
+  },
+  {
+   "id": "S-2.01",
+   "section": 2,
+   "base": "main-protected",
+   "title": "Main window, protected",
+   "when": "Row 6 with a profile selected.",
+   "ref": "UI-CONCEPT 6.3",
+   "regions": [
+    {
+     "id": "a",
+     "x": 0.12,
+     "y": 0.04,
+     "label": "Search"
+    },
+    {
+     "id": "b",
+     "x": 0.12,
+     "y": 0.22,
+     "label": "Profile rows"
+    },
+    {
+     "id": "c",
+     "x": 0.1,
+     "y": 0.5,
+     "label": "Section links"
+    },
+    {
+     "id": "d",
+     "x": 0.1,
+     "y": 0.96,
+     "label": "Sidebar footer"
+    },
+    {
+     "id": "e",
+     "x": 0.6,
+     "y": 0.17,
+     "label": "Protection hero"
+    },
+    {
+     "id": "f",
+     "x": 0.6,
+     "y": 0.5,
+     "label": "Connection details"
+    },
+    {
+     "id": "g",
+     "x": 0.6,
+     "y": 0.85,
+     "label": "Protection toggles"
+    }
+   ]
+  },
+  {
+   "id": "S-2.02",
+   "section": 2,
+   "base": "main-launch",
+   "title": "Main window at launch, nothing selected",
+   "when": "The window picks the active/last/first profile.",
+   "ref": "UI-CONCEPT 6.3",
+   "regions": [
+    {
+     "id": "a",
+     "x": 0.12,
+     "y": 0.04,
+     "label": "Search"
+    },
+    {
+     "id": "b",
+     "x": 0.12,
+     "y": 0.22,
+     "label": "Profile rows"
+    },
+    {
+     "id": "e",
+     "x": 0.6,
+     "y": 0.17,
+     "label": "Hero"
+    }
+   ]
+  },
+  {
+   "id": "S-2.03",
+   "section": 2,
+   "base": "main-blocked",
+   "title": "Main window, blocked reconnecting",
+   "when": "Row 10.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.04",
+   "section": 2,
+   "base": "main-row1",
+   "title": "Main window, Row 1: tunnel component not allowed yet",
+   "when": "The system extension awaits approval in System Settings (first launch, or after a reinstall).",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.05",
+   "section": 2,
+   "base": "main-row2",
+   "title": "Main window, Row 2: paused",
+   "when": "After Pause Protection; counts down to automatic resume.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.06",
+   "section": 2,
+   "base": "main-row3",
+   "title": "Main window, Row 3: sign in to connect (kill switch on)",
+   "when": "The server asks for a code or password during a connect; traffic is blocked meanwhile.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.07",
+   "section": 2,
+   "base": "main-row12a",
+   "title": "Main window, Row 12a: preparing to connect",
+   "when": "LockPlus's own start work before any NEVPNStatus exists.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.08",
+   "section": 2,
+   "base": "main-row12a-nonet",
+   "title": "Main window, Row 12a: waiting for a network",
+   "when": "Connect pressed while the Mac has no network; nothing starts until one is available.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.09",
+   "section": 2,
+   "base": "main-row14",
+   "title": "Main window, Row 14: stopped unexpectedly",
+   "when": "The tunnel process stopped; not protected.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.10",
+   "section": 2,
+   "base": "main-row15",
+   "title": "Main window, Row 15: not protected",
+   "when": "Disconnected, no error. The other main resting state.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.11",
+   "section": 2,
+   "base": "hero-row1",
+   "title": "Hero, Row 1: tunnel component not allowed yet",
+   "when": "The system extension awaits approval in System Settings (first launch, or after a reinstall).",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.12",
+   "section": 2,
+   "base": "hero-row1-disabled",
+   "title": "Hero, Row 1: tunnel component turned off",
+   "when": "The user switched LockPlus's network extension off in System Settings.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.13",
+   "section": 2,
+   "base": "hero-row1-removed",
+   "title": "Hero, Row 1: tunnel component removed during an update",
+   "when": "The app was replaced in Finder and macOS dropped the extension.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.14",
+   "section": 2,
+   "base": "hero-row1-damaged",
+   "title": "Hero, Row 1: tunnel component damaged",
+   "when": "Activation failed hard; Reinstall is offered.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.15",
+   "section": 2,
+   "base": "hero-row1-reboot",
+   "title": "Hero, Row 1: restart needed",
+   "when": "macOS finishes the extension install at the next restart.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.16",
+   "section": 2,
+   "base": "hero-row2",
+   "title": "Hero, Row 2: paused",
+   "when": "After Pause Protection; counts down to automatic resume.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.17",
+   "section": 2,
+   "base": "hero-row3",
+   "title": "Hero, Row 3: sign in to connect (kill switch on)",
+   "when": "The server asks for a code or password during a connect; traffic is blocked meanwhile.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.18",
+   "section": 2,
+   "base": "hero-row3-approval",
+   "title": "Hero, Row 3: waiting for sign-in approval",
+   "when": "A push approval is pending on the user's phone (up to 10 min).",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.19",
+   "section": 2,
+   "base": "hero-row3-nokillswitch",
+   "title": "Hero, Row 3: sign in to connect (no kill switch)",
+   "when": "As row 3 on a profile without kill switch.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.20",
+   "section": 2,
+   "base": "hero-row3a",
+   "title": "Hero, Row 3a: blocked, could not connect (retrying)",
+   "when": "Kill-switch connect failed before Connected; held and retrying.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.21",
+   "section": 2,
+   "base": "hero-row3b",
+   "title": "Hero, Row 3b: auto-connect paused after a failed start",
+   "when": "An auto-connect start failed with a non-retryable error.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.22",
+   "section": 2,
+   "base": "hero-rowswitch",
+   "title": "Hero, Switching profiles",
+   "when": "Another profile is chosen while one is connected; not protected for a moment.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.23",
+   "section": 2,
+   "base": "hero-row4",
+   "title": "Hero, Row 4: connecting",
+   "when": "The tunnel is establishing.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.24",
+   "section": 2,
+   "base": "hero-row4a",
+   "title": "Hero, Row 4a: reconnecting to the tunnel process",
+   "when": "The tunnel process crashed; macOS still reports connected.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.25",
+   "section": 2,
+   "base": "hero-row4a-unresponsive",
+   "title": "Hero, Row 4a: tunnel process not responding",
+   "when": "The XPC link is unavailable while macOS says connected.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.26",
+   "section": 2,
+   "base": "hero-row5",
+   "title": "Hero, Row 5: protected, DNS not verified",
+   "when": "Connected, but the DNS check could not confirm the tunnel resolver.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.27",
+   "section": 2,
+   "base": "hero-row5-overridden",
+   "title": "Hero, Row 5: protected, DNS overridden",
+   "when": "Another profile's resolver owns DNS.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.28",
+   "section": 2,
+   "base": "hero-row6",
+   "title": "Hero, Row 6: protected",
+   "when": "Connected and verified. The main resting state.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": [
+    {
+     "id": "a",
+     "x": 0.12,
+     "y": 0.2,
+     "label": "State glyph"
+    },
+    {
+     "id": "b",
+     "x": 0.3,
+     "y": 0.14,
+     "label": "State word"
+    },
+    {
+     "id": "c",
+     "x": 0.3,
+     "y": 0.35,
+     "label": "Live numbers"
+    },
+    {
+     "id": "d",
+     "x": 0.5,
+     "y": 0.55,
+     "label": "5-minute chart"
+    },
+    {
+     "id": "e",
+     "x": 0.2,
+     "y": 0.75,
+     "label": "DNS line"
+    },
+    {
+     "id": "f",
+     "x": 0.13,
+     "y": 0.85,
+     "label": "Action button"
+    }
+   ]
+  },
+  {
+   "id": "S-2.29",
+   "section": 2,
+   "base": "hero-row6-reconnected",
+   "title": "Hero, Row 6 with 'reconnected after restart' strip",
+   "when": "The session came back by itself within 2 minutes of a tunnel-process crash.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.30",
+   "section": 2,
+   "base": "hero-row7",
+   "title": "Hero, Row 7: blocked after a failure",
+   "when": "Kill switch on and the engine stopped with a fatal error; no retries.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.31",
+   "section": 2,
+   "base": "hero-row8",
+   "title": "Hero, Row 8: auto-connect paused (reasserting)",
+   "when": "On-demand reconnect failed with a non-retryable error.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.32",
+   "section": 2,
+   "base": "hero-row9",
+   "title": "Hero, Row 9: new code needed to reconnect",
+   "when": "A reconnect needs a one-time code; traffic is blocked meanwhile.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.33",
+   "section": 2,
+   "base": "hero-row10",
+   "title": "Hero, Row 10: blocked, reconnecting",
+   "when": "Kill switch on and the connection dropped; retries with countdown.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.34",
+   "section": 2,
+   "base": "hero-row11",
+   "title": "Hero, Row 11: reconnecting (no kill switch)",
+   "when": "Connection dropped; traffic flows unprotected meanwhile.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.35",
+   "section": 2,
+   "base": "hero-row12",
+   "title": "Hero, Row 12: disconnecting",
+   "when": "A disconnect is in progress.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.36",
+   "section": 2,
+   "base": "hero-row12a",
+   "title": "Hero, Row 12a: preparing to connect",
+   "when": "LockPlus's own start work before any NEVPNStatus exists.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.37",
+   "section": 2,
+   "base": "hero-row12a-wait",
+   "title": "Hero, Row 12a: waiting for another profile to disconnect",
+   "when": "A profile switch waits until macOS has stopped the old session.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.38",
+   "section": 2,
+   "base": "hero-row12a-restart",
+   "title": "Hero, Row 12a: waiting for the tunnel process to restart",
+   "when": "After a seen crash, macOS or LockPlus restarts the profile (up to 30 s).",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.39",
+   "section": 2,
+   "base": "hero-row12a-mayrestart",
+   "title": "Hero, Row 12a: checking whether it restarts",
+   "when": "An unexpected stop that may be a crash; hedged copy, up to 10 s.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.40",
+   "section": 2,
+   "base": "hero-row12a-endedearly",
+   "title": "Hero, Row 12a: the start ended early",
+   "when": "LockPlus's own start ended before any status was read.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.41",
+   "section": 2,
+   "base": "hero-row12a-nonet",
+   "title": "Hero, Row 12a: waiting for a network",
+   "when": "Connect pressed while the Mac has no network; nothing starts until one is available.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.42",
+   "section": 2,
+   "base": "hero-row12a-netrestart",
+   "title": "Hero, Row 12a: connects when a network is available",
+   "when": "macOS refused a kill-switch start for want of a network and connects by itself later.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.43",
+   "section": 2,
+   "base": "hero-row13a",
+   "title": "Hero, Row 13a: auto-connect paused (start latch)",
+   "when": "On-demand starts fail fast until the user acts.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.44",
+   "section": 2,
+   "base": "hero-row14",
+   "title": "Hero, Row 14: stopped unexpectedly",
+   "when": "The tunnel process stopped; not protected.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.45",
+   "section": 2,
+   "base": "hero-row14-nonet",
+   "title": "Hero, Row 14: no network",
+   "when": "macOS ended the session because the Mac has no network.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.46",
+   "section": 2,
+   "base": "hero-row14-killswitch-not-applied",
+   "title": "Hero, Row 14: kill switch could not be applied",
+   "when": "LockPlus refuses to connect unprotected.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.47",
+   "section": 2,
+   "base": "hero-row14-server-unreachable",
+   "title": "Hero, Row 14: server only reachable via an unusable network",
+   "when": "The server is reachable only through a non-primary interface (e.g. a VM bridge).",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.48",
+   "section": 2,
+   "base": "hero-row15",
+   "title": "Hero, Row 15: not protected",
+   "when": "Disconnected, no error. The other main resting state.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.49",
+   "section": 2,
+   "base": "hero-row15-nas",
+   "title": "Hero, Row 15: not protected, split-tunnel profile",
+   "when": "A split-tunnel profile ('Route protection' wording elsewhere).",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.50",
+   "section": 2,
+   "base": "hero-row15-repairing",
+   "title": "Hero, Not protected, protection settings being restored",
+   "when": "macOS rewrote the VPN configuration; LockPlus restores the kill-switch flags first.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.51",
+   "section": 2,
+   "base": "hero-row15-notverified",
+   "title": "Hero, Not protected, profile not yet verified",
+   "when": "An OpenVPN profile imported before the engine was available; Connect disabled.",
+   "ref": "UI-CONCEPT 6.4, 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-2.52",
+   "section": 2,
+   "base": "detail-work-protected",
+   "title": "Profile detail, WireGuard, protected",
+   "when": "The detail below the hero.",
+   "ref": "UI-CONCEPT 6.4",
+   "regions": []
+  },
+  {
+   "id": "S-2.53",
+   "section": 2,
+   "base": "detail-acme-openvpn",
+   "title": "Profile detail, OpenVPN with credentials",
+   "when": "An OpenVPN profile: cipher, credentials, import report.",
+   "ref": "UI-CONCEPT 6.4",
+   "regions": [
+    {
+     "id": "a",
+     "x": 0.5,
+     "y": 0.1,
+     "label": "Hero"
+    },
+    {
+     "id": "b",
+     "x": 0.5,
+     "y": 0.3,
+     "label": "Connection"
+    },
+    {
+     "id": "c",
+     "x": 0.5,
+     "y": 0.5,
+     "label": "Protection"
+    },
+    {
+     "id": "d",
+     "x": 0.5,
+     "y": 0.65,
+     "label": "Auto-Connect"
+    },
+    {
+     "id": "e",
+     "x": 0.5,
+     "y": 0.77,
+     "label": "Credentials"
+    },
+    {
+     "id": "f",
+     "x": 0.5,
+     "y": 0.93,
+     "label": "Notes"
+    }
+   ]
+  },
+  {
+   "id": "S-2.54",
+   "section": 2,
+   "base": "detail-nas-split-tunnel",
+   "title": "Profile detail, split tunnel",
+   "when": "'Route protection' wording; not a full tunnel.",
+   "ref": "UI-CONCEPT 6.4",
+   "regions": []
+  },
+  {
+   "id": "S-3.01",
+   "section": 3,
+   "base": "sidebar-rows",
+   "title": "Sidebar rows, selected and plain",
+   "when": "Selected row drawn without vibrancy.",
+   "ref": "UI-CONCEPT 6.3",
+   "regions": []
+  },
+  {
+   "id": "S-3.02",
+   "section": 3,
+   "base": "sidebar-rows-all-row6",
+   "title": "Sidebar, all profiles while Work is connected",
+   "when": "Active profile pinned on top.",
+   "ref": "UI-CONCEPT 6.3",
+   "regions": []
+  },
+  {
+   "id": "S-3.03",
+   "section": 3,
+   "base": "sidebar-rows-all-row15",
+   "title": "Sidebar, all profiles, nothing connected",
+   "when": "Default order.",
+   "ref": "UI-CONCEPT 6.3",
+   "regions": []
+  },
+  {
+   "id": "S-3.04",
+   "section": 3,
+   "base": "main-library-empty",
+   "title": "Main window, empty library",
+   "when": "No profiles yet.",
+   "ref": "UI-CONCEPT 6.15",
+   "regions": []
+  },
+  {
+   "id": "S-3.05",
+   "section": 3,
+   "base": "main-library-locked",
+   "title": "Main window, profiles locked",
+   "when": "Profiles sealed on another Mac.",
+   "ref": "UI-CONCEPT 6.8",
+   "regions": []
+  },
+  {
+   "id": "S-3.06",
+   "section": 3,
+   "base": "main-library-unreadable",
+   "title": "Main window, profile files unreadable",
+   "when": "A read failure is not 'No Profiles'.",
+   "ref": "E2E-4",
+   "regions": []
+  },
+  {
+   "id": "S-3.07",
+   "section": 3,
+   "base": "locked-profiles",
+   "title": "Locked profiles view",
+   "when": "Detail of the locked state.",
+   "ref": "UI-CONCEPT 6.8",
+   "regions": []
+  },
+  {
+   "id": "S-3.08",
+   "section": 3,
+   "base": "detail-no-selection",
+   "title": "Detail placeholder, nothing selected",
+   "when": "Transient; normally a profile is always resolved.",
+   "ref": "UI-CONCEPT 6.15",
+   "regions": []
+  },
+  {
+   "id": "S-4.01",
+   "section": 4,
+   "base": "editor-wireguard",
+   "title": "Editor, WireGuard",
+   "when": "Edit Config... behind Touch ID.",
+   "ref": "UI-CONCEPT 6.9",
+   "regions": [
+    {
+     "id": "a",
+     "x": 0.03,
+     "y": 0.15,
+     "label": "Line numbers"
+    },
+    {
+     "id": "b",
+     "x": 0.2,
+     "y": 0.07,
+     "label": "Masked private key"
+    },
+    {
+     "id": "c",
+     "x": 0.035,
+     "y": 0.29,
+     "label": "Issue marker"
+    },
+    {
+     "id": "d",
+     "x": 0.85,
+     "y": 0.15,
+     "label": "Issues list"
+    },
+    {
+     "id": "e",
+     "x": 0.85,
+     "y": 0.4,
+     "label": "Reference"
+    }
+   ]
+  },
+  {
+   "id": "S-4.02",
+   "section": 4,
+   "base": "editor-wireguard-key-revealed",
+   "title": "Editor, private key revealed",
+   "when": "After Show.",
+   "ref": "UI-CONCEPT 6.9",
+   "regions": []
+  },
+  {
+   "id": "S-4.03",
+   "section": 4,
+   "base": "editor-openvpn",
+   "title": "Editor, OpenVPN",
+   "when": "With ignored directives and a legacy-cipher error.",
+   "ref": "UI-CONCEPT 6.9",
+   "regions": []
+  },
+  {
+   "id": "S-4.04",
+   "section": 4,
+   "base": "editor-new-profile",
+   "title": "Editor, new profile",
+   "when": "New WireGuard Profile.",
+   "ref": "UI-CONCEPT 6.9",
+   "regions": []
+  },
+  {
+   "id": "S-4.05",
+   "section": 4,
+   "base": "import-typical",
+   "title": "Import sheet, typical",
+   "when": "Single file import.",
+   "ref": "UI-CONCEPT 6.8",
+   "regions": []
+  },
+  {
+   "id": "S-4.06",
+   "section": 4,
+   "base": "import-warnings",
+   "title": "Import sheet, with warnings",
+   "when": "Legacy cipher and a server on another network.",
+   "ref": "UI-CONCEPT 6.8",
+   "regions": []
+  },
+  {
+   "id": "S-4.07",
+   "section": 4,
+   "base": "import-unsupported",
+   "title": "Import sheet, unsupported",
+   "when": "Import is disabled; the reason is explained.",
+   "ref": "UI-CONCEPT 6.8",
+   "regions": []
+  },
+  {
+   "id": "S-4.08",
+   "section": 4,
+   "base": "import-batch",
+   "title": "Batch import (zip or several files)",
+   "when": "A zip or several files.",
+   "ref": "UI-CONCEPT 6.8",
+   "regions": []
+  },
+  {
+   "id": "S-4.09",
+   "section": 4,
+   "base": "import-batch-errors",
+   "title": "Batch import with entry errors",
+   "when": "Skipped entries are shown above the list.",
+   "ref": "UI-CONCEPT 6.8",
+   "regions": []
+  },
+  {
+   "id": "S-4.10",
+   "section": 4,
+   "base": "password-change",
+   "title": "Change password",
+   "when": "Change... on a saved password.",
+   "ref": "UI-CONCEPT 6.4",
+   "regions": []
+  },
+  {
+   "id": "S-4.11",
+   "section": 4,
+   "base": "password-reveal",
+   "title": "Reveal password",
+   "when": "Show, after Touch ID.",
+   "ref": "UI-CONCEPT 6.4",
+   "regions": []
+  },
+  {
+   "id": "S-5.01",
+   "section": 5,
+   "base": "auth-password",
+   "title": "Sign-in, password and one-time code",
+   "when": "Password not saved, OTP profile.",
+   "ref": "UI-CONCEPT 6.5",
+   "regions": [
+    {
+     "id": "a",
+     "x": 0.2,
+     "y": 0.12,
+     "label": "Title"
+    },
+    {
+     "id": "b",
+     "x": 0.5,
+     "y": 0.3,
+     "label": "Username and password"
+    },
+    {
+     "id": "c",
+     "x": 0.5,
+     "y": 0.55,
+     "label": "One-time code"
+    },
+    {
+     "id": "d",
+     "x": 0.3,
+     "y": 0.7,
+     "label": "Save in Keychain"
+    },
+    {
+     "id": "e",
+     "x": 0.8,
+     "y": 0.88,
+     "label": "Cancel / Connect"
+    }
+   ]
+  },
+  {
+   "id": "S-5.02",
+   "section": 5,
+   "base": "auth-password-plain",
+   "title": "Sign-in, password",
+   "when": "Password not saved.",
+   "ref": "UI-CONCEPT 6.5",
+   "regions": []
+  },
+  {
+   "id": "S-5.03",
+   "section": 5,
+   "base": "auth-static-challenge",
+   "title": "Sign-in, static challenge",
+   "when": "Server text asks for a response.",
+   "ref": "UI-CONCEPT 6.5",
+   "regions": []
+  },
+  {
+   "id": "S-5.04",
+   "section": 5,
+   "base": "auth-crv1",
+   "title": "Sign-in, dynamic challenge (new code)",
+   "when": "CRV1 after an expired or used code.",
+   "ref": "UI-CONCEPT 6.5",
+   "regions": []
+  },
+  {
+   "id": "S-5.05",
+   "section": 5,
+   "base": "auth-rejected",
+   "title": "Sign-in, rejected by the server",
+   "when": "Wrong password or code.",
+   "ref": "UI-CONCEPT 6.5",
+   "regions": []
+  },
+  {
+   "id": "S-5.06",
+   "section": 5,
+   "base": "auth-key-passphrase",
+   "title": "Sign-in, key passphrase",
+   "when": "Encrypted private key.",
+   "ref": "UI-CONCEPT 6.5",
+   "regions": []
+  },
+  {
+   "id": "S-5.07",
+   "section": 5,
+   "base": "auth-waiting-approval",
+   "title": "Sign-in, waiting for approval",
+   "when": "Push approval pending.",
+   "ref": "UI-CONCEPT 6.5",
+   "regions": []
+  },
+  {
+   "id": "S-5.08",
+   "section": 5,
+   "base": "auth-approval-too-late",
+   "title": "Sign-in, approval took too long",
+   "when": "Try Again sends a new request.",
+   "ref": "UI-CONCEPT 6.5",
+   "regions": []
+  },
+  {
+   "id": "S-5.09",
+   "section": 5,
+   "base": "auth-answer-failed",
+   "title": "Sign-in, answer could not be delivered",
+   "when": "The tunnel process was busy.",
+   "ref": "UI-CONCEPT 6.5",
+   "regions": []
+  },
+  {
+   "id": "S-5.10",
+   "section": 5,
+   "base": "auth-expired",
+   "title": "Sign-in, request expired",
+   "when": "After 10 min (5 for a dynamic challenge).",
+   "ref": "UI-CONCEPT 6.5",
+   "regions": []
+  },
+  {
+   "id": "S-6.01",
+   "section": 6,
+   "base": "settings-general",
+   "title": "Settings, General",
+   "when": "Launch at login, language, notifications (shown with approval pending and notifications denied).",
+   "ref": "UI-CONCEPT 6.13",
+   "regions": [
+    {
+     "id": "a",
+     "x": 0.5,
+     "y": 0.07,
+     "label": "Tabs"
+    },
+    {
+     "id": "b",
+     "x": 0.2,
+     "y": 0.2,
+     "label": "Launch at login"
+    },
+    {
+     "id": "c",
+     "x": 0.2,
+     "y": 0.5,
+     "label": "Language"
+    },
+    {
+     "id": "d",
+     "x": 0.2,
+     "y": 0.64,
+     "label": "Notifications"
+    }
+   ]
+  },
+  {
+   "id": "S-6.02",
+   "section": 6,
+   "base": "settings-menubar",
+   "title": "Settings, Menu Bar (icon may be hidden)",
+   "when": "Show in menu bar, rates, icon style, preview.",
+   "ref": "UI-CONCEPT 6.13",
+   "regions": []
+  },
+  {
+   "id": "S-6.03",
+   "section": 6,
+   "base": "settings-menubar-hidden-color",
+   "title": "Settings, Menu Bar (colour, download only)",
+   "when": "Alternate values.",
+   "ref": "UI-CONCEPT 6.13",
+   "regions": []
+  },
+  {
+   "id": "S-6.04",
+   "section": 6,
+   "base": "settings-profiles",
+   "title": "Settings, Profiles",
+   "when": "Defaults for new profiles; Export All.",
+   "ref": "UI-CONCEPT 6.13",
+   "regions": []
+  },
+  {
+   "id": "S-6.05",
+   "section": 6,
+   "base": "settings-advanced",
+   "title": "Settings, Advanced",
+   "when": "Log level, RCs, diagnostics, import from old LockPlus, reinstall, uninstall.",
+   "ref": "UI-CONCEPT 6.13",
+   "regions": []
+  },
+  {
+   "id": "S-6.06",
+   "section": 6,
+   "base": "settings-advanced-dev",
+   "title": "Settings, Advanced (dev build)",
+   "when": "Adds a Debug section.",
+   "ref": "UI-CONCEPT 6.13",
+   "regions": []
+  },
+  {
+   "id": "S-6.07",
+   "section": 6,
+   "base": "settings-about",
+   "title": "Settings, About",
+   "when": "Version, updates, links.",
+   "ref": "UI-CONCEPT 6.13",
+   "regions": []
+  },
+  {
+   "id": "S-6.08",
+   "section": 6,
+   "base": "settings-advanced-import-old",
+   "title": "Import from Old LockPlus (sheet)",
+   "when": "Settings > Advanced > Import from Old LockPlus..., or the Finish Import banner. Any time, also after onboarding (E2E-5 F4).",
+   "ref": "UI-CONCEPT 6.13, DESIGN 13.1",
+   "regions": []
+  },
+  {
+   "id": "S-7.01",
+   "section": 7,
+   "base": "onboarding-step1-welcome",
+   "title": "Onboarding 1, welcome",
+   "when": "First launch.",
+   "ref": "UI-CONCEPT 6.14",
+   "regions": []
+  },
+  {
+   "id": "S-7.02",
+   "section": 7,
+   "base": "onboarding-step2-idle",
+   "title": "Onboarding 2, install tunnel component",
+   "when": "Before Install.",
+   "ref": "UI-CONCEPT 6.14",
+   "regions": []
+  },
+  {
+   "id": "S-7.03",
+   "section": 7,
+   "base": "onboarding-step2-requesting",
+   "title": "Onboarding 2, installing",
+   "when": "Request in flight.",
+   "ref": "UI-CONCEPT 6.14",
+   "regions": []
+  },
+  {
+   "id": "S-7.04",
+   "section": 7,
+   "base": "onboarding-step2-approval",
+   "title": "Onboarding 2, waiting for approval",
+   "when": "Approve in System Settings; 'Show the Switch Again'.",
+   "ref": "UI-CONCEPT 6.14",
+   "regions": []
+  },
+  {
+   "id": "S-7.05",
+   "section": 7,
+   "base": "onboarding-step2-reboot",
+   "title": "Onboarding 2, restart needed",
+   "when": "willCompleteAfterReboot.",
+   "ref": "UI-CONCEPT 6.14",
+   "regions": []
+  },
+  {
+   "id": "S-7.06",
+   "section": 7,
+   "base": "onboarding-step2-failed",
+   "title": "Onboarding 2, failed",
+   "when": "Try Again / Get Help.",
+   "ref": "UI-CONCEPT 6.14",
+   "regions": []
+  },
+  {
+   "id": "S-7.07",
+   "section": 7,
+   "base": "onboarding-step2-installed",
+   "title": "Onboarding 2, installed",
+   "when": "Extension approved.",
+   "ref": "UI-CONCEPT 6.14",
+   "regions": []
+  },
+  {
+   "id": "S-7.08",
+   "section": 7,
+   "base": "onboarding-step3-explain",
+   "title": "Onboarding 3, allow VPN configuration (explain)",
+   "when": "Before the system alert.",
+   "ref": "UI-CONCEPT 6.14",
+   "regions": []
+  },
+  {
+   "id": "S-7.09",
+   "section": 7,
+   "base": "onboarding-step3-requesting",
+   "title": "Onboarding 3, waiting for the system alert",
+   "when": "Request in flight.",
+   "ref": "UI-CONCEPT 6.14",
+   "regions": []
+  },
+  {
+   "id": "S-7.10",
+   "section": 7,
+   "base": "onboarding-step3-denied",
+   "title": "Onboarding 3, denied",
+   "when": "The user chose Don't Allow.",
+   "ref": "UI-CONCEPT 6.14",
+   "regions": []
+  },
+  {
+   "id": "S-7.11",
+   "section": 7,
+   "base": "onboarding-step3-deferred",
+   "title": "Onboarding 3, deferred",
+   "when": "A running VPN postpones the save.",
+   "ref": "UI-CONCEPT 6.14",
+   "regions": []
+  },
+  {
+   "id": "S-7.12",
+   "section": 7,
+   "base": "onboarding-step4-choose",
+   "title": "Onboarding 4, bring your profiles",
+   "when": "No old app found; choose files; /etc/wireguard hint.",
+   "ref": "UI-CONCEPT 6.14",
+   "regions": []
+  },
+  {
+   "id": "S-7.13",
+   "section": 7,
+   "base": "onboarding-step4-migration",
+   "title": "Onboarding 4, migration from LockPlus 1.x",
+   "when": "Profiles found.",
+   "ref": "UI-CONCEPT 6.14",
+   "regions": []
+  },
+  {
+   "id": "S-7.14",
+   "section": 7,
+   "base": "onboarding-step4-migration-passwords",
+   "title": "Onboarding 4, migration with saved passwords",
+   "when": "Opt-in to import saved passwords.",
+   "ref": "UI-CONCEPT 6.14",
+   "regions": []
+  },
+  {
+   "id": "S-7.15",
+   "section": 7,
+   "base": "onboarding-step4-report",
+   "title": "Onboarding 4, migration report",
+   "when": "Imported / needs attention (with the reason) / not migrated / good to know (harmless lines, appearance, DNS, per-network map), launch-at-login offer (E2E-5 F6).",
+   "ref": "UI-CONCEPT 6.14",
+   "regions": []
+  },
+  {
+   "id": "S-7.16",
+   "section": 7,
+   "base": "onboarding-step5-done",
+   "title": "Onboarding 5, done",
+   "when": "Last step; notification permission is requested here.",
+   "ref": "UI-CONCEPT 6.14",
+   "regions": []
+  },
+  {
+   "id": "S-7.17",
+   "section": 7,
+   "base": "onboarding-callout",
+   "title": "Callout under the menu bar icon",
+   "when": "Shown at the end of onboarding.",
+   "ref": "UI-CONCEPT 6.14",
+   "regions": []
+  },
+  {
+   "id": "S-7.18",
+   "section": 7,
+   "base": "onboarding-step4-resume",
+   "title": "Onboarding 4, finish an interrupted migration",
+   "when": "An earlier import was interrupted (E2E-5 F4): the missing profiles, then settings, Wi-Fi rules, history and saved sign-ins.",
+   "ref": "UI-CONCEPT 6.14, DESIGN 13.1",
+   "regions": []
+  },
+  {
+   "id": "S-7.19",
+   "section": 7,
+   "base": "onboarding-step3-first",
+   "title": "Onboarding 3, allow VPN configuration (first profile)",
+   "when": "No profile yet: macOS asks at the first import in step 4.",
+   "ref": "UI-CONCEPT 6.14",
+   "regions": []
+  },
+  {
+   "id": "S-7.20",
+   "section": 7,
+   "base": "onboarding-step4-first-choose",
+   "title": "Onboarding 4, bring your profiles (first profile)",
+   "when": "No profile yet: hint that macOS asks to add VPN configurations.",
+   "ref": "UI-CONCEPT 6.14",
+   "regions": []
+  },
+  {
+   "id": "S-7.21",
+   "section": 7,
+   "base": "onboarding-step4-first-migration-passwords",
+   "title": "Onboarding 4, migration with saved passwords (first profile)",
+   "when": "No profile yet; hint plus the keychain prompts.",
+   "ref": "UI-CONCEPT 6.14",
+   "regions": []
+  },
+  {
+   "id": "S-8.01",
+   "section": 8,
+   "base": "main-section-activity",
+   "title": "Main window, Activity",
+   "when": "Sidebar > Activity.",
+   "ref": "UI-CONCEPT 6.10",
+   "regions": []
+  },
+  {
+   "id": "S-8.02",
+   "section": 8,
+   "base": "section-activity",
+   "title": "Activity",
+   "when": "Sessions and the live chart.",
+   "ref": "UI-CONCEPT 6.10",
+   "regions": []
+  },
+  {
+   "id": "S-8.03",
+   "section": 8,
+   "base": "section-activity-empty",
+   "title": "Activity, empty",
+   "when": "No sessions yet.",
+   "ref": "UI-CONCEPT 6.15",
+   "regions": []
+  },
+  {
+   "id": "S-8.04",
+   "section": 8,
+   "base": "main-section-autoconnect",
+   "title": "Main window, Auto-Connect",
+   "when": "Sidebar > Auto-Connect.",
+   "ref": "UI-CONCEPT 6.7",
+   "regions": []
+  },
+  {
+   "id": "S-8.05",
+   "section": 8,
+   "base": "autoconnect-default",
+   "title": "Auto-Connect, on",
+   "when": "Rules and trusted networks.",
+   "ref": "UI-CONCEPT 6.7",
+   "regions": []
+  },
+  {
+   "id": "S-8.06",
+   "section": 8,
+   "base": "autoconnect-off",
+   "title": "Auto-Connect, off",
+   "when": "Controls disabled.",
+   "ref": "UI-CONCEPT 6.7",
+   "regions": []
+  },
+  {
+   "id": "S-8.07",
+   "section": 8,
+   "base": "autoconnect-status-suspended",
+   "title": "Auto-Connect, status line (suspended)",
+   "when": "Status: paused after a manual Disconnect.",
+   "ref": "UI-CONCEPT 6.7",
+   "regions": [
+    {
+     "id": "a",
+     "x": 0.5,
+     "y": 0.07,
+     "label": "Status line"
+    },
+    {
+     "id": "b",
+     "x": 0.5,
+     "y": 0.2,
+     "label": "Toggle and profile"
+    },
+    {
+     "id": "c",
+     "x": 0.5,
+     "y": 0.4,
+     "label": "Connect on"
+    },
+    {
+     "id": "d",
+     "x": 0.5,
+     "y": 0.6,
+     "label": "Trusted networks"
+    },
+    {
+     "id": "e",
+     "x": 0.8,
+     "y": 0.72,
+     "label": "Add network"
+    },
+    {
+     "id": "f",
+     "x": 0.5,
+     "y": 0.82,
+     "label": "Info"
+    }
+   ]
+  },
+  {
+   "id": "S-8.08",
+   "section": 8,
+   "base": "autoconnect-status-resumes",
+   "title": "Auto-Connect, status line (resumes)",
+   "when": "Status: waits for another profile.",
+   "ref": "UI-CONCEPT 6.7",
+   "regions": []
+  },
+  {
+   "id": "S-8.09",
+   "section": 8,
+   "base": "autoconnect-status-handover",
+   "title": "Auto-Connect, status line (handover)",
+   "when": "Status: held during an extension update.",
+   "ref": "UI-CONCEPT 6.7",
+   "regions": []
+  },
+  {
+   "id": "S-8.10",
+   "section": 8,
+   "base": "autoconnect-status-restore-failed",
+   "title": "Auto-Connect, status line (restore failed)",
+   "when": "Status: could not be turned back on.",
+   "ref": "UI-CONCEPT 6.7",
+   "regions": []
+  },
+  {
+   "id": "S-8.11",
+   "section": 8,
+   "base": "autoconnect-status-another-user",
+   "title": "Auto-Connect, status line (another user)",
+   "when": "Status: another user's VPN holds changes back.",
+   "ref": "UI-CONCEPT 6.7",
+   "regions": []
+  },
+  {
+   "id": "S-8.12",
+   "section": 8,
+   "base": "autoconnect-location-authorized",
+   "title": "Auto-Connect, location authorized",
+   "when": "Location allowed: 'Add Current Network' and the current SSID.",
+   "ref": "UI-CONCEPT 6.7",
+   "regions": []
+  },
+  {
+   "id": "S-8.13",
+   "section": 8,
+   "base": "autoconnect-location-denied",
+   "title": "Auto-Connect, location denied",
+   "when": "Location denied: type the name or open Privacy Settings.",
+   "ref": "UI-CONCEPT 6.7",
+   "regions": []
+  },
+  {
+   "id": "S-8.14",
+   "section": 8,
+   "base": "autoconnect-location-restricted",
+   "title": "Auto-Connect, location restricted",
+   "when": "Location managed by the organisation.",
+   "ref": "UI-CONCEPT 6.7",
+   "regions": []
+  },
+  {
+   "id": "S-8.15",
+   "section": 8,
+   "base": "autoconnect-requires-running-app",
+   "title": "Auto-Connect, requires running app",
+   "when": "Subtitle when auto-connect needs LockPlus running.",
+   "ref": "UI-CONCEPT 6.7",
+   "regions": []
+  },
+  {
+   "id": "S-8.16",
+   "section": 8,
+   "base": "location-preprompt",
+   "title": "Location pre-prompt",
+   "when": "'Add Current Network...' with Location undecided.",
+   "ref": "UI-CONCEPT 6.7",
+   "regions": []
+  },
+  {
+   "id": "S-8.17",
+   "section": 8,
+   "base": "main-section-diagnostics",
+   "title": "Main window, Diagnostics",
+   "when": "Sidebar > Diagnostics.",
+   "ref": "UI-CONCEPT 6.11",
+   "regions": []
+  },
+  {
+   "id": "S-8.18",
+   "section": 8,
+   "base": "section-diagnostics",
+   "title": "Diagnostics",
+   "when": "Checks, routes, problems (none).",
+   "ref": "UI-CONCEPT 6.11",
+   "regions": []
+  },
+  {
+   "id": "S-8.19",
+   "section": 8,
+   "base": "section-diagnostics-problems",
+   "title": "Diagnostics, with a failed check and problems",
+   "when": "Background failures collect here.",
+   "ref": "UI-CONCEPT 6.11",
+   "regions": []
+  },
+  {
+   "id": "S-8.20",
+   "section": 8,
+   "base": "main-section-logs",
+   "title": "Main window, Logs",
+   "when": "Sidebar > Logs.",
+   "ref": "UI-CONCEPT 6.12",
+   "regions": []
+  },
+  {
+   "id": "S-8.21",
+   "section": 8,
+   "base": "section-logs",
+   "title": "Logs",
+   "when": "App and tunnel lines.",
+   "ref": "UI-CONCEPT 6.12",
+   "regions": []
+  },
+  {
+   "id": "S-8.22",
+   "section": 8,
+   "base": "logs-tunnel-gap",
+   "title": "Logs, tunnel logs unreadable",
+   "when": "Non-administrator account.",
+   "ref": "UI-CONCEPT 6.12",
+   "regions": []
+  },
+  {
+   "id": "S-8.23",
+   "section": 8,
+   "base": "diagnostics-export",
+   "title": "Export Diagnostics, 'What is inside'",
+   "when": "Settings > Advanced > Export Diagnostics.",
+   "ref": "UI-CONCEPT 6.11",
+   "regions": []
+  },
+  {
+   "id": "S-8.24",
+   "section": 8,
+   "base": "diagnostics-panel-compare",
+   "title": "Diagnostics before/after: system table rows vs rows on lp.panel (dark mode is the change)",
+   "when": "Review comparison for S-8.17; the app ships the right-hand version.",
+   "ref": "UI-CONCEPT 2.5",
+   "regions": []
+  },
+  {
+   "id": "S-9.01",
+   "section": 9,
+   "base": "banner-extension-approval",
+   "title": "Banner, tunnel component not allowed",
+   "when": "Above the detail while approval is pending.",
+   "ref": "UI-CONCEPT 6.15",
+   "regions": []
+  },
+  {
+   "id": "S-9.02",
+   "section": 9,
+   "base": "banner-extension-disabled",
+   "title": "Banner, extension turned off",
+   "when": "Switched off in System Settings.",
+   "ref": "UI-CONCEPT 6.15",
+   "regions": []
+  },
+  {
+   "id": "S-9.03",
+   "section": 9,
+   "base": "banner-extension-removed",
+   "title": "Banner, removed during update",
+   "when": "After a Finder replace.",
+   "ref": "UI-CONCEPT 6.15",
+   "regions": []
+  },
+  {
+   "id": "S-9.04",
+   "section": 9,
+   "base": "banner-extension-damaged",
+   "title": "Banner, tunnel component damaged",
+   "when": "Reinstall.",
+   "ref": "UI-CONCEPT 6.15",
+   "regions": []
+  },
+  {
+   "id": "S-9.05",
+   "section": 9,
+   "base": "banner-extension-reboot",
+   "title": "Banner, restart to finish install",
+   "when": "willCompleteAfterReboot.",
+   "ref": "UI-CONCEPT 6.15",
+   "regions": []
+  },
+  {
+   "id": "S-9.06",
+   "section": 9,
+   "base": "banner-extension-update-failed",
+   "title": "Banner, tunnel component update failed",
+   "when": "Old extension still connects profiles.",
+   "ref": "UI-CONCEPT 6.15",
+   "regions": []
+  },
+  {
+   "id": "S-9.07",
+   "section": 9,
+   "base": "banner-legacy-helper",
+   "title": "Banner, old LockPlus helper blocks connecting",
+   "when": "Old Go app's firewall is on.",
+   "ref": "UI-CONCEPT 6.15",
+   "regions": []
+  },
+  {
+   "id": "S-9.08",
+   "section": 9,
+   "base": "banner-legacy-helper-warn",
+   "title": "Banner, old helper crashed with firewall on",
+   "when": "Warns before connecting.",
+   "ref": "UI-CONCEPT 6.15",
+   "regions": []
+  },
+  {
+   "id": "S-9.09",
+   "section": 9,
+   "base": "banner-vpn-configuration-denied",
+   "title": "Banner, VPN configuration not allowed",
+   "when": "macOS hasn't allowed adding VPN configurations.",
+   "ref": "UI-CONCEPT 6.15",
+   "regions": []
+  },
+  {
+   "id": "S-9.10",
+   "section": 9,
+   "base": "banner-other-vpn",
+   "title": "Banner, another VPN is active",
+   "when": "Connecting will disconnect it.",
+   "ref": "UI-CONCEPT 6.15",
+   "regions": []
+  },
+  {
+   "id": "S-9.11",
+   "section": 9,
+   "base": "banner-export-result",
+   "title": "Banner, export finished",
+   "when": "After Export All.",
+   "ref": "UI-CONCEPT 6.15",
+   "regions": []
+  },
+  {
+   "id": "S-9.12",
+   "section": 9,
+   "base": "uninstall-confirm",
+   "title": "Uninstall, confirmation",
+   "when": "Settings > Advanced > Uninstall.",
+   "ref": "UI-CONCEPT 6.13",
+   "regions": []
+  },
+  {
+   "id": "S-9.13",
+   "section": 9,
+   "base": "uninstall-uninstalling",
+   "title": "Uninstall, in progress",
+   "when": "Admin password dialog is up.",
+   "ref": "UI-CONCEPT 6.13",
+   "regions": []
+  },
+  {
+   "id": "S-9.14",
+   "section": 9,
+   "base": "uninstall-still-installed",
+   "title": "Uninstall, component still installed",
+   "when": "Admin dialog cancelled.",
+   "ref": "UI-CONCEPT 6.13",
+   "regions": []
+  },
+  {
+   "id": "S-9.15",
+   "section": 9,
+   "base": "uninstall-residual",
+   "title": "Uninstall, leftovers",
+   "when": "Names what stayed behind.",
+   "ref": "UI-CONCEPT 6.13",
+   "regions": []
+  },
+  {
+   "id": "S-9.16",
+   "section": 9,
+   "base": "banner-legacy-helper-idle",
+   "title": "Banner, old LockPlus helper installed and idle: Remove Old Helper",
+   "when": "The Go helper is installed and has no tunnel up (E2E-5 F1).",
+   "ref": "UI-CONCEPT 6.15, DESIGN 4.5, 13.3a",
+   "regions": []
+  },
+  {
+   "id": "S-9.17",
+   "section": 9,
+   "base": "banner-legacy-helper-removing",
+   "title": "Banner, removing the old helper",
+   "when": "After the administrator password, while the removal runs.",
+   "ref": "UI-CONCEPT 6.15, DESIGN 13.3a",
+   "regions": []
+  },
+  {
+   "id": "S-9.18",
+   "section": 9,
+   "base": "banner-legacy-helper-removed",
+   "title": "Banner, old helper removed",
+   "when": "The removal finished and was verified.",
+   "ref": "UI-CONCEPT 6.15, DESIGN 13.3a",
+   "regions": []
+  },
+  {
+   "id": "S-9.19",
+   "section": 9,
+   "base": "banner-legacy-helper-removal-failed",
+   "title": "Banner, old helper removal refused or failed",
+   "when": "Refused while the old LockPlus is connected; other failures say why. Try Again while the helper is still there.",
+   "ref": "UI-CONCEPT 6.15, DESIGN 13.3a",
+   "regions": []
+  },
+  {
+   "id": "S-9.20",
+   "section": 9,
+   "base": "banner-legacy-helper-removal-cancelled",
+   "title": "Banner, old helper removal cancelled",
+   "when": "The administrator dialog was cancelled.",
+   "ref": "UI-CONCEPT 6.15, DESIGN 13.3a",
+   "regions": []
+  },
+  {
+   "id": "S-9.21",
+   "section": 9,
+   "base": "banner-migration-resume",
+   "title": "Banner, finish an interrupted import",
+   "when": "After onboarding, an earlier import from LockPlus 1.x didn't finish (E2E-5 F4).",
+   "ref": "UI-CONCEPT 6.15, DESIGN 13.1",
+   "regions": []
+  },
+  {
+   "id": "S-9.22",
+   "section": 9,
+   "base": "banner-launch-at-login-offer",
+   "title": "Banner, open LockPlus at login instead of the old app",
+   "when": "LockPlus 1.0.x's LaunchAgent was removed at launch (E2E-5 F5).",
+   "ref": "UI-CONCEPT 6.15, DESIGN 13.1",
+   "regions": []
+  },
+  {
+   "id": "S-10.01",
+   "section": 10,
+   "base": "pause-confirm",
+   "title": "Pause confirmation",
+   "when": "After choosing 5 min / 15 min / 1 hour.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-10.02",
+   "section": 10,
+   "base": "pause-resume-approval",
+   "title": "Pause confirmation, background item not allowed",
+   "when": "Resume on time needs the login item.",
+   "ref": "UI-CONCEPT 6.6",
+   "regions": []
+  },
+  {
+   "id": "S-10.03",
+   "section": 10,
+   "base": "error-details",
+   "title": "Error details",
+   "when": "Details... on an error.",
+   "ref": "UI-CONCEPT 6.15",
+   "regions": []
+  },
+  {
+   "id": "S-10.04",
+   "section": 10,
+   "base": "alert-switch-confirm",
+   "title": "Alert, switch to a profile without kill switch (stand-in)",
+   "when": "Active profile has kill switch, target doesn't. (Native alert; drawn from the app's strings.)",
+   "ref": "UI-CONCEPT 6.15",
+   "regions": []
+  },
+  {
+   "id": "S-10.05",
+   "section": 10,
+   "base": "alert-pause",
+   "title": "Alert, pause protection (menu) (stand-in)",
+   "when": "Pause from the menu. (Native alert; drawn from the app's strings.)",
+   "ref": "UI-CONCEPT 6.15",
+   "regions": []
+  },
+  {
+   "id": "S-10.06",
+   "section": 10,
+   "base": "banner-legacy-refuse-gate",
+   "title": "Refusal, old helper refuses connect (strip, no alert sheet)",
+   "when": "Connect while the old helper's tunnel or kill switch is up. A strip above the detail, so Quit isn't blocked (E2E-5 F8).",
+   "ref": "UI-CONCEPT 6.15, DESIGN 4.5",
+   "regions": []
+  },
+  {
+   "id": "S-10.07",
+   "section": 10,
+   "base": "alert-delete-profile",
+   "title": "Confirmation, delete profile (stand-in)",
+   "when": "Delete... (Native alert; drawn from the app's strings.)",
+   "ref": "UI-CONCEPT 6.15",
+   "regions": []
+  },
+  {
+   "id": "S-10.08",
+   "section": 10,
+   "base": "alert-locked-remove",
+   "title": "Alert, remove locked profiles (stand-in)",
+   "when": "Remove Locked Profiles... (Native alert; drawn from the app's strings.)",
+   "ref": "UI-CONCEPT 6.15",
+   "regions": []
+  },
+  {
+   "id": "S-10.09",
+   "section": 10,
+   "base": "alert-locked-start-over",
+   "title": "Alert, start over (stand-in)",
+   "when": "Re-import... on locked profiles. (Native alert; drawn from the app's strings.)",
+   "ref": "UI-CONCEPT 6.15",
+   "regions": []
+  },
+  {
+   "id": "S-11.01",
+   "section": 11,
+   "base": "glyphs",
+   "title": "Glyph family at 40 pt and 13 pt",
+   "when": "Reference of all eight states.",
+   "ref": "UI-CONCEPT 7.2",
+   "regions": []
+  },
+  {
+   "id": "S-12.02",
+   "section": 12,
+   "base": "glyph-shipping-lock",
+   "title": "The shipping lock: V2 Sturdy with a + in the body (p2)",
+   "when": "Shipping since UI-CONCEPT draft 8.4 (owner pick p2). Every state in the menu bar (mono 15 pt and colour tile 13 pt, with and without rates, @1x/@2x pixels at 15 and 13 pt), 40 pt family, menu header and hero.",
+   "ref": "UI-CONCEPT 7.2",
+   "regions": []
+  }
+ ]
+}

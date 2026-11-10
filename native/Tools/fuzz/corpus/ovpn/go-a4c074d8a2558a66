@@ -1,0 +1,21 @@
+client
+dev tun
+proto udp
+remote vpn.example.invalid 1194
+remote-cert-tls server
+remote-cert-tls server
+<ca>
+-----BEGIN CERTIFICATE-----
+MIIB
+-----END CERTIFICATE-----
+</ca>
+<cert>
+-----BEGIN CERTIFICATE-----
+MIIB
+-----END CERTIFICATE-----
+</cert>
+<key>
+-----BEGIN PRIVATE KEY-----
+MIIB
+-----END PRIVATE KEY-----
+</key>

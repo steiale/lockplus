@@ -1,0 +1,28 @@
+{
+  "configurations": [
+    {
+      "id": "6C2F7C0A-1F0B-4E52-9E0A-0A1B2C3D4E02",
+      "name": "Default",
+      "options": {}
+    }
+  ],
+  "defaultOptions": {
+    "environmentVariableEntries": [
+      {
+        "key": "LIBDISPATCH_COOPERATIVE_POOL_STRICT",
+        "value": "1"
+      }
+    ],
+    "testTimeoutsEnabled": true
+  },
+  "testTargets": [
+    {
+      "target": {
+        "containerPath": "container:LockPlus.xcodeproj",
+        "identifier": "D8098181093CF994BE47C9FE",
+        "name": "RequirementTests"
+      }
+    }
+  ],
+  "version": 1
+}

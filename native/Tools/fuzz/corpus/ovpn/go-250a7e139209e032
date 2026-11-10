@@ -1,0 +1,24 @@
+client
+dev tun
+proto udp
+remote vpn.example.invalid 1194
+<connection>
+remote a.example 1194 udp
+connect-timeout 5
+foo-bar
+</connection>
+<ca>
+-----BEGIN CERTIFICATE-----
+MIIB
+-----END CERTIFICATE-----
+</ca>
+<cert>
+-----BEGIN CERTIFICATE-----
+MIIB
+-----END CERTIFICATE-----
+</cert>
+<key>
+-----BEGIN PRIVATE KEY-----
+MIIB
+-----END PRIVATE KEY-----
+</key>

@@ -1,0 +1,45 @@
+// Config/Base.xcconfig — every target, every configuration (DESIGN §2.1, ref/toolchain §3.1).
+// Project-level build settings are empty in project.pbxproj: every setting lives in these files.
+#include "Version.xcconfig"
+
+LP_TEAM_ID = M53GHX9FAY
+DEVELOPMENT_TEAM = $(LP_TEAM_ID)
+LP_APP_ID = io.github.steiale.lockplus.mac
+LP_EXT_ID = $(LP_APP_ID).tunnel
+// Not $(TeamIdentifierPrefix): that comes from signing and is empty with CODE_SIGNING_ALLOWED=NO (P1 skeleton, §2.5).
+LP_APP_GROUP = $(LP_TEAM_ID).$(LP_APP_ID)
+
+SDKROOT = macosx
+SUPPORTED_PLATFORMS = macosx
+MACOSX_DEPLOYMENT_TARGET = 26.0                 // O1, draft 7.1
+ARCHS = arm64                                   // REQUIRED: Xcode 27 builds universal below a 27.0 target
+ONLY_ACTIVE_ARCH = NO
+
+// Swift 6 language mode + SC1 concurrency settings (ref/swift-concurrency §2.2). Never -disable-dynamic-actor-isolation.
+SWIFT_VERSION = 6.0
+SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated
+SWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT = YES
+SWIFT_UPCOMING_FEATURE_INFER_ISOLATED_CONFORMANCES = YES
+SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES
+SWIFT_APPROACHABLE_CONCURRENCY = NO             // the two features it would add are pinned above, explicitly
+SWIFT_EMIT_LOC_STRINGS = YES
+
+CLANG_CXX_LANGUAGE_STANDARD = gnu++20
+CLANG_ENABLE_MODULES = YES
+CLANG_ENABLE_OBJC_ARC = YES
+ENABLE_HARDENED_RUNTIME = YES
+ENABLE_USER_SCRIPT_SANDBOXING = YES
+ENABLE_MODULE_VERIFIER = NO
+DEAD_CODE_STRIPPING = YES
+ALWAYS_SEARCH_USER_PATHS = NO
+GENERATE_INFOPLIST_FILE = NO
+COMBINE_HIDPI_IMAGES = YES
+COMPILATION_CACHE_ENABLE_CACHING = NO           // opt-in; CI unit jobs pass YES on the command line
+ENABLE_STRICT_OBJC_MSGSEND = YES
+GCC_NO_COMMON_BLOCKS = YES
+SWIFT_ENABLE_EXPLICIT_MODULES = YES
+
+// Debug-configuration builds: Apple Development, Xcode automatic signing (O7). Release is built unsigned and signed
+// inside-out by Tools/release/sign-inside-out.sh. Never -allowProvisioningUpdates from an agent (§2.7).
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = Apple Development

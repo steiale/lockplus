@@ -1,0 +1,146 @@
+# LockPlus native CI (DESIGN §12.4). Unsigned builds, static checks and unit tests only.
+# N1: no secrets, no signing material, no release artifacts. The secrets context is never referenced here.
+name: native-ci
+on:
+  pull_request:
+    paths: ['native/**', '.github/workflows/native-*.yml']
+  push:
+    branches: [main]
+    paths: ['native/**', '.github/workflows/native-*.yml']
+    tags: ['native-v*']
+permissions:
+  contents: read
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  LP_BUILD_ROOT: ${{ github.workspace }}/native/build   # CI keeps build output workspace-relative (local default: ~/Code/lockplus-build)
+  DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer   # the xcode-27 image's 27.2 (RC 27B48 today; symlink to Xcode_27.2_Release_Candidate.app)
+  LP_TOOLCHAIN_CI: '1'   # check-toolchain.sh: same Xcode version, another build allowed with a warning; release.sh stays pinned (toolchain.lock 27B52)
+  GOTOOLCHAIN: local
+  GOFLAGS: -modcacherw
+
+jobs:
+  build:
+    runs-on: xcode-27                       # preview label: macOS 27.0.1; Xcode 27.2 RC 27B48 selected above (image 20261026.0314.1)
+    timeout-minutes: 90
+    defaults: { run: { working-directory: native } }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e   # v7.0.0
+        with: { go-version: '1.27.3', cache: false }
+      - name: Toolchain (toolchain.lock)
+        run: Tools/build/check-toolchain.sh
+      - name: No secrets in workflows (N1)
+        working-directory: .
+        run: '! grep -rn "secrets\." .github/workflows/native-*.yml'
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9   # v6.1.0
+        with:
+          path: |
+            native/Vendor/dl
+            native/Vendor/gomodcache
+            native/Vendor/build
+          # openssl.sh additionally records the shasum of libOpenSSL.a in its stamp and rebuilds on any mismatch.
+          key: vendor-${{ hashFiles('native/Tools/bootstrap/*.sh', 'native/Vendor/patches/**', 'native/Config/toolchain.lock') }}
+      - name: Vendor bootstrap (pinned, hash-checked) + OpenSSL XCFramework
+        run: |
+          Tools/bootstrap/vendor.sh
+          Tools/bootstrap/openssl.sh
+      - name: Lint (custom rules, @Sendable, main.swift, C callbacks, SAFETY markers)
+        run: |
+          Tools/build/lint.sh
+          if command -v swiftlint >/dev/null; then swiftlint lint --strict --quiet; else echo "swiftlint not on runner; lint.sh covers the custom rules"; fi
+      - name: Static source checks
+        run: |
+          Tools/release/version-check.sh
+          Tools/release/check-entitlement-sources.sh
+      - name: Package tests (swift test)
+        run: |
+          rc=0   # every package runs and reports; the step fails if any failed
+          for p in Packages/LockPlusCore Packages/TunnelEngine Packages/OpenVPN3Shim Tests/TunnelAdapterTests; do
+            (cd $p && swift test --scratch-path $LP_BUILD_ROOT/spm/$(basename $p)) || { echo "::error::swift test: $p failed"; rc=1; }
+          done
+          exit $rc
+      - name: Xcode unit tests (Unit = Debug, UnitRelease = Release requirement strings)
+        env: { LIBDISPATCH_COOPERATIVE_POOL_STRICT: '1' }
+        run: |
+          for plan in Unit:Debug UnitRelease:Release; do
+            xcodebuild build-for-testing -project LockPlus.xcodeproj -scheme LockPlus -testPlan ${plan%%:*} \
+              -configuration ${plan##*:} -destination 'platform=macOS,arch=arm64' \
+              -derivedDataPath "$LP_BUILD_ROOT"/dd-${plan%%:*} -testProductsPath "$LP_BUILD_ROOT"/${plan%%:*}.xctestproducts \
+              CODE_SIGNING_ALLOWED=NO COMPILATION_CACHE_ENABLE_CACHING=YES
+            rm -rf "$LP_BUILD_ROOT"/${plan%%:*}.xcresult
+            xcodebuild test-without-building -testProductsPath "$LP_BUILD_ROOT"/${plan%%:*}.xctestproducts \
+              -destination 'platform=macOS,arch=arm64' -resultBundlePath "$LP_BUILD_ROOT"/${plan%%:*}.xcresult
+            Tools/build/assert-test-count.sh "$LP_BUILD_ROOT"/${plan%%:*}.xcresult 1
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9   # v7.0.2
+        with: { name: unit-xctestproducts, path: native/build/Unit.xctestproducts }
+      - name: Unsigned Release archive + verify static (otool, rpath, check-symbols, no dev clause, no paths)
+        run: |
+          Tools/build/build-unsigned.sh
+          Tools/release/verify.sh static "$LP_BUILD_ROOT"/release/LockPlus.xcarchive
+
+  unit-older-os:
+    # TBD-by-S14: Xcode 27 test products run by Xcode 26.6 on macOS 26. Fallback: build this leg with Xcode 26.6.
+    needs: build
+    runs-on: macos-26
+    continue-on-error: true
+    env: { DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer }
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333   # v8.0.2
+        with: { name: unit-xctestproducts, path: Unit.xctestproducts }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1 (for the assertion script)
+        with: { persist-credentials: false }
+      - run: |
+          xcodebuild test-without-building -testProductsPath Unit.xctestproducts -destination 'platform=macOS,arch=arm64' \
+            -resultBundlePath Unit.xcresult
+          native/Tools/build/assert-test-count.sh Unit.xcresult 1
+
+  engine-support:
+    # DESIGN §12.4: the OpenVPN directive table is generated from the S13 CSV; a drift between CSV and the committed
+    # OVPNEngineSupport.generated.swift fails here (regenerate, then require a clean tree).
+    runs-on: xcode-27
+    timeout-minutes: 30
+    defaults: { run: { working-directory: native } }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
+        with: { persist-credentials: false }
+      - name: Regenerate the EngineSupport table and diff
+        run: |
+          (cd Packages/LockPlusCore && LP_REGEN_ENGINE_SUPPORT=1 swift test --scratch-path $LP_BUILD_ROOT/spm/LockPlusCore --filter EngineSupportTests)
+          git diff --exit-code -- Packages/LockPlusCore/Sources/LPParsing/OpenVPN/OVPNEngineSupport.generated.swift
+
+  fuzz-smoke:
+    # DESIGN §15.4: build the LPParsing fuzz targets and fuzz_zip_import (fetches the pinned ZIPFoundation) and replay every corpus + regression input once (standalone ASan driver
+    # on Xcode's swiftc, libFuzzer on a swift.org toolchain).
+    runs-on: xcode-27
+    timeout-minutes: 30
+    defaults: { run: { working-directory: native } }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
+        with: { persist-credentials: false }
+      - name: Fuzz smoke run over Tools/fuzz/corpus
+        env: { FUZZ_ITERATIONS: '2000' }
+        run: Tools/fuzz/build.sh run
+
+  repro:
+    # Same build-unsigned.sh as release.sh, no caches; non-gating until two clean builds match (§12.4, T12).
+    if: startsWith(github.ref, 'refs/tags/native-v')
+    runs-on: xcode-27
+    timeout-minutes: 90
+    defaults: { run: { working-directory: native } }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e   # v7.0.0
+        with: { go-version: '1.27.3', cache: false }
+      - run: |
+          Tools/build/check-toolchain.sh
+          Tools/bootstrap/vendor.sh
+          Tools/bootstrap/openssl.sh
+          Tools/build/build-unsigned.sh
+          Tools/release/macho-hashes.sh "$LP_BUILD_ROOT"/release/LockPlus.xcarchive/Products/Applications/LockPlus.app > "$LP_BUILD_ROOT"/macho-sha256.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9   # v7.0.2
+        with: { name: 'repro-${{ github.ref_name }}', path: native/build/macho-sha256.txt }

@@ -1,0 +1,7 @@
+client
+remote vpn.example.com 1194
+lport 0
+lport 50000
+local 10.0.0.1 50000
+bind
+port 1194

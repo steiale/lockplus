@@ -1,0 +1,57 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: LockPlus Spike <spike@localhost>
+Date: Mon, 26 Oct 2026 10:13:21 +0100
+Subject: [PATCH 01/11] W0: tools 6.0, macOS 15.1 only, Swift 5 language mode,
+ sys/types.h include
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Fixes B1 (manifest .v12 unavailable), B2 (explicit modules: u_int32_t
+must be imported), B3 (Swift 6 mode errors) from ref/wireguard §4.1.
+---
+ Package.swift                         | 8 ++++----
+ Sources/WireGuardKitC/WireGuardKitC.h | 2 ++
+ 2 files changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/Package.swift b/Package.swift
+index 5d15a1b..16733a9 100644
+--- a/Package.swift
++++ b/Package.swift
+@@ -1,4 +1,4 @@
+-// swift-tools-version:5.3
++// swift-tools-version:6.0
+ // The swift-tools-version declares the minimum version of Swift required to build this package.
+ 
+ import PackageDescription
+@@ -6,8 +6,7 @@ import PackageDescription
+ let package = Package(
+     name: "WireGuardKit",
+     platforms: [
+-        .macOS(.v12),
+-        .iOS(.v15)
++        .macOS("15.1")
+     ],
+     products: [
+         .library(name: "WireGuardKit", targets: ["WireGuardKit"])
+@@ -36,5 +35,6 @@ let package = Package(
+             publicHeadersPath: ".",
+             linkerSettings: [.linkedLibrary("wg-go")]
+         )
+-    ]
++    ],
++    swiftLanguageModes: [.v5]
+ )
+diff --git a/Sources/WireGuardKitC/WireGuardKitC.h b/Sources/WireGuardKitC/WireGuardKitC.h
+index 54e4783..84c53f7 100644
+--- a/Sources/WireGuardKitC/WireGuardKitC.h
++++ b/Sources/WireGuardKitC/WireGuardKitC.h
+@@ -1,6 +1,8 @@
+ // SPDX-License-Identifier: MIT
+ // Copyright © 2018-2023 WireGuard LLC. All Rights Reserved.
+ 
++#include <sys/types.h>
++
+ #include "key.h"
+ #include "x25519.h"
+ 

@@ -1,0 +1,8 @@
+// Config/Repro.xcconfig — passed with -xcconfig by Tools/build/build-unsigned.sh only (DESIGN §12.4, ref/toolchain
+// §9.2). -xcconfig reaches SPM package targets too (S14), so this file holds reproducibility flags ONLY, never
+// compilation conditions. LP_CHECKOUT_ROOT / LP_BUILD_ROOT come from the command line.
+OTHER_SWIFT_FLAGS = $(inherited) -file-prefix-map $(LP_CHECKOUT_ROOT)=/lp -file-prefix-map $(LP_BUILD_ROOT)=/lpb
+OTHER_CFLAGS = $(inherited) -ffile-prefix-map=$(LP_CHECKOUT_ROOT)=/lp -ffile-prefix-map=$(LP_BUILD_ROOT)=/lpb
+OTHER_CPLUSPLUSFLAGS = $(inherited) -ffile-prefix-map=$(LP_CHECKOUT_ROOT)=/lp -ffile-prefix-map=$(LP_BUILD_ROOT)=/lpb
+OTHER_LDFLAGS = $(inherited) -Xlinker -reproducible -Xlinker -oso_prefix -Xlinker $(LP_CHECKOUT_ROOT)
+COMPILATION_CACHE_ENABLE_CACHING = NO

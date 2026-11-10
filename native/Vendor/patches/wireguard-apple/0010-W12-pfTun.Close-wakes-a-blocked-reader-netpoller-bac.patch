@@ -1,0 +1,310 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: LockPlus Vendor <vendor@localhost>
+Date: Mon, 26 Oct 2026 21:03:46 +0100
+Subject: [PATCH 10/11] W12: pfTun.Close wakes a blocked reader
+ (netpoller-backed fd); monotonic handle numbers
+
+T5: the socketpair end is a non-blocking *os.File, so Close wakes a Read blocked in another goroutine instead of
+leaving wgTurnOff hanging (shutdown(2) does not wake a blocked read on a socketpair end). Writes still drop when
+the far end is full.
+T13: storeHandle issues handles from a monotonic counter (1..MaxInt32, wrapping past live ones) instead of the lowest
+free slot, so a late call with a stale handle cannot reach a newer device.
+NEW-4: wgTurnOnPF owns pfFd on every path. newPFTun closes it on its own errors (unix.Close before os.NewFile, the
+*os.File after), wgTurnOnPF no longer closes it again, and after newPFTun succeeds only dev.Close closes it.
+lockplus_w12_test.go covers all three (run by vendor.sh).
+---
+ Sources/WireGuardKitGo/api-apple-pf.go      |  76 ++++++++++---
+ Sources/WireGuardKitGo/api-apple.go         |  13 ++-
+ Sources/WireGuardKitGo/lockplus_w12_test.go | 114 ++++++++++++++++++++
+ 3 files changed, 185 insertions(+), 18 deletions(-)
+ create mode 100644 Sources/WireGuardKitGo/lockplus_w12_test.go
+
+diff --git a/Sources/WireGuardKitGo/api-apple-pf.go b/Sources/WireGuardKitGo/api-apple-pf.go
+index eeba827..ab79ccd 100644
+--- a/Sources/WireGuardKitGo/api-apple-pf.go
++++ b/Sources/WireGuardKitGo/api-apple-pf.go
+@@ -12,8 +12,10 @@ import "C"
+ 
+ import (
+ 	"errors"
++	"io"
+ 	"os"
+ 	"sync"
++	"syscall"
+ 
+ 	"golang.org/x/sys/unix"
+ 	"golang.zx2c4.com/wireguard/conn"
+@@ -21,24 +23,53 @@ import (
+ 	"golang.zx2c4.com/wireguard/tun"
+ )
+ 
++// LockPlus W12: the socketpair end is wrapped in a non-blocking *os.File, so it lives in Go's netpoller and Close wakes
++// a Read that is blocked in another goroutine. (A raw blocking read(2) is not woken by shutdown(2) on a socketpair
++// end, and wgTurnOff, which waits for the read routine, would hang.)
+ type pfTun struct {
+-	fd        int
++	file      *os.File
++	rc        syscall.RawConn
+ 	mtu       int
+ 	events    chan tun.Event
+ 	closeOnce sync.Once
+ }
+ 
++// newPFTun owns fd on every path (NEW-4): on success the returned pfTun closes it; on failure it is already closed,
++// exactly once (unix.Close before os.NewFile, the *os.File after it), and the caller must not close it again.
++func newPFTun(fd int, mtu int) (*pfTun, error) {
++	if fd < 0 {
++		return nil, errors.New("invalid fd")
++	}
++	if err := unix.SetNonblock(fd, true); err != nil {
++		unix.Close(fd)
++		return nil, err
++	}
++	f := os.NewFile(uintptr(fd), "lockplus-pf")
++	if f == nil {
++		unix.Close(fd)
++		return nil, errors.New("os.NewFile failed")
++	}
++	rc, err := f.SyscallConn()
++	if err != nil {
++		f.Close()
++		return nil, err
++	}
++	t := &pfTun{file: f, rc: rc, mtu: mtu, events: make(chan tun.Event, 10)}
++	t.events <- tun.EventUp
++	return t, nil
++}
++
+ func (t *pfTun) File() *os.File { return nil }
+ 
+ func (t *pfTun) Read(bufs [][]byte, sizes []int, offset int) (int, error) {
+ 	buf := bufs[0][offset-4:]
+ 	for {
+-		n, err := unix.Read(t.fd, buf)
+-		if err == unix.EINTR {
+-			continue
++		n, err := t.file.Read(buf)
++		if err == io.EOF {
++			return 0, os.ErrClosed
+ 		}
+ 		if err != nil {
+-			return 0, err
++			return 0, err // os.ErrClosed once Close has run
+ 		}
+ 		if n == 0 {
+ 			return 0, os.ErrClosed
+@@ -67,16 +98,20 @@ func (t *pfTun) Write(bufs [][]byte, offset int) (int, error) {
+ 			return i, unix.EAFNOSUPPORT
+ 		}
+ 		for {
+-			_, err := unix.Write(t.fd, buf)
+-			if err == unix.EINTR {
++			var werr error
++			// Control (not Write): a full socket must drop the packet, not park this goroutine in the poller.
++			if cerr := t.rc.Control(func(fd uintptr) { _, werr = unix.Write(int(fd), buf) }); cerr != nil {
++				return i, cerr
++			}
++			if werr == unix.EINTR {
+ 				continue
+ 			}
+-			if err == unix.ENOBUFS || err == unix.EAGAIN {
++			if werr == unix.ENOBUFS || werr == unix.EAGAIN {
+ 				// The far end is momentarily full: drop, like a utun under pressure.
+ 				break
+ 			}
+-			if err != nil {
+-				return i, err
++			if werr != nil {
++				return i, werr
+ 			}
+ 			break
+ 		}
+@@ -90,26 +125,35 @@ func (t *pfTun) Events() <-chan tun.Event { return t.events }
+ func (t *pfTun) BatchSize() int           { return 1 }
+ func (t *pfTun) Close() error {
+ 	t.closeOnce.Do(func() {
+-		unix.Shutdown(t.fd, unix.SHUT_RDWR) // wakes a blocked Read
+-		unix.Close(t.fd)
++		t.file.Close() // closes the fd and wakes a blocked Read with os.ErrClosed
+ 		close(t.events)
+ 	})
+ 	return nil
+ }
+ 
+-// wgTurnOnPF takes ownership of pfFd (one end of a socketpair). Returns a handle or -1.
++// wgTurnOnPF takes ownership of pfFd (one end of a socketpair) on every path: the caller never closes it after this
++// call, whatever it returns. Returns a handle or -1.
+ //
+ //export wgTurnOnPF
+ func wgTurnOnPF(settings *C.char, pfFd int32, mtu int32) int32 {
++	return turnOnPF(C.GoString(settings), pfFd, mtu)
++}
++
++// turnOnPF is wgTurnOnPF without cgo types (testable). Exactly one owner closes pfFd: newPFTun on its own errors,
++// the pfTun (through dev.Close) after it succeeded.
++func turnOnPF(settings string, pfFd int32, mtu int32) int32 {
+ 	logger := &device.Logger{
+ 		Verbosef: CLogger(0).Printf,
+ 		Errorf:   CLogger(1).Printf,
+ 	}
+-	t := &pfTun{fd: int(pfFd), mtu: int(mtu), events: make(chan tun.Event, 10)}
+-	t.events <- tun.EventUp
++	t, err := newPFTun(int(pfFd), int(mtu))
++	if err != nil {
++		logger.Errorf("packetFlow socketpair: %v", err) // pfFd is already closed by newPFTun
++		return -1
++	}
+ 	logger.Verbosef("Attaching to packetFlow socketpair fd %d", pfFd)
+ 	dev := device.NewDevice(t, conn.NewStdNetBind(), logger)
+-	if err := dev.IpcSet(C.GoString(settings)); err != nil {
++	if err := dev.IpcSet(settings); err != nil {
+ 		logger.Errorf("Unable to set IPC settings: %v", err)
+ 		dev.Close()
+ 		return -1
+diff --git a/Sources/WireGuardKitGo/api-apple.go b/Sources/WireGuardKitGo/api-apple.go
+index 9d5a11f..0118cd8 100644
+--- a/Sources/WireGuardKitGo/api-apple.go
++++ b/Sources/WireGuardKitGo/api-apple.go
+@@ -79,11 +79,20 @@ func lookupHandle(h int32) (*tunnelHandle, bool) {
+ }
+ 
+ // storeHandle returns the new handle, or -1 when the map is full (the caller closes the device).
++// LockPlus W12: handles are issued from a monotonic counter (1 ... MaxInt32, then wrapping past the ones still in use),
++// never from the lowest free slot, so a late call holding a stale handle cannot reach a newer device.
++var nextHandle int32 = 1
++
+ func storeHandle(dev *device.Device, logger *device.Logger) int32 {
+ 	tunnelHandlesMu.Lock()
+ 	defer tunnelHandlesMu.Unlock()
+-	var i int32
+-	for i = 0; i < math.MaxInt32; i++ {
++	for tries := int64(0); tries < math.MaxInt32; tries++ {
++		i := nextHandle
++		if nextHandle == math.MaxInt32 {
++			nextHandle = 1
++		} else {
++			nextHandle++
++		}
+ 		if _, exists := tunnelHandles[i]; !exists {
+ 			tunnelHandles[i] = &tunnelHandle{Device: dev, Logger: logger}
+ 			return i
+diff --git a/Sources/WireGuardKitGo/lockplus_w12_test.go b/Sources/WireGuardKitGo/lockplus_w12_test.go
+new file mode 100644
+index 0000000..54ec8a9
+--- /dev/null
++++ b/Sources/WireGuardKitGo/lockplus_w12_test.go
+@@ -0,0 +1,114 @@
++// SPDX-License-Identifier: MIT
++//
++// LockPlus W12 tests (run by Tools/bootstrap/vendor.sh): pfTun.Close must wake a blocked reader promptly (T5), and
++// handle numbers must not be reused while a stale holder may still exist (T13).
++
++package main
++
++import (
++	"errors"
++	"os"
++	"testing"
++	"time"
++
++	"golang.org/x/sys/unix"
++)
++
++func TestPFTunCloseWakesBlockedRead(t *testing.T) {
++	fds, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_DGRAM, 0)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer unix.Close(fds[1])
++	p, err := newPFTun(fds[0], 1420)
++	if err != nil {
++		t.Fatal(err)
++	}
++	readErr := make(chan error, 1)
++	go func() {
++		bufs := [][]byte{make([]byte, 2048)}
++		_, err := p.Read(bufs, make([]int, 1), 16)
++		readErr <- err
++	}()
++	time.Sleep(100 * time.Millisecond) // let the reader block in the poller
++	start := time.Now()
++	p.Close()
++	select {
++	case err := <-readErr:
++		if !errors.Is(err, os.ErrClosed) {
++			t.Fatalf("Read returned %v, want os.ErrClosed", err)
++		}
++		if d := time.Since(start); d > time.Second {
++			t.Fatalf("Close took %v to wake the reader", d)
++		}
++	case <-time.After(3 * time.Second):
++		t.Fatal("Read still blocked 3s after Close")
++	}
++	p.Close() // idempotent
++}
++
++func TestPFTunDropsWhenFull(t *testing.T) {
++	fds, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_DGRAM, 0)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer unix.Close(fds[1])
++	p, err := newPFTun(fds[0], 1420)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer p.Close()
++	pkt := make([]byte, 4+20)
++	pkt[4] = 0x45
++	done := make(chan struct{})
++	go func() {
++		defer close(done)
++		for i := 0; i < 20000; i++ { // nobody reads fds[1]: the buffer fills, Write must drop rather than block
++			if _, err := p.Write([][]byte{pkt}, 4); err != nil {
++				t.Errorf("Write: %v", err)
++				return
++			}
++		}
++	}()
++	select {
++	case <-done:
++	case <-time.After(10 * time.Second):
++		t.Fatal("Write blocked on a full socket")
++	}
++}
++
++func TestHandlesAreNotReused(t *testing.T) {
++	a := storeHandle(nil, nil)
++	b := storeHandle(nil, nil)
++	if a <= 0 || b <= a {
++		t.Fatalf("handles %d, %d: want positive and increasing", a, b)
++	}
++	removeHandle(a)
++	c := storeHandle(nil, nil)
++	if c == a || c <= b {
++		t.Fatalf("handle %d reused or not monotonic after removing %d (last %d)", c, a, b)
++	}
++	removeHandle(b)
++	removeHandle(c)
++}
++
++// NEW-4: wgTurnOnPF owns pfFd on every error path: a failing start leaves it closed (by exactly one owner, newPFTun
++// or the pfTun via dev.Close; the caller must not close it again).
++func TestTurnOnPFClosesFDOnceOnError(t *testing.T) {
++	fds, err := unix.Socketpair(unix.AF_UNIX, unix.SOCK_DGRAM, 0)
++	if err != nil {
++		t.Fatal(err)
++	}
++	defer unix.Close(fds[1])
++	if h := turnOnPF("not_a_key=1\n", int32(fds[0]), 1420); h != -1 {
++		removeHandle(h)
++		t.Fatalf("turnOnPF with bad settings returned handle %d", h)
++	}
++	if _, err := unix.FcntlInt(uintptr(fds[0]), unix.F_GETFD, 0); err != unix.EBADF {
++		t.Fatalf("pfFd still open after a failed turnOnPF (fcntl err %v)", err)
++	}
++	// An invalid fd is refused without touching anything.
++	if h := turnOnPF("", -1, 1420); h != -1 {
++		t.Fatalf("turnOnPF(-1) returned %d", h)
++	}
++}

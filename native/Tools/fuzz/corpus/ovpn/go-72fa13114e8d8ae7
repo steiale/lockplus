@@ -1,0 +1,5 @@
+client
+remote vpn.example.com 1194
+<ca>
+mssfix 1400
+</ca>

@@ -1,0 +1,80 @@
+# Fable review 4: 6e297ab..360d136 (a730d5a refactor + N1–N10 fixes). Read-only; Unit plan not run.
+
+CS = native/App/Stores/ConnectionStore.swift, PS = ProfilesStore.swift, SS = SettingsStore.swift, ADS = AppDataStore.swift, HR = native/App/Headless/HeadlessResume.swift, MQ = ManagerQuiescer.swift, UC = native/App/Services/UpdateCoordinator.swift, SEM = native/App/SystemExtensionManager.swift, T3 = native/Tests/LockPlusTests/OnDemandPause3Tests.swift.
+
+## 1. N1–N10 verdicts
+- **N1 closed.** (a) CS:169 clears a `.starting` entry on a non-active status only once `issued`; (b) CS:373-378 a Connect while `.disconnecting` waits via `startAfterStop`. f3521d7 (CS:238) keeps a pending start over the old session's non-user end. U11 (an old `.disconnected` after the issue) stays open as documented.
+- **N2 closed for the stated scenario** (`AppSettings.extensionHandOver` in `onDemandPlan` PS:331-332, `restoreIfIdle` guard CS:639, markers cleared in the record's durable write MQ:52-57). Two marker-clearing paths restore nothing (findings 2, 3).
+- **N3 closed.** `mutationBlocked` requires `.connected` (CS:540-542); `load()`/`resaveOnDemand` never save a live manager's flags (PS:143-153, PS:443); `restoreIfIdle` runs only at full idle (CS:639). Residual: `prepareForStart` on an active same profile (finding 5).
+- **N4 closed.** One ordered queue, seq per write, `lastWritten` Mutex drop (SS:41-57, ADS:161-183). Quit paths synchronous and correct (see §2).
+- **N5 closed.** `!isBusy` first (CS:639); one `restoreIfIdle` per status event.
+- **N6 closed.** `sessionKillSwitch` set after `prepareForStart` verified (CS:462) and for a foreign session (CS:177); the crash decision reads it (CS:988).
+- **N7 closed** for `.awaitingRestart` (CS:600-610, AE:252). Not for a `.starting` entry of a deleted profile (ends by `fail` when `start` throws, or the 30 s timer) — header inaccuracy, §3.
+- **N8 closed.** Record written before the start (HR:78-83); settle cap = min(2 s, deadline) with a 1 s reserve (HR:132-135). Arithmetic holds: loadAll + on-demand save + load + prepareForStart (≤ 2 saves, 2×0.5 s, 3 loadAlls) + settle ≤ 1 s ≈ 3 s < 4 s. Caveat finding 6.
+- **N9 closed** (CS:786).
+- **N10 closed** (DESIGN:3054).
+
+## 2. Refactor fidelity (R1–R12, F1–F11)
+All preserved. Checked specifically:
+- **One-entry map.** Connect during `.awaitingRestart` is allowed (not `isStarting`, CS:360) and replaces the entry; the fetch Task's `restartAfterCrashIfNeeded(id, t1)` (CS:947) and `clearPending(id, token: t1)` (CS:293) are no-ops on the newer token. A stale `.disconnected` into `.starting(issued: false)` reaches `observedDisconnect` with `token == nil` (CS:238): a fresh crash is booked but nothing is armed, and our pending start covers NE's own restart (an active status clears the entry; `gone()` stops a late `managers.start`). Correct.
+- **Timer/token.** `arm` cancels the old timer; the timer checks `!Task.isCancelled` and `entry.token == token` after the sleep on the main actor (CS:587); `clearPending` cancels. `startNow` re-checks `gone()` after every await and there is no await between CS:447 and the `issued` flip/`managers.start`. `failPause` has an await (`dropFromPauseRecord`) before `fail`→`clearPending(id)` without a token — but no newer `.starting` entry for `id` can appear in that window (`connect` guard), only an active status can clear it, after which `fail` paints a failure over a live session (cosmetic).
+- **Restore vs a start.** Not atomic, but safe: `arm` is synchronous, so from the click on `isBusy` is true; the restore loop checks `!isBusy` before each `restore` (CS:648) and `pauseOtherOnDemand` awaits `restoreTask` (CS:485), so the restore's save (A on) always completes before the pause's save (A off), and the settle counts from the pause. Both saves serialize on the manager lock.
+- **N1(b) + 22 s fallback.** `pendingSwitch == switchFrom == id`; `handle(.disconnected)` (user stop → early return at CS:233) starts it at CS:207-211; the fallback guards `pending[id]?.isStarting != true`; `disconnect()` cancels it. A held-back A during the wait: `othersBusy(except: A)` true via `pendingSwitch` ✓.
+- **N2 persistence.** A save in the `expectedUpdate` window turns A off (held plan) but never permanently: after the markers clear, `wantsRestore(A)` (plan on, manager off) restores at the next status event/launch. `expectedUpdate` is set only for Install-and-Relaunch (UpdateController:97-105), so the window is seconds unless the install aborts (finding 2).
+- **N4 queue.** `seq` is taken on the main actor when the write begins (after `previous`), the value read then; `saveNow` takes the next seq synchronously, so a queued write that read an older value and lands later is dropped (`seq > last`). No deadlock: `write` holds the Mutex only around sync I/O, no actor hop inside; `flush` chains only Tasks. `writeSynchronously` may block the main thread for one in-flight fsync. `prepareForInstall` (UC:44) runs F_FULLFSYNC on main while the app is live — acceptable (Sparkle quits next), note it. `stop()`'s `lastQuitAt` update also leaves a queued duplicate write that can die mid-write at exit (same value; harmless).
+- **N8** see §1.
+
+## 3. Findings (most severe first)
+
+**1 MEDIUM — a Connect of ANOTHER profile during a pending start is not ignored: two starts, and saves inside X's pending kill-switch start.** CS:357-380 (guard is per-profile: `pending[id]?.isStarting != true, pendingSwitch != id`); DESIGN:3024 claims "A second Connect while one is in flight is ignored".
+Scenario: Connect X (kill switch). X is `.starting` with no status yet (prepare ≤ 1 s + resolve ≤ 3 s + settle 1 s + NE's `.connecting` latency). User clicks Connect Z. `connect(Z)`: no active status → `startNow(Z)` → `prepareForStart(Z)` saves Z's manager if behind (nehelper rewrite is routine) → `pauseOtherOnDemand(except: Z)`: if X is the auto profile whose own on-demand `restoreOwnOnDemand` just turned on, `setOnDemandEnabled(false, X)` — a save of X's manager inside X's own pending start (the N3 class) → `managers.start(Z)` beside X's issued start. Same with `pendingSwitch == Y` (X stopping) + Connect Z: Z starts into NE's Stopping (S2, silently dropped, entry held 30 s) while Y starts at X's `.disconnected`.
+Fix: `guard !pending.values.contains(where: \.isStarting), pendingSwitch == nil else { return }` at CS:360 (an `.awaitingRestart` entry still allows a Connect of that profile; the crash `.restart` entry blocks others for the few ms until a status). `returnOnDemand(thenConnect:)` then needs `restoreIfIdle()` when the connect was ignored (or let it: the target stays recorded and returns at idle). Test: FakeSettleClock `onFirstSleep { connect(Z) }` inside X's settle; assert `starts.map(\.0) == [X]`, `saves` of Z == 0, `onDemandChanges[X]` has no extra `false`.
+
+**2 LOW — `installDidNotHappen` and the no-`pendingResume` branch of `resumeAfterUpdate` clear the marker without a restore** (the known open item). UC:50-55, MQ:47.
+Scenario: Install-and-Relaunch → `expectedUpdate` set → a `load()` with A's manager behind (or a UI resave) saves A with on-demand off (held plan) → Sparkle aborts → marker cleared → nothing restores A until a status event or relaunch; with nothing running there is none; the pane says "couldn't turn it back on" (`wantsRestore` true now) but nothing retries.
+Fix: one path for every marker clear: `ConnectionStore.endExtensionHandOver(_ ending: (inout AppSettings) -> Void) async { await returnOnDemand([], thenConnect: nil, ending: ending) }`; MQ:47 → `await connection?.endExtensionHandOver { $0.expectedUpdate = nil }`; `UpdateCoordinator` gets an `onInstallDidNotHappen: () async -> Void` hook wired to the same (AppEnvironment). Test: set `expectedUpdate`, turn A's manager off, call `installDidNotHappen`, expect A on without a status event.
+
+**3 LOW — a failed activation after a quiesce leaves `pendingResume` set: every plan held forever, A off, pane silent.** SEM:166-172 (quiesce before the request), SEM:405-416 (`resumeAfterUpdate` only on `.completed`), no other `pendingResume = nil` (grep).
+Scenario: new app launches with on-demand → quiesce (A off, `pendingResume`) → activation fails (user denies, broken bundle) → the old extension keeps working, but `extensionHandOver` holds every plan: `restoreIfIdle` returns at CS:639, `wantsRestore(A)` is false (plan held) so `onDemandNeedsRestore` shows nothing, `holder(of:)` nil. Auto-connect is silently off until "Try again" succeeds. Pre-N2 the R2 restore re-enabled A (the N2 bug); N2 made it silent.
+Fix: on an activation `.failed` (SEM `setFailed`/the request failure path) also hand back: `Task { await quiescer.resumeAfterUpdate() }` (the old extension is still installed; the failure UI stays). And a pane line while `extensionHandOver`: "Auto-connect is paused while the tunnel component is updated." (UIBinder:244-247, before `onDemandNeedsRestore`).
+
+**4 LOW — `withDeadline` sleeper not cancelled when the body wins** (known). native/Packages/LockPlusCore/Sources/LPModel/OneShot.swift:61-80: one 10 s sleeping Task per observed disconnect.
+Fix: `let sleeper = Task { try? await sleep(timeout); gate.resume(onTimeout) }` before the continuation, `defer { sleeper.cancel() }` around the `withTaskCancellationHandler` result (a cancelled `Task.sleep` throws → `try?` → the late `resume(onTimeout)` is ignored by the gate). Test: inject `sleep` that records `Task.isCancelled` after the throw.
+
+**5 LOW — `connect(id)` on an active same profile runs `prepareForStart` and `startVPNTunnel` on a live session.** CS:368 excludes `id` from the active check; CS:373 only handles `.disconnecting`. `prepareForStart` (PS:387-404) saves the manager if behind — a flag save on a live session (L-KS-2), then `managers.start` on a connecting/connected session. Reachable if any UI path offers Connect for the active profile (SidebarView:77 context menu, MenuBarController:475/488 — not verified).
+Fix: `if statuses[id]?.isActive == true || managers.status(id).isActive { return }` after CS:367. Reframe T3:401 (`anUnexpectedEndOfTheOldSessionKeepsAPendingStart`) onto a reachable path: X `.disconnecting` by a non-user stop → Connect X (N1b) → `.disconnected` (observed: `.awaitingRestart` armed, then replaced by `startNow`); assert `fetchCount == 1`, `starts.count == 2`, A off at start.
+
+**6 LOW — headless retry after a watchdog exit between `start` and the final write re-verifies a now-live target.** HR:89-99, HR:107: the next minute's run finds `pausedUntil` still set, target `.connecting/.connected`; `verifyForStart` → `prepareForStart` may flag-save the live manager (L-KS-2) and `managers.start` an active session. Window ≤ the 1 s reserve; pre-N8 but N8's early record (HR:82) is what makes the retry reach this point with A recorded.
+Fix: `if managers.status(id).isActive { restarted = id } else { verify + start }` at HR:89.
+
+**7 LOW — `failPause` resets `pendingSwitch`/`switchFrom` unconditionally** (CS:501-502): with finding 1 fixed it is moot; otherwise guard `if pendingSwitch == id`.
+
+**8 LOW (pre-existing, outside the range; the invariant names it) — manager saves not behind `mutationBlocked`:** `create` PS:291 (import), `updateMetadata` PS:349 (policy/rename of ANOTHER profile), `replacePayload` PS:322, `AppActions.allowVPNConfiguration` :424. An import or a policy toggle of another profile while X's kill-switch start is pending is a save of another own manager inside the pending start (E2E-3), while X is connected the unmeasured U2 case.
+Fix: skip the manager save when `mutationBlocked(p.id)` and set `hasDeferredSync = true` (metadata is saved; the manager is then "behind" — a state `runDeferredSync`/`prepareForStart` already heals). For `create` the note at PS:292 already says "at the first connect".
+
+## 4. State-machine header vs code (CS:13-30)
+- "any pending ── manager removed ──▶ idle": only `.awaitingRestart` (CS:602); a `.starting` entry ends by failure/timer.
+- Missing: `.starting(issued: false)` ── another profile active after the settle (F6, CS:456-459) ──▶ idle + switch (`pendingSwitch`).
+- Missing: `.awaitingRestart` ── user Connect of the same profile ──▶ `.starting(issued: false)` (a newer entry, CS:360 allows it; DESIGN:3045 says "a newer entry", the header doesn't).
+- Minor: idle → `.starting` also from the re-provision retry (CS:282) and the 22 s fallback (CS:393); "observed disconnect (not ours)" includes stops by `ManagerQuiescer`/`delete()` (not user stops) — fine, but say "not a user stop".
+- `.starting(issued: true)` is set before `managers.start` (CS:461); a throw → `fail` → idle: covered by "failure".
+Otherwise the header matches the code, including `isBusy`, the fetch-then-await merge into one `.awaitingRestart` with the timer re-armed at the decision (CS:950).
+
+## 5. Tests
+Real (fail on 6e297ab): T3 N1a (hook inside the settle, asserts `onDemandAtStart`), N1b (100 ms window + start after `.disconnected`), N2 (`onDemandChanges[A] == [false]`, record and `pendingResume` intact, A off at the restart), N3 ×3, N5, N6, N7, N8 both, N9; `aConnectInsideTheCrashGraceTakesTheRestartOver` (old code started twice), `anUnexpectedEndOfTheOldSessionKeepsAPendingStart` (old code replaced the entry → no second start); T2 `theRunningProfilesDriftIsNotedAndHealedWhenItEnds`; N4 `anOlderSettingsWriteNeverLandsAfterANewerOne` (the in-flight case, direct on the file store).
+Pass on pre-fix code (coverage only, say so in the doc comment): `theCrashRestartIsAPendingStartWithItsTimer` (old `beginStarting` + timer + `clearStarting` on throw behave the same), `aHandBackWhoseConnectFailsRestoresTheRest` (old `fail` → `restoreIfIdle` too), `aQueuedSettingsWriteNeverOverwritesALaterDurableOne` (trivially ordered now).
+Weak: `theHeadlessSettleFitsTheBudget` uses budget 500 ms < reserve 1 s, so the deadline is negative before anything runs — it tests `cap > .zero`, not "capped by what is left"; use budget ≈ 1.6 s with a slow fake `loadAll` or a FakeSettleClock and assert the recorded sleep is the remainder, then `.resumed(restarted: nil …)`. `anUnexpectedEndOfTheOldSessionKeepsAPendingStart` relies on Connect while `.reasserting` (finding 5). a1dafbe's retitle/500 ms/window comments are right.
+Missing: finding 1 (Connect Z inside X's window), finding 2 (`installDidNotHappen` → restore), finding 3 (failed activation after quiesce), finding 5 guard, finding 6 (headless with an active target), `withDeadline` sleeper cancellation.
+
+## 6. Simplifications
+1. Fold `pendingSwitch`/`switchFrom`/the ad-hoc 22 s Task (CS:383-395) into the map: `Pending.Phase.waitingForStop(of: UUID)` armed with `arm(id, phase, timeout: .seconds(22))`; `handle(.disconnected of old)` and the timer both `startNow(target)`; `othersBusy` reads one map; `connect`'s guard becomes `pending[id]?.phase != .awaitingRestart` and finding 1's guard `pending.values.contains { $0.phase != .awaitingRestart }`. The header already draws this state.
+2. One marker-clearing path (`endExtensionHandOver`, finding 2) replaces MQ:47 and UC:53.
+3. HR: compute `owed` once before the start, write it, reuse at HR:103 (the two record computations differ only by `restarted`).
+4. `crashDecision` is evaluated twice per crash (CS:948, CS:957) by design; comment it once, or pass the first decision into the grace Task and re-check only `status`.
+5. `arm(_:_:)` timeout parameter (for 1) also lets the `.awaitingRestart` fetch phase use `disconnectErrorTimeout + grace` instead of 30 s.
+
+## 7. Could not verify
+- Whether SidebarView:77 / MenuBarController:475 offer Connect for the active profile (finding 5's reachability; the store-side guard is cheap either way).
+- NE's behaviour for a second `startVPNTunnel` of a different manager while one kill-switch start is pending (finding 1: assumed harmful per E2E-3; the save part is the measured case).
+- Whether after a failed replacement activation the previous extension stays usable (finding 3's "hand back on failure").
+- U10, U11, U2 unchanged. Unit plan not run.

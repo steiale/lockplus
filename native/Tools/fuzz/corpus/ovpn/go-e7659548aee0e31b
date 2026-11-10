@@ -1,0 +1,4 @@
+client
+remote vpn.example.com 1194
+cipher AES-256-CBC
+data-ciphers AES-256-GCM

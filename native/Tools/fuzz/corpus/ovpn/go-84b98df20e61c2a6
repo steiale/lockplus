@@ -1,0 +1,4 @@
+client
+remote vpn.example.com 1194
+pull-filter accept "dhcp-option DNS 10."
+pull-filter ignore "dhcp-option"

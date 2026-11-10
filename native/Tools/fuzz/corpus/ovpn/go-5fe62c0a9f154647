@@ -1,0 +1,6 @@
+client
+remote a.example 1194
+remote b.example 1194
+persist-remote-ip
+setenv opt persist-remote-ip
+verb 3

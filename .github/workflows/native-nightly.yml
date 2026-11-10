@@ -1,0 +1,69 @@
+# LockPlus native nightly sanitizers (DESIGN §12.4 `tsan`, `asan` (draft 7.3)). Unsigned; no secret material.
+# The in-extension ASan run (S7 sequence) needs an activated extension: a §15.2 integration item on the self-hosted
+# Mac, not a CI job.
+name: native-nightly
+on:
+  schedule: [{ cron: '17 3 * * *' }]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+env:
+  LP_BUILD_ROOT: ${{ github.workspace }}/native/build   # CI keeps build output workspace-relative (local default: ~/Code/lockplus-build)
+  DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer   # the xcode-27 image's 27.2 (RC 27B48 today; symlink to Xcode_27.2_Release_Candidate.app)
+  LP_TOOLCHAIN_CI: '1'   # check-toolchain.sh: same Xcode version, another build allowed with a warning; release.sh stays pinned (toolchain.lock 27B52)
+  GOTOOLCHAIN: local
+  GOFLAGS: -modcacherw
+
+jobs:
+  asan:
+    runs-on: xcode-27
+    timeout-minutes: 120
+    defaults: { run: { working-directory: native } }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e   # v7.0.0
+        with: { go-version: '1.27.3', cache: false }
+      - name: Bootstrap
+        run: |
+          Tools/build/check-toolchain.sh
+          Tools/bootstrap/vendor.sh
+          Tools/bootstrap/openssl.sh
+      - name: ASan host-side tests (shim lifecycle incl. the Stop-outlives-client rule, TunnelEngine, PacketFlowPump)
+        env:
+          ASAN_OPTIONS: 'abort_on_error=1:detect_leaks=0:use_sigaltstack=0:handle_segv=0:handle_sigbus=0:allow_user_segv_handler=1'
+        run: |
+          for p in OpenVPN3Shim TunnelEngine LockPlusCore; do
+            (cd Packages/$p && swift test --sanitize=address --scratch-path $LP_BUILD_ROOT/spm-asan/$p)
+          done
+      - name: ASan extension build (Config/ASan.xcconfig reaches the packages) + static checks
+        run: |
+          LP_OUT="$LP_BUILD_ROOT/asan" Tools/build/build-unsigned.sh --asan
+          Tools/release/verify.sh static "$LP_BUILD_ROOT"/asan/LockPlus.xcarchive --asan || true   # ASan builds embed paths; informational
+          libs=$(otool -L "$LP_BUILD_ROOT"/asan/LockPlus.xcarchive/Products/Applications/LockPlus.app/Contents/Library/SystemExtensions/*.systemextension/Contents/MacOS/*)   # capture: no `| grep -q` under pipefail
+          grep -q asan <<<"$libs"
+
+  tsan:
+    runs-on: xcode-27
+    timeout-minutes: 120
+    defaults: { run: { working-directory: native } }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e   # v7.0.0
+        with: { go-version: '1.27.3', cache: false }
+      - name: Bootstrap
+        run: |
+          Tools/build/check-toolchain.sh
+          Tools/bootstrap/vendor.sh
+          Tools/bootstrap/openssl.sh
+      - name: TSan over TunnelEngine, the XPC layer, the shim and LockPlusCore
+        env:
+          # Documented false positives only, each with its reason (Tools/build/tsan.supp).
+          TSAN_OPTIONS: 'suppressions=${{ github.workspace }}/native/Tools/build/tsan.supp'
+        run: |
+          rc=0   # every package runs and reports; the step fails if any failed
+          for p in TunnelEngine OpenVPN3Shim LockPlusCore; do
+            (cd Packages/$p && swift test --sanitize=thread --scratch-path $LP_BUILD_ROOT/spm-tsan/$p) || { echo "::error::TSan: $p failed"; rc=1; }
+          done
+          exit $rc

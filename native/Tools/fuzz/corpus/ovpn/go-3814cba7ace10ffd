@@ -1,0 +1,5 @@
+client
+remote vpn.example.com 1194
+<key>
+cipher AES-128-CBC
+</key>

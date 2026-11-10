@@ -1,0 +1,8 @@
+client
+remote vpn.example.com 1194
+user nobody
+"group" nogroup
+verb 3
+<ca>
+user x
+</ca>

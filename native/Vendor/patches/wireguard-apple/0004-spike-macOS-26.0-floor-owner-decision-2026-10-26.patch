@@ -1,0 +1,36 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: LockPlus Spike <spike@localhost>
+Date: Mon, 26 Oct 2026 16:04:25 +0100
+Subject: [PATCH 04/11] spike: macOS 26.0 floor (owner decision 2026-10-26)
+
+---
+ Package.swift                   | 2 +-
+ Sources/WireGuardKitGo/Makefile | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/Package.swift b/Package.swift
+index 21a2264..51f5c55 100644
+--- a/Package.swift
++++ b/Package.swift
+@@ -6,7 +6,7 @@ import PackageDescription
+ let package = Package(
+     name: "WireGuardKit",
+     platforms: [
+-        .macOS("15.1")
++        .macOS("26.0")
+     ],
+     products: [
+         .library(name: "WireGuardKit", targets: ["WireGuardKit"])
+diff --git a/Sources/WireGuardKitGo/Makefile b/Sources/WireGuardKitGo/Makefile
+index 2b8ccad..b401f47 100644
+--- a/Sources/WireGuardKitGo/Makefile
++++ b/Sources/WireGuardKitGo/Makefile
+@@ -4,7 +4,7 @@
+ 
+ # These are generally passed to us by xcode, but we set working defaults for standalone compilation too.
+ ARCHS ?= arm64
+-MACOSX_DEPLOYMENT_TARGET ?= 15.1
++MACOSX_DEPLOYMENT_TARGET ?= 26.0
+ PLATFORM_NAME ?= macosx
+ SDKROOT ?= $(shell xcrun --sdk $(PLATFORM_NAME) --show-sdk-path)
+ CONFIGURATION_BUILD_DIR ?= $(CURDIR)/out

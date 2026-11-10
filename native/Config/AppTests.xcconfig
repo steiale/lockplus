@@ -1,0 +1,5 @@
+// Config/AppTests.xcconfig — LockPlusTests, unit tests hosted in LockPlus.app (`@testable import LockPlus`).
+// The host skips extension activation under XCTest (AppDelegate), so running these never submits a sysex request.
+#include "Tests.xcconfig"
+TEST_HOST = $(BUILT_PRODUCTS_DIR)/LockPlus.app/Contents/MacOS/LockPlus
+BUNDLE_LOADER = $(TEST_HOST)

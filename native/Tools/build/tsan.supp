@@ -1,0 +1,10 @@
+# ThreadSanitizer suppressions for the nightly `tsan` job (TSAN_OPTIONS=suppressions=…, .github/workflows/native-nightly.yml).
+# Format: https://github.com/google/sanitizers/wiki/ThreadSanitizerSuppressions. Every entry names ONE function and
+# says why it can't be a real race. Real races are fixed, never listed here.
+
+# asio's clear_last_error() is exactly `errno = 0`. errno is per thread (Darwin keeps it in the thread's pthread TSD,
+# which lives in the thread's own stack allocation), so two threads can never share it. TSan reports a write by a
+# new openvpn3 resolver thread against a previous write by an already FINISHED (detached) resolver thread at the same
+# address: libpthread reused the dead thread's stack and TSD for the new thread and TSan's Darwin runtime kept the
+# old shadow state (nightly runs 40666510213 and 40854237978; reproduced locally: "Thread T15 (…, finished)").
+race:asio::detail::socket_ops::clear_last_error

@@ -1,0 +1,7 @@
+client
+remote vpn.example.com 1194
+<connection>
+remote h 1
+<tls-auth>
+k
+</connection>

@@ -1,0 +1,4 @@
+client
+remote vpn.example.com 1194
+dns server 0 address 9.9.9.9
+dns server 5 address 8.8.8.8

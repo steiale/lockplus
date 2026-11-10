@@ -1,0 +1,6 @@
+client
+remote vpn.example.com 1194
+<ca>
+x
+</ca> trailing
+log /x

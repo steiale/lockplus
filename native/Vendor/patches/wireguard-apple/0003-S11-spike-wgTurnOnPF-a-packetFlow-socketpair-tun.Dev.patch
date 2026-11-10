@@ -1,0 +1,192 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: LockPlus Spike <spike@localhost>
+Date: Mon, 26 Oct 2026 15:48:53 +0100
+Subject: [PATCH 03/11] S11 spike: wgTurnOnPF, a packetFlow (socketpair)
+ tun.Device for dataPlane=.packetFlow
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Spike-only (DESIGN §7.3 fallback). Makefile depends on every .go file.
+---
+ Package.swift                          |   1 +
+ Sources/WireGuardKitGo/Makefile        |   2 +-
+ Sources/WireGuardKitGo/api-apple-pf.go | 131 +++++++++++++++++++++++++
+ Sources/WireGuardKitGo/wireguard.h     |   1 +
+ 4 files changed, 134 insertions(+), 1 deletion(-)
+ create mode 100644 Sources/WireGuardKitGo/api-apple-pf.go
+
+diff --git a/Package.swift b/Package.swift
+index 16733a9..21a2264 100644
+--- a/Package.swift
++++ b/Package.swift
+@@ -30,6 +30,7 @@ let package = Package(
+                 "go.mod",
+                 "go.sum",
+                 "api-apple.go",
++                "api-apple-pf.go",
+                 "Makefile"
+             ],
+             publicHeadersPath: ".",
+diff --git a/Sources/WireGuardKitGo/Makefile b/Sources/WireGuardKitGo/Makefile
+index 747ec01..2b8ccad 100644
+--- a/Sources/WireGuardKitGo/Makefile
++++ b/Sources/WireGuardKitGo/Makefile
+@@ -49,7 +49,7 @@ $(BUILDDIR)/libwg-go-$(1).a: export CGO_CFLAGS := $(CFLAGS_PREFIX) $(ARCH)
+ $(BUILDDIR)/libwg-go-$(1).a: export CGO_LDFLAGS := $(CFLAGS_PREFIX) $(ARCH)
+ $(BUILDDIR)/libwg-go-$(1).a: export GOOS := $(GOOS_$(PLATFORM_NAME))
+ $(BUILDDIR)/libwg-go-$(1).a: export GOARCH := $(GOARCH_$(1))
+-$(BUILDDIR)/libwg-go-$(1).a: $(PREPARED) go.mod go.sum api-apple.go
++$(BUILDDIR)/libwg-go-$(1).a: $(PREPARED) go.mod go.sum $(wildcard *.go)
+ 	go build -ldflags="-w -buildid=" -trimpath -v -o "$(BUILDDIR)/libwg-go-$(1).a" -buildmode c-archive
+ 	rm -f "$(BUILDDIR)/libwg-go-$(1).h"
+ endef
+diff --git a/Sources/WireGuardKitGo/api-apple-pf.go b/Sources/WireGuardKitGo/api-apple-pf.go
+new file mode 100644
+index 0000000..e2f3488
+--- /dev/null
++++ b/Sources/WireGuardKitGo/api-apple-pf.go
+@@ -0,0 +1,131 @@
++/* SPDX-License-Identifier: MIT
++ *
++ * LockPlus spike S11 (DESIGN §7.3 `dataPlane = .packetFlow`): a tun.Device over one end of a
++ * socketpair(AF_UNIX, SOCK_DGRAM). The provider pumps NEPacketTunnelFlow <-> the other end.
++ * Framing is the utun framing (4-byte AF header), so the Swift pump is shared with openvpn3.
++ */
++
++package main
++
++// #include <sys/types.h>
++import "C"
++
++import (
++	"errors"
++	"math"
++	"os"
++	"sync"
++
++	"golang.org/x/sys/unix"
++	"golang.zx2c4.com/wireguard/conn"
++	"golang.zx2c4.com/wireguard/device"
++	"golang.zx2c4.com/wireguard/tun"
++)
++
++type pfTun struct {
++	fd        int
++	mtu       int
++	events    chan tun.Event
++	closeOnce sync.Once
++}
++
++func (t *pfTun) File() *os.File { return nil }
++
++func (t *pfTun) Read(bufs [][]byte, sizes []int, offset int) (int, error) {
++	buf := bufs[0][offset-4:]
++	for {
++		n, err := unix.Read(t.fd, buf)
++		if err == unix.EINTR {
++			continue
++		}
++		if err != nil {
++			return 0, err
++		}
++		if n == 0 {
++			return 0, os.ErrClosed
++		}
++		if n < 4 {
++			continue
++		}
++		sizes[0] = n - 4
++		return 1, nil
++	}
++}
++
++func (t *pfTun) Write(bufs [][]byte, offset int) (int, error) {
++	if offset < 4 {
++		return 0, errors.New("short offset")
++	}
++	for i, buf := range bufs {
++		buf = buf[offset-4:]
++		buf[0], buf[1], buf[2] = 0, 0, 0
++		switch buf[4] >> 4 {
++		case 4:
++			buf[3] = unix.AF_INET
++		case 6:
++			buf[3] = unix.AF_INET6
++		default:
++			return i, unix.EAFNOSUPPORT
++		}
++		for {
++			_, err := unix.Write(t.fd, buf)
++			if err == unix.EINTR {
++				continue
++			}
++			if err == unix.ENOBUFS || err == unix.EAGAIN {
++				// The far end is momentarily full: drop, like a utun under pressure.
++				break
++			}
++			if err != nil {
++				return i, err
++			}
++			break
++		}
++	}
++	return len(bufs), nil
++}
++
++func (t *pfTun) MTU() (int, error)        { return t.mtu, nil }
++func (t *pfTun) Name() (string, error)    { return "pf", nil }
++func (t *pfTun) Events() <-chan tun.Event { return t.events }
++func (t *pfTun) BatchSize() int           { return 1 }
++func (t *pfTun) Close() error {
++	t.closeOnce.Do(func() {
++		unix.Shutdown(t.fd, unix.SHUT_RDWR) // wakes a blocked Read
++		unix.Close(t.fd)
++		close(t.events)
++	})
++	return nil
++}
++
++// wgTurnOnPF takes ownership of pfFd (one end of a socketpair). Returns a handle or -1.
++//
++//export wgTurnOnPF
++func wgTurnOnPF(settings *C.char, pfFd int32, mtu int32) int32 {
++	logger := &device.Logger{
++		Verbosef: CLogger(0).Printf,
++		Errorf:   CLogger(1).Printf,
++	}
++	t := &pfTun{fd: int(pfFd), mtu: int(mtu), events: make(chan tun.Event, 10)}
++	t.events <- tun.EventUp
++	logger.Verbosef("Attaching to packetFlow socketpair fd %d", pfFd)
++	dev := device.NewDevice(t, conn.NewStdNetBind(), logger)
++	if err := dev.IpcSet(C.GoString(settings)); err != nil {
++		logger.Errorf("Unable to set IPC settings: %v", err)
++		dev.Close()
++		return -1
++	}
++	dev.Up()
++	var i int32
++	for i = 0; i < math.MaxInt32; i++ {
++		if _, exists := tunnelHandles[i]; !exists {
++			break
++		}
++	}
++	if i == math.MaxInt32 {
++		dev.Close()
++		return -1
++	}
++	tunnelHandles[i] = tunnelHandle{dev, logger}
++	return i
++}
+diff --git a/Sources/WireGuardKitGo/wireguard.h b/Sources/WireGuardKitGo/wireguard.h
+index fdb66c2..309ffb4 100644
+--- a/Sources/WireGuardKitGo/wireguard.h
++++ b/Sources/WireGuardKitGo/wireguard.h
+@@ -13,6 +13,7 @@
+ typedef void(*logger_fn_t)(void *context, int level, const char *msg);
+ extern void wgSetLogger(void *context, logger_fn_t logger_fn);
+ extern int wgTurnOn(const char *settings, int32_t tun_fd);
++extern int wgTurnOnPF(const char *settings, int32_t pf_fd, int32_t mtu); /* LockPlus spike S11: packetFlow socketpair mode */
+ extern void wgTurnOff(int handle);
+ extern int64_t wgSetConfig(int handle, const char *settings);
+ extern char *wgGetConfig(int handle);

@@ -1,0 +1,4 @@
+client
+remote vpn.example.com 1194
+port 53
+bind

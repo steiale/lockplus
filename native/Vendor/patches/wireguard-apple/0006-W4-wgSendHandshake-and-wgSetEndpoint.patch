@@ -1,0 +1,201 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Alex Steiner <alex@steiale.io>
+Date: Mon, 26 Oct 2026 20:30:11 +0100
+Subject: [PATCH 06/11] W4: wgSendHandshake and wgSetEndpoint
+
+wgSendHandshake(h, *sentNs) forces Peer.SendHandshakeInitiation(false) for every peer and reports 1 (sent, with
+the wall-clock send time for the handshake RTT), 0 (inside RekeyTimeout of the bridge's previous forced
+initiation) or < 0. wgSetEndpoint(h, pubHex, "ip:port") is UAPI public_key + update_only=true + endpoint, never
+replace_peers. Peer keys are read through a filtering io.Writer (uapiFilter) that keeps only the requested lines and
+zeroes IpcGetOperation's pooled buffer, so the private key never becomes a Go string here.
+---
+ Sources/WireGuardKitGo/api-apple-handshake.go | 93 +++++++++++++++++++
+ .../WireGuardKitGo/api-apple-uapifilter.go    | 64 +++++++++++++
+ Sources/WireGuardKitGo/wireguard.h            |  4 +
+ 3 files changed, 161 insertions(+)
+ create mode 100644 Sources/WireGuardKitGo/api-apple-handshake.go
+ create mode 100644 Sources/WireGuardKitGo/api-apple-uapifilter.go
+
+diff --git a/Sources/WireGuardKitGo/api-apple-handshake.go b/Sources/WireGuardKitGo/api-apple-handshake.go
+new file mode 100644
+index 0000000..a600dc3
+--- /dev/null
++++ b/Sources/WireGuardKitGo/api-apple-handshake.go
+@@ -0,0 +1,93 @@
++/* SPDX-License-Identifier: MIT
++ *
++ * LockPlus W4 (DESIGN §9.2, §9.3): a forced handshake and an endpoint switch that never replaces peers.
++ */
++
++package main
++
++// #include <stdint.h>
++import "C"
++
++import (
++	"bytes"
++	"time"
++
++	"golang.zx2c4.com/wireguard/device"
++)
++
++// wgSendHandshake forces a handshake initiation to every peer (Peer.SendHandshakeInitiation(false)).
++// Returns 1 when sent (and stores the wall-clock send time in *sentNs), 0 when rate-limited, < 0 on error.
++// wireguard-go silently drops an initiation within RekeyTimeout (5 s) of the previous one; the bridge applies the
++// same limit to its own forced initiations so that 0 is reported instead of a silent no-op. (Initiations wireguard-go
++// sends on its own timers are not visible here, so a 1 can still coincide with Go's own limit; the caller retries
++// every 5.5 s, outside RekeyTimeout.)
++//
++//export wgSendHandshake
++func wgSendHandshake(tunnelHandle int32, sentNs *C.int64_t) int32 {
++	th, ok := lookupHandle(tunnelHandle)
++	if !ok {
++		return -1
++	}
++	now := time.Now().UnixNano()
++	last := th.lastHandshakeSend.Load()
++	if last != 0 && now-last < int64(device.RekeyTimeout) {
++		return 0
++	}
++	if !th.lastHandshakeSend.CompareAndSwap(last, now) {
++		return 0
++	}
++	f := newUAPIFilter("public_key")
++	if err := th.Device.IpcGetOperation(f); err != nil {
++		return -2
++	}
++	sent := 0
++	for _, line := range bytes.Split(f.lines(), []byte{'\n'}) {
++		hexKey, found := bytes.CutPrefix(line, []byte("public_key="))
++		if !found {
++			continue
++		}
++		var pk device.NoisePublicKey
++		if pk.FromHex(string(hexKey)) != nil {
++			continue
++		}
++		peer := th.Device.LookupPeer(pk)
++		if peer == nil {
++			continue
++		}
++		if peer.SendHandshakeInitiation(false) == nil {
++			sent++
++		}
++	}
++	if sent == 0 {
++		return -3
++	}
++	if sentNs != nil {
++		*sentNs = C.int64_t(now)
++	}
++	return 1
++}
++
++// wgSetEndpoint points one existing peer at "ip:port" (UAPI public_key + update_only=true + endpoint). It never sends
++// replace_peers, so sessions survive. Returns 0 or the IPC errno (negative); -1 for an unknown handle or bad input.
++//
++//export wgSetEndpoint
++func wgSetEndpoint(tunnelHandle int32, publicKeyHex *C.char, endpoint *C.char) int64 {
++	th, ok := lookupHandle(tunnelHandle)
++	if !ok || publicKeyHex == nil || endpoint == nil {
++		return -1
++	}
++	pub, ep := C.GoString(publicKeyHex), C.GoString(endpoint)
++	var pk device.NoisePublicKey
++	if pk.FromHex(pub) != nil || len(ep) == 0 || bytes.ContainsAny([]byte(ep), "\n=") {
++		return -1
++	}
++	err := th.Device.IpcSet("public_key=" + pub + "\nupdate_only=true\nendpoint=" + ep + "\n")
++	if err != nil {
++		th.Errorf("Unable to set endpoint: %v", err)
++		if ipcErr, ok := err.(*device.IPCError); ok {
++			return ipcErr.ErrorCode()
++		}
++		return -1
++	}
++	return 0
++}
+diff --git a/Sources/WireGuardKitGo/api-apple-uapifilter.go b/Sources/WireGuardKitGo/api-apple-uapifilter.go
+new file mode 100644
+index 0000000..10f8fe6
+--- /dev/null
++++ b/Sources/WireGuardKitGo/api-apple-uapifilter.go
+@@ -0,0 +1,64 @@
++/* SPDX-License-Identifier: MIT
++ *
++ * LockPlus W4/W5: reads selected keys out of IpcGetOperation without materializing the private or preshared key
++ * as a Go string.
++ */
++
++package main
++
++import "bytes"
++
++// uapiFilter is an io.Writer for Device.IpcGetOperation. It keeps only the lines whose key is in `keep` and zeroes
++// every byte it was handed (IpcGetOperation passes its pooled buffer, which holds private_key/preshared_key in hex).
++type uapiFilter struct {
++	keep    map[string]bool
++	out     bytes.Buffer
++	partial []byte
++}
++
++func newUAPIFilter(keys ...string) *uapiFilter {
++	f := &uapiFilter{keep: make(map[string]bool, len(keys))}
++	for _, k := range keys {
++		f.keep[k] = true
++	}
++	return f
++}
++
++func (f *uapiFilter) Write(p []byte) (int, error) {
++	n := len(p)
++	data := p
++	if len(f.partial) > 0 {
++		data = append(f.partial, p...)
++	}
++	for {
++		i := bytes.IndexByte(data, '\n')
++		if i < 0 {
++			break
++		}
++		line := data[:i]
++		if eq := bytes.IndexByte(line, '='); eq > 0 && f.keep[string(line[:eq])] {
++			f.out.Write(line)
++			f.out.WriteByte('\n')
++		}
++		data = data[i+1:]
++	}
++	rest := make([]byte, len(data))
++	copy(rest, data)
++	zero(f.partial)
++	f.partial = rest
++	zero(p)
++	return n, nil
++}
++
++// lines returns the kept lines; any unterminated tail is dropped and zeroed.
++func (f *uapiFilter) lines() []byte {
++	zero(f.partial)
++	f.partial = nil
++	return f.out.Bytes()
++}
++
++func zero(b []byte) {
++	for i := range b {
++		b[i] = 0
++	}
++}
+diff --git a/Sources/WireGuardKitGo/wireguard.h b/Sources/WireGuardKitGo/wireguard.h
+index 309ffb4..41ba759 100644
+--- a/Sources/WireGuardKitGo/wireguard.h
++++ b/Sources/WireGuardKitGo/wireguard.h
+@@ -20,5 +20,9 @@ extern char *wgGetConfig(int handle);
+ extern void wgBumpSockets(int handle);
+ extern void wgDisableSomeRoamingForBrokenMobileSemantics(int handle);
+ extern const char *wgVersion();
++/* LockPlus W4: forced handshake (1 sent + wall-clock ns in *sent_ns, 0 rate-limited, < 0 error) and an update_only
++   endpoint switch (0 or a negative IPC errno). */
++extern int wgSendHandshake(int handle, int64_t *sent_ns);
++extern int64_t wgSetEndpoint(int handle, const char *public_key_hex, const char *endpoint);
+ 
+ #endif

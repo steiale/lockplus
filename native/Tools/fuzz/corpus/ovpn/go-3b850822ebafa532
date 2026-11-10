@@ -1,0 +1,3 @@
+client
+remote vpn.example.com 1194
+chroot /var/empty

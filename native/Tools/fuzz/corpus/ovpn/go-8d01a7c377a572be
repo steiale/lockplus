@@ -1,0 +1,81 @@
+client
+dev tun
+proto udp
+remote vpn.example.com 1194
+remote vpn2.example.com 443 tcp
+remote-random
+resolv-retry infinite
+nobind
+persist-key
+persist-tun
+remote-cert-tls server
+verify-x509-name server.example.com name
+auth SHA512
+cipher AES-256-CBC
+data-ciphers AES-256-GCM:AES-128-GCM:AES-256-CBC
+data-ciphers-fallback AES-256-CBC
+tls-version-min 1.2
+tls-cipher TLS-ECDHE-RSA-WITH-AES-256-GCM-SHA384
+key-direction 1
+comp-lzo no
+allow-compression no
+verb 3
+mute 20
+mute-replay-warnings
+auth-user-pass
+auth-nocache
+auth-retry nointeract
+static-challenge "Enter OTP" 1
+push-peer-info
+pull-filter ignore "route-ipv6"
+route 10.0.0.0 255.0.0.0 vpn_gateway
+route-ipv6 fd00::/8
+redirect-gateway def1 bypass-dhcp
+block-ipv6
+dhcp-option DNS 10.8.0.1
+dns server 0 address 10.8.0.1
+dns-updown disable
+tun-mtu 1500
+mssfix 1450
+keepalive 10 60
+ping-timer-rem
+connect-retry 2 30
+connect-retry-max 5
+connect-timeout 10
+server-poll-timeout 4
+hand-window 60
+reneg-sec 0
+float
+explicit-exit-notify 2
+sndbuf 393216
+rcvbuf 393216
+http-proxy proxy.example 8080 auto
+socks-proxy 127.0.0.1 1080
+script-security 2
+setenv opt block-outside-dns
+ignore-unknown-option block-outside-dns
+setenv FORWARD_COMPATIBLE 1
+setenv UV_ID abc
+setenv-safe FOO bar
+# comment
+; comment
+<ca>
+-----BEGIN CERTIFICATE-----
+MIIB
+-----END CERTIFICATE-----
+</ca>
+<cert>
+-----BEGIN CERTIFICATE-----
+MIIB
+-----END CERTIFICATE-----
+</cert>
+<key>
+-----BEGIN PRIVATE KEY-----
+MIIB
+-----END PRIVATE KEY-----
+</key>
+<tls-auth>
+-----BEGIN OpenVPN Static key V1-----
+abcd
+-----END OpenVPN Static key V1-----
+</tls-auth>

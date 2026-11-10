@@ -1,0 +1,6 @@
+// Config/FaultInjection.xcconfig — project level (DESIGN §15.2). Apple Development-signed like Debug, so it inherits
+// LP_DEV_SIGNING. Note: Xcode builds SPM package targets as RELEASE for this custom configuration (forum 45506, S14),
+// so package code never sees DEBUG or these conditions.
+#include "Debug.xcconfig"
+
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) LP_FAULT_INJECTION
