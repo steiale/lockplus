@@ -4,4 +4,5 @@
 export LP_BUILD_ROOT="${LP_BUILD_ROOT:-$HOME/Code/lockplus-build}"
 # Per-machine settings that never go into the repo (gitignored): e.g. `export LP_NOTARY_PROFILE=<keychain profile>`.
 LP_LOCAL_ENV="${${(%):-%x}:A:h}/local.zsh"
-[[ -f "$LP_LOCAL_ENV" ]] && source "$LP_LOCAL_ENV"
+# `if`, not `&&`: a missing file must not make the sourced script return 1 (set -e callers exit silently; CI).
+if [[ -f "$LP_LOCAL_ENV" ]]; then source "$LP_LOCAL_ENV"; fi
