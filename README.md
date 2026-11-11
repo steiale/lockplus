@@ -16,6 +16,7 @@
   <img alt="macOS 26 or later" src="https://img.shields.io/badge/macOS-26%2B-0b2e4d">
   <img alt="Apple silicon" src="https://img.shields.io/badge/Apple%20silicon-only-0b2e4d">
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-2d7a68"></a>
+  <a href="docs/reviews/"><img alt="Security review: Fable + Codex" src="https://img.shields.io/badge/security%20review-Fable%20%2B%20Codex-2d7a68"></a>
 </p>
 
 <p align="center">
@@ -118,8 +119,13 @@ I direct the work, make the decisions and am accountable for every release. Most
 agents (Claude), working from a design document ([`docs/native/DESIGN.md`](docs/native/DESIGN.md)) that records every
 decision and the measurements behind it.
 
-- **Review.** Every security-relevant change went through dedicated AI security review passes. The reports, with their
-  findings and how each was fixed, are in [`docs/reviews/`](docs/reviews/).
+- **Two independent review engines.** Since 2.0.1, every security-relevant change is reviewed adversarially by two different AI
+  model families, each on its own: Anthropic's **Fable** and OpenAI's **Codex** (GPT-6-Astra at maximum reasoning
+  effort). Both get the same threat model: other users on the Mac, malware running as you, a hostile network, a
+  malicious profile file. Findings are fixed, then both review again, round after round, until neither reports a
+  high-severity issue. Two model families don't share the same blind spots: on the 2.0.1 start guard (ten rounds) each
+  found serious problems the other had missed. Every report, every finding and how it was fixed is public in
+  [`docs/reviews/`](docs/reviews/).
 - **Tests.** About 880 automated tests, plus end-to-end runs of the released app on macOS 26 and 27 virtual machines
   (install, approval, import, connect, sign-in, auto-connect, kill switch, updates, migration from 1.x) with documented
   results. Numbers in this README are measured, not promised: for example the kill-switch window after a tunnel-process
@@ -237,7 +243,7 @@ Profiles that need a one-time code can't connect without you, so they can't be t
 <summary><b>Was this written with AI?</b></summary>
 
 Mostly, yes, under my direction; see [How LockPlus is built](#how-lockplus-is-built). AI agents wrote most of the code,
-AI review passes checked it, and tests and VM runs verified it.
+two independent AI review engines (Fable and Codex) checked it, and tests and VM runs verified it.
 
 What AI wrote is the app *around* the VPN, not the VPN protocols. The tunnels and their encryption come from upstream
 [wireguard-go](https://git.zx2c4.com/wireguard-go/about/) (unmodified) and [OpenVPN 3](https://github.com/OpenVPN/openvpn3)
@@ -333,7 +339,10 @@ LockPlus 2 ist ein nativer VPN-Client für macOS (WireGuard und OpenVPN) mit ein
 durchsetzt: Ist er an, verlässt kein Datenverkehr den Mac außerhalb des Tunnels, auch nicht während die Verbindung
 neu aufgebaut wird. Die App läuft in der Menüleiste, kommt ohne Root-Helfer und ohne Administratorpasswort zum
 Verbinden aus, verbindet sich auf Wunsch automatisch in fremden WLANs und übernimmt beim ersten Start Profile und
-Einstellungen aus LockPlus 1.x. Die Oberfläche gibt es auf Deutsch und Englisch.
+Einstellungen aus LockPlus 1.x. Die Oberfläche gibt es auf Deutsch und Englisch. Seit 2.0.1 prüfen
+zwei unabhängige KI-Modelle (Fable von Anthropic und Codex von OpenAI) jede sicherheitsrelevante Änderung
+getrennt voneinander; alle Berichte
+stehen in [`docs/reviews/`](docs/reviews/).
 
 Voraussetzungen: macOS 26 oder neuer, Mac mit Apple-Chip. Von LockPlus 1.x zuerst auf 1.2.0 aktualisieren und dort
 „Jetzt zu LockPlus 2 wechseln“ wählen. Fragen und Fehlerberichte gern auf Deutsch in den

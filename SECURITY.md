@@ -49,6 +49,8 @@ Out of scope, or better reported elsewhere:
 
 ## How LockPlus is reviewed
 
-LockPlus has not had an independent human security audit. Its security-relevant changes went through dedicated AI
-review passes; the reports and their fixes are in [`docs/reviews/`](docs/reviews/). Independent review is very
-welcome.
+LockPlus has not had an independent human security audit. Since 2.0.1, every security-relevant change is reviewed
+by two independent AI review engines from different model families: Anthropic's Fable and OpenAI's Codex (GPT-6-Astra at
+maximum reasoning effort). They review separately against the same threat model; findings are fixed and both review
+again until neither reports a high-severity issue. The reports and their fixes are in [`docs/reviews/`](docs/reviews/).
+Two engines catch more than one, but they are not a human audit: independent review is very welcome.
