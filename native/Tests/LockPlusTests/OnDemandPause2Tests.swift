@@ -371,8 +371,8 @@ struct OnDemandPause2Tests {
         try await h.env.managers.loadAll()
         for id in [p1.id, p2.id] { h.managers.entries[id]?.cfg.flags.includeAllNetworks = true }
         try await h.env.managers.loadAll()
-        var calls = 0
-        h.env.profiles.mutationBlocked = { _ in calls += 1; return calls > 1 }  // busy from the second mutation on
+        var asked: Set<UUID> = []                                               // busy from the second mutation on
+        h.env.profiles.mutationBlocked = { id in asked.insert(id); return asked.count > 1 }   // (each asked twice, round 6)
         await h.env.profiles.load()
         let healed = [p1.id, p2.id].filter { h.managers.entries[$0]?.cfg.flags.includeAllNetworks == false }
         #expect(healed.count == 1)

@@ -24,6 +24,17 @@ struct OnboardingSheet: View {
         }
         // §6.14 size as the minimum; German copy may need more height (UI-M17).
         .frame(minWidth: 600, idealWidth: 600, maxWidth: 680, minHeight: 480)
+        // 2.0.1 E2E F5: step 4's imports present their preview and errors on top of this sheet (the main window's
+        // sheet and alert can't while onboarding is shown).
+        .sheet(item: Binding(get: { MainSheet.nested(in: env) }, set: { new in
+            if new == nil, let shown = MainSheet.nested(in: env) { shown.clear(in: env) }
+        })) { sheet in sheet.content }
+        .alert(Text("Can't Import", comment: "Import error alert title"),
+               isPresented: Binding(get: { env.importer.errorMessage != nil }, set: { if !$0 { env.importer.errorMessage = nil } })) {
+            Button(String(localized: "OK", comment: "Button")) {}
+        } message: {
+            Text(env.importer.errorMessage ?? "")
+        }
     }
 }
 

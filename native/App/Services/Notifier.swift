@@ -14,17 +14,20 @@ enum ConnectionNotice: Sendable, Equatable {
     case needsSignIn(UUID, reconnect: Bool)
     /// PF 53: protected again after the tunnel process crashed and was restarted (by macOS or by LockPlus).
     case reconnectedAfterRestart(UUID)
+    /// 2.0.1 review H1: a kill-switch profile's start was refused beside another LockPlus session; its own kill switch
+    /// is not protecting the Mac.
+    case killSwitchStartRefused(UUID)
 
     var profileID: UUID {
         switch self {
         case .connected(let id), .disconnectedByUser(let id), .stoppedUnexpectedly(let id), .needsSignIn(let id, _),
-             .reconnectedAfterRestart(let id): id
+             .reconnectedAfterRestart(let id), .killSwitchStartRefused(let id): id
         }
     }
 
     var isProblem: Bool {
         switch self {
-        case .stoppedUnexpectedly, .needsSignIn: true
+        case .stoppedUnexpectedly, .needsSignIn, .killSwitchStartRefused: true
         case .connected, .disconnectedByUser, .reconnectedAfterRestart: false
         }
     }
@@ -66,6 +69,10 @@ enum NotificationPolicy {
         case .stoppedUnexpectedly:
             UserNotice(id: id, title: String(localized: "Protection stopped", comment: "Notification title"),
                        body: String(localized: "\(name) disconnected unexpectedly.", comment: "Notification body; profile name"))
+        case .killSwitchStartRefused:
+            UserNotice(id: id, title: String(localized: "Couldn't connect", comment: "Notification title (2.0.1: a kill-switch profile's start was refused)"),
+                       body: String(localized: "\(name) couldn't connect because another LockPlus profile is connected. Its kill switch isn't active.",
+                                    comment: "Notification body (2.0.1 review H1); profile name"))
         case .needsSignIn(_, let reconnect):
             UserNotice(id: id + ".auth",
                        title: reconnect ? String(localized: "\(name) needs a new one-time code", comment: "Notification title; profile name")

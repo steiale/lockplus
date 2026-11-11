@@ -54,6 +54,10 @@ final class ProfilesStore {
     /// PF 50 failure mode. `load()` and `resaveOnDemand()` then skip it; it runs when idle (`hasDeferredSync`). The
     /// headless agent blocks everything (it only reads).
     @ObservationIgnored var mutationBlocked: @MainActor (UUID) -> Bool = { _ in false }
+    /// Round 7 (Fable L3): the one predicate for a start's own configuration work (`prepareForStart`'s saves, its own
+    /// on-demand restore, the pause of the others): another configuration (ours, any user's, a stray) is in a pending
+    /// start (`ConnectionStore.otherStartPending`). A merely connected one doesn't block them.
+    @ObservationIgnored var otherStartPending: @MainActor (UUID) -> Bool = { _ in false }
     /// Review e321e10: `delete` stops a live session through this (`ConnectionStore.stopAndWait`: a user stop, waited
     /// for, bounded) before it removes the configuration. Nil (headless, previews): a plain `stop`.
     @ObservationIgnored var stopSessionBeforeRemoval: (@MainActor (UUID) async -> Void)?
@@ -134,7 +138,7 @@ final class ProfilesStore {
             var bad = r.tampered
             let stored = Dictionary(managers.managers.map { ($0.profileID, $0) }, uniquingKeysWith: { a, _ in a })
             for p in r.profiles where p.ownerUID == ownerUID {
-                if let m = stored[p.id], Self.isReplay(p, manager: m) {
+                if let m = stored[p.id], Self.isReplay(p, manager: m), !rollbackPending(p, m) {
                     await repository.quarantine(p.id)
                     bad.append(p.id)
                     note("Profile \(p.id.uuidString.prefix(8)): settings were changed outside LockPlus")
@@ -147,9 +151,14 @@ final class ProfilesStore {
             // M3: this user's managers whose profile no longer exists (a failed remove, a deleted profile) go.
             // Review R10: deferral is re-checked before EVERY mutation (a start can begin during an earlier save).
             let known = Set(ok.map(\.id)).union(bad)
+            // Round 6 (Codex M1): every idle-path mutation re-checks its deferral inside the serialization too (a start
+            // can begin while it waits for an earlier mutation); skipped: deferred like any other.
             for m in managers.managers where m.stored?.ownerUID == ownerUID && !known.contains(m.profileID) {
                 if mutationBlocked(m.profileID) || isLive(m.profileID) { hasDeferredSync = true; continue }
-                do throws(LPError) { try await managers.remove(m.profileID) } catch { note("Orphaned VPN configuration not removed: \(error.code)") }
+                let id = m.profileID
+                do throws(LPError) {
+                    if try await !managers.remove(id, onlyIf: idleAllowed(id)) { hasDeferredSync = true }
+                } catch { note("Orphaned VPN configuration not removed: \(error.code)") }
             }
             // E2E-4: unaddressable configurations (no profile ID, an older duplicate) of THIS user only, and only through
             // the same deferral as every other mutation: never while anything at all starts or runs, another user's
@@ -157,7 +166,15 @@ final class ProfilesStore {
             // be read may be another user's (U3): never removed.
             for s in managers.strays where s.ownerUID == ownerUID {
                 if mutationBlocked(s.key) || s.status.isLive { hasDeferredSync = true; continue }
-                do throws(LPError) { try await managers.removeStray(s.key) } catch { note("Stray VPN configuration not removed: \(error.code)") }
+                let key = s.key, managers = managers, blocked = mutationBlocked
+                do throws(LPError) {
+                    let removed = try await managers.removeStray(key, onlyIf: {
+                        // Round 7 (Fable N4): a key a reload re-minted is gone: skipped (deferred), not "removed".
+                        guard let st = managers.strays.first(where: { $0.key == key }) else { return false }
+                        return !blocked(key) && !st.status.isLive
+                    })
+                    if !removed { hasDeferredSync = true }
+                } catch { note("Stray VPN configuration not removed: \(error.code)") }
             }
             // A newer local write the manager never got (H1), or flags the system changed under our revision
             // (`flagsDrifted`): bring the manager up to date from the authenticated metadata. A drift is healed once
@@ -199,7 +216,21 @@ final class ProfilesStore {
                     log.fault("protocol flags drifted for \(p.id.uuidString.prefix(8), privacy: .public) at the same revision; restoring from metadata")
                 }
                 if deleting.contains(p.id) { continue }           // a Delete is under way: nothing to sync (and no note)
-                do throws(LPError) { try await syncManager(p) } catch { note("VPN configuration for \(p.id.uuidString.prefix(8)) not updated: \(error.code)") }
+                do throws(LPError) {
+                    if try await !syncManager(p, onlyIf: idleAllowed(p.id)) {
+                        hasDeferredSync = true
+                        healedDrift[p.id] = nil                 // round 7 (Codex L5): not attempted, so not used up
+                    }
+                } catch { note("VPN configuration for \(p.id.uuidString.prefix(8)) not updated: \(error.code)") }
+            }
+            // Round 8 (Codex M3): a pending rollback is forgotten only on positive confirmation: the manager is seen
+            // carrying the metadata revision again (saved), or the metadata moved on (a later commit). A manager missing
+            // from one reload is no evidence; a deleted profile is forgotten by `delete`.
+            let byID = Dictionary(ok.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+            let current = Dictionary(managers.managers.map { ($0.profileID, $0) }, uniquingKeysWith: { a, _ in a })
+            for (id, r) in pendingRollbacks {
+                if let p = byID[id], p.metaRevision != r { pendingRollbacks[id] = nil }
+                else if let s = current[id]?.stored, s.metaRev == r { pendingRollbacks[id] = nil }
             }
             locked = nil
             loadError = nil
@@ -250,7 +281,19 @@ final class ProfilesStore {
         healedLiveDrift[id] = p.metaRevision
         log.fault("protocol flags of the connected \(id.uuidString.prefix(8), privacy: .public) weakened; restoring them on the live session (U7)")
         do throws(LPError) {
-            try await managers.save(ManagerConfiguration(profile: p, onDemand: onDemandPlan(for: p)))
+            // 2.0.1 round 4 (Codex 2): a flag save reaches a live session only while it is `.connected`, checked again
+            // when the save is issued (after any wait for an earlier mutation): never while it reasserts, ends or starts,
+            // where the extension's hold-vs-cancel decisions read the live flags (DESIGN §20 risk 27).
+            let managers = managers, blocked = mutationBlocked
+            let saved = try await managers.save(ManagerConfiguration(profile: p, onDemand: onDemandPlan(for: p)), onlyIf: {
+                managers.status(id) == .connected && !blocked(id)
+            })
+            guard saved else {
+                healedLiveDrift[id] = nil                               // not a repeat: tried again at the next `.connected`
+                hasDeferredSync = true
+                log.notice("protective flag heal of \(id.uuidString.prefix(8), privacy: .public) skipped: no longer connected")
+                return true
+            }
             note("The system weakened the protection settings of \(p.name) while it was connected. LockPlus restored them.")
         } catch {
             note("The system weakened the protection settings of \(p.name) while it was connected, and LockPlus couldn't restore them (\(error.code)). Disconnect and connect again.")
@@ -276,8 +319,29 @@ final class ProfilesStore {
             log.notice("manager save of \(p.id.uuidString.prefix(8), privacy: .public) deferred: a start or session is under way")
             return false
         }
-        try await managers.save(ManagerConfiguration(profile: p, onDemand: onDemandPlan(for: p)))
+        // Round 7 (Codex M4, Fable L2): the same deferral re-checked inside the serialization, "behind" recomputed there.
+        guard try await managers.save(ManagerConfiguration(profile: p, onDemand: onDemandPlan(for: p)), onlyIf: liveSafe(p)) else {
+            hasDeferredSync = true
+            log.notice("manager save of \(p.id.uuidString.prefix(8), privacy: .public) deferred: a start began meanwhile")
+            return false
+        }
         return true
+    }
+
+    /// Round 7 (Codex M2): a save of `p`'s configuration may land: nothing else is busy for it (`mutationBlocked`), and
+    /// it carries no flags or revision onto a live session (L-KS-2). Evaluated on every invocation inside the
+    /// serialization (stale retries included), "behind" against the manager as it is THEN.
+    private func liveSafe(_ p: Profile) -> @MainActor () -> Bool {
+        let blocked = mutationBlocked, safe = behindSafe(p)
+        return { !blocked(p.id) && safe() }
+    }
+
+    /// Only the "no flags or revision onto a live session" half (L-KS-2), recomputed on every invocation.
+    private func behindSafe(_ p: Profile) -> @MainActor () -> Bool {
+        { [weak self] in
+            guard let self else { return false }
+            return !(self.isLive(p.id) && self.managerIsBehind(p))
+        }
     }
 
     /// What was skipped while busy (`load`, `resaveOnDemand`), at idle. The flag is cleared first: whatever is still
@@ -318,6 +382,18 @@ final class ProfilesStore {
     /// … from the corresponding SCNetworkService") and drops includeAllNetworks. Treating that as tampering
     /// quarantined the user's first profile and left the weakened configuration in place. It is `flagsDrifted`
     /// instead, and `load()` re-saves the manager from the metadata (`managerIsBehind` → `syncManager`).
+    /// Round 7, round 8 (Codex H1, Fable M1): rollbacks of `updateMetadata` that were skipped (a start began meanwhile):
+    /// profile → the metadata revision the manager goes back to. IN MEMORY ONLY: nothing same-user code can write may
+    /// exempt a profile from replay detection. After a relaunch in that state the profile is quarantined (fail closed).
+    @ObservationIgnored private var pendingRollbacks: [UUID: UInt64] = [:]
+
+    /// The manager is exactly the state a skipped rollback of `p` left behind: one metadata revision ahead, the same
+    /// payload revision. Not a replay, and behind (re-saved from the metadata).
+    func rollbackPending(_ p: Profile, _ m: ManagerSnapshot) -> Bool {
+        guard let r = pendingRollbacks[p.id], r == p.metaRevision, let s = m.stored else { return false }
+        return s.metaRev == r + 1 && s.revision == p.payloadRevision
+    }
+
     static func isReplay(_ p: Profile, manager m: ManagerSnapshot) -> Bool {
         guard let s = m.stored else { return false }
         return p.metaRevision < s.metaRev || p.payloadRevision < s.revision
@@ -416,6 +492,7 @@ final class ProfilesStore {
         // M4: the new revision gets its own sealed file; the old one stays valid until the metadata commit.
         try await repository.savePayload(d.payload, for: p)
         try await repository.saveMetadata(p)
+        pendingRollbacks[p.id] = nil                       // round 8: a later commit supersedes a pending rollback
         await repository.pruneSealed(p.id, keep: p.payloadRevision)
         replace(p)
         try await saveManagerUnlessBlocked(p)              // review 4 #8: deferred while busy (healed as "behind")
@@ -440,20 +517,34 @@ final class ProfilesStore {
         guard let old = profile(id) else { throw LPError(.profileNotProvisioned, detail: "unknown profile") }
         var p = old
         change(&p)
+        // Round 9 (Fable N1): while a rollback is pending the manager holds the failed change at old+1: skip that
+        // revision, so a deferred manager save leaves it plainly behind (never equal revisions with other content).
+        if pendingRollbacks[id] != nil { p.metaRevision += 1 }
         p.metaRevision += 1
         p.updatedAt = Date()
         // A rename on a live tunnel waits for the next start (syncManager), so a running session's configuration
         // isn't re-saved (L11).
         let idle = [.disconnected, .invalid].contains(managers.status(id))
-        let managerRelevant = p.policy != old.policy || (p.name != old.name && idle)
+        // Round 8 (Fable N4): while a rollback is pending the manager carries another revision-`p` content: saved too.
+        let managerRelevant = p.policy != old.policy || (p.name != old.name && idle) || pendingRollbacks[id] != nil
         // Review 4 #8: while another start or session is under way the manager waits (behind until idle or its start).
         let saved = managerRelevant ? try await saveManagerUnlessBlocked(p) : false
         do throws(LPError) {
             try await repository.saveMetadata(p)
         } catch {
-            if saved, !deleting.contains(old.id) { try? await managers.save(ManagerConfiguration(profile: old, onDemand: onDemandPlan(for: old))) }
+            if saved, !deleting.contains(old.id) {
+                // Round 7 (Fable L2): conditional too; skipped, the idle sync brings the manager back to the metadata.
+                let rolledBack = (try? await managers.save(ManagerConfiguration(profile: old, onDemand: onDemandPlan(for: old)), onlyIf: liveSafe(old))) ?? false
+                if !rolledBack {
+                    // Round 7/8: remembered in memory, so the next `load()` doesn't read the manager (one revision
+                    // ahead) as a replay; it re-saves it from the metadata at idle.
+                    pendingRollbacks[old.id] = old.metaRevision
+                    hasDeferredSync = true
+                }
+            }
             throw error
         }
+        pendingRollbacks[id] = nil                               // round 8: a later commit supersedes it
         replace(p)
     }
 
@@ -462,6 +553,7 @@ final class ProfilesStore {
     func managerIsBehind(_ p: Profile) -> Bool {
         guard let m = managers.managers.first(where: { $0.profileID == p.id }) else { return true }
         guard let s = m.stored else { return true }
+        if rollbackPending(p, m) { return true }                 // round 7: the skipped rollback, still to be saved
         if s.metaRev < p.metaRevision || s.revision < p.payloadRevision { return true }
         return m.flags.map { $0 != ProtocolFlags(policy: p.policy, isFullTunnel: p.summary.isFullTunnel) } ?? true
     }
@@ -477,11 +569,19 @@ final class ProfilesStore {
         if deleting.contains(p.id) { throw LPError(.profileNotProvisioned, detail: "profile deleted or unavailable") }
     }
 
-    /// Re-saves a manager that is behind its profile (load, before every start).
-    func syncManager(_ p: Profile) async throws(LPError) {
+    /// Re-saves a manager that is behind its profile (`load`; `prepareForStart` has its own). Round 6 (Codex M1): only
+    /// if `condition` holds inside the serialization. False: skipped.
+    private func syncManager(_ p: Profile, onlyIf condition: @MainActor () -> Bool) async throws(LPError) -> Bool {
         try refuseIfDeleted(p)
-        guard managerIsBehind(p) else { return }
-        try await managers.save(ManagerConfiguration(profile: p, onDemand: onDemandPlan(for: p)))
+        guard managerIsBehind(p) else { return true }
+        return try await managers.save(ManagerConfiguration(profile: p, onDemand: onDemandPlan(for: p)), onlyIf: condition)
+    }
+
+    /// Round 6 (Codex M1): the idle path's deferral, re-checked inside the serialization: nothing else starts or runs
+    /// (`mutationBlocked`) and `id`'s own session isn't live (its flags and revision wait for its end, L-KS-2).
+    private func idleAllowed(_ id: UUID) -> @MainActor () -> Bool {
+        let managers = managers, blocked = mutationBlocked
+        return { !blocked(id) && !managers.status(id).isLive }
     }
 
     /// The NE manager's protocol flags differ from the metadata right now (a drift being repaired, or a save that
@@ -499,14 +599,23 @@ final class ProfilesStore {
     /// if the flags still disagree the start is refused: LockPlus never connects with a weaker configuration.
     func prepareForStart(_ p: Profile) async throws(LPError) {
         let wasBehind = managerIsBehind(p)
-        try await syncManager(p)
+        // Round 7 (Fable L3): never inside another configuration's pending start (it would be refused beside it anyway).
+        let otherPending = otherStartPending
+        try refuseIfDeleted(p)
+        if managerIsBehind(p) {
+            guard try await managers.save(ManagerConfiguration(profile: p, onDemand: onDemandPlan(for: p)), onlyIf: { !otherPending(p.id) }) else {
+                throw LPError(.anotherTunnelActive, detail: "another configuration is starting")
+            }
+        }
         guard p.policy.killSwitch else { return }
         if wasBehind { try? await Task.sleep(for: settleAfterSave) }
         try await managers.loadAll()
         try refuseIfDeleted(p)                 // M-1: the Delete's removal may have landed inside the settle
         if managerIsBehind(p) {
             log.fault("protocol flags of \(p.id.uuidString.prefix(8), privacy: .public) differ from the metadata before start; re-saving")
-            try await managers.save(ManagerConfiguration(profile: p, onDemand: onDemandPlan(for: p)))
+            guard try await managers.save(ManagerConfiguration(profile: p, onDemand: onDemandPlan(for: p)), onlyIf: { !otherPending(p.id) }) else {
+                throw LPError(.anotherTunnelActive, detail: "another configuration is starting")
+            }
             try? await Task.sleep(for: settleAfterSave)
             try await managers.loadAll()
         }
@@ -539,12 +648,19 @@ final class ProfilesStore {
     /// A manager that already carries the planned state (and isn't behind its profile) is left alone: the rules can't
     /// have changed since the last save of them (`resaveOnDemand` covers rule edits), and a save is a configuration
     /// change nesessionmanager has to digest (review simplification 3).
-    func saveOnDemand(_ p: Profile) async throws(LPError) {
+    ///
+    /// Round 6 (Codex M1): `onlyIf` (the restore's "nothing is busy") is checked inside the serialization, after any
+    /// wait for an earlier mutation. False: not saved (the caller keeps what it would have cleared, and tries again).
+    @discardableResult
+    func saveOnDemand(_ p: Profile, onlyIf condition: @MainActor () -> Bool = { true }) async throws(LPError) -> Bool {
         try refuseIfDeleting(p)
         let want = onDemandPlan(for: p)
         if let have = managers.managers.first(where: { $0.profileID == p.id }), have.onDemandEnabled == (want?.enabled ?? false),
-           !managerIsBehind(p) { return }
-        try await managers.save(ManagerConfiguration(profile: p, onDemand: want))
+           !managerIsBehind(p) { return true }
+        let safe = behindSafe(p)              // the caller's `condition` is its busy predicate (a start's own restore, too)
+        return try await managers.save(ManagerConfiguration(profile: p, onDemand: want), onlyIf: { [weak self] in
+            condition() && safe() && self?.profile(p.id)?.metaRevision == p.metaRevision      // round 7 (Codex M2)
+        })
     }
 
     /// Re-saves the managers whose on-demand plan depends on the auto-connect rules or the pause.
@@ -557,7 +673,15 @@ final class ProfilesStore {
             if want == nil, have?.onDemandEnabled == false, p.id != settings.value.autoConnect.profileID { continue }
             // Review N3: a connected manager may get its on-demand and rules (`mutationBlocked`), never its flags.
             if mutationBlocked(p.id) || (isLive(p.id) && managerIsBehind(p)) { hasDeferredSync = true; continue }
-            do throws(LPError) { try await managers.save(ManagerConfiguration(profile: p, onDemand: want)) } catch {
+            // Round 6 (Codex M1): the same deferral, re-checked inside the serialization.
+            // Round 7 (Codex M2): "behind" recomputed inside, and the metadata this save carries must still be current.
+            let safe = liveSafe(p)
+            do throws(LPError) {
+                let saved = try await managers.save(ManagerConfiguration(profile: p, onDemand: want), onlyIf: { [weak self] in
+                    safe() && self?.profile(p.id)?.metaRevision == p.metaRevision
+                })
+                if !saved { hasDeferredSync = true }
+            } catch {
                 note("Auto-connect settings for \(p.name) weren't saved: \(error.code)")
             }
         }
@@ -599,7 +723,11 @@ final class ProfilesStore {
             // beside the session is the E2E-3 trigger itself, and as an orphan it would linger until idle.
             hasDeferredSync = true
         } else {
-            do throws(LPError) { try await managers.remove(id) } catch {
+            do throws(LPError) {
+                // Round 7 (Codex M4, Fable L2): the same deferral inside the serialization; skipped: the orphan sweep.
+                let heldBack = onDemandHeldBack, still = stillOnDemand
+                if try await !managers.remove(id, onlyIf: { !heldBack(id) || still }) { hasDeferredSync = true }
+            } catch {
                 // The orphan sweep in load() removes it later (its profile no longer exists).
                 note("VPN configuration not removed yet: \(error.code)")
             }
@@ -611,6 +739,7 @@ final class ProfilesStore {
         await repository.delete(id)
         profiles.removeAll { $0.id == id }
         tampered.removeAll { $0 == id }
+        pendingRollbacks[id] = nil
         setFacts(id, nil)
         settings.update {
             $0.profileOrder.removeAll { $0 == id }
@@ -663,8 +792,17 @@ final class ProfilesStore {
         let rec = try? await credentialStore.load(p.id)
         let req = ProvisionRequest(profileID: p.id, kind: p.kind, revision: p.payloadRevision,
                                    payload: payload.withUnsafeBytes { Data($0) }, credentials: rec)
-        try await service.callVoid(.provisionProfile, req)
+        // Round 7 (Fable N6): a failed provision may have stored the payload and not the credentials (the extension
+        // commits them one after the other); `reconcile` retries it even though revision and digest then match.
+        do throws(LPError) { try await service.callVoid(.provisionProfile, req) } catch {
+            provisionIncomplete.insert(p.id)
+            throw error
+        }
+        provisionIncomplete.remove(p.id)
     }
+
+    /// Profiles whose last provision failed (round 7, Fable N6), retried by the next `reconcile`.
+    @ObservationIgnored private(set) var provisionIncomplete: Set<UUID> = []
 
     private func provisionQuietly(_ p: Profile) async {
         do throws(LPError) { try await provision(p) } catch {
@@ -688,7 +826,8 @@ final class ProfilesStore {
         }
         let plan = Self.reconcilePlan(local: profiles.filter { !tampered.contains($0.id) && $0.engineVerified },
                                       remote: remote, pendingRemovals: settings.value.pendingRemovals)
-        for id in plan.provision {
+        let retry = provisionIncomplete.filter { id in !plan.provision.contains(id) && profile(id) != nil }
+        for id in plan.provision + retry.sorted(by: { $0.uuidString < $1.uuidString }) {
             guard let p = profile(id) else { continue }
             do throws(LPError) { try await provision(p) } catch { note("\(p.name) couldn't be installed in the tunnel component: \(error.code)") }
         }

@@ -20,6 +20,10 @@ struct StraySnapshot: Sendable, Equatable {
     var key: UUID
     var ownerUID: uid_t?
     var status: TunnelStatus
+    /// The profile it duplicates, when its `profileID` parses (2.0.1 round 3, Fable L3).
+    var profileID: UUID? = nil
+    /// Its own `includeAllNetworks` (round 7, Codex L6): only a kill-switch duplicate is kept waiting by the extension.
+    var includeAllNetworks: Bool? = nil
 }
 
 /// The NE seam (DESIGN §3.4 `ManagerStore`). The only owner of NETunnelProviderManager objects; `NEManagerStore`
@@ -35,8 +39,17 @@ struct StraySnapshot: Sendable, Equatable {
     /// Removes the stray `key` named by the last load (a no-op if a reload renamed it). The caller defers it to idle.
     func removeStray(_ key: UUID) async throws(LPError)
     func save(_ cfg: ManagerConfiguration) async throws(LPError)
+    /// 2.0.1 round 4 (Codex 2): saves only if `condition` still holds when the save is issued (checked inside the
+    /// serialization, after any wait for an earlier mutation). False: not saved.
+    func save(_ cfg: ManagerConfiguration, onlyIf condition: @MainActor () -> Bool) async throws(LPError) -> Bool
     func remove(_ id: UUID) async throws(LPError)
+    /// 2.0.1 round 6 (Codex M1): the conditional forms of `remove` and `removeStray`, for the idle path's mutations
+    /// (`condition` checked inside the serialization, after any wait). False: not removed.
+    func remove(_ id: UUID, onlyIf condition: @MainActor () -> Bool) async throws(LPError) -> Bool
+    func removeStray(_ key: UUID, onlyIf condition: @MainActor () -> Bool) async throws(LPError) -> Bool
     func setOnDemandEnabled(_ on: Bool, for id: UUID) async throws(LPError)
+    /// Round 7: the conditional form (`condition` checked inside the serialization, also after a stale retry).
+    func setOnDemandEnabled(_ on: Bool, for id: UUID, onlyIf condition: @MainActor () -> Bool) async throws(LPError) -> Bool
     func status(_ id: UUID) -> TunnelStatus
     /// `startVPNTunnel(options:)`; the options carry `lp.manual = 1` (StartOptionsBuilder), except the app's restart
     /// after a tunnel-process crash (PF 52), which is an on-demand start (`StartOptionsBuilder.crashRestart`).
@@ -46,6 +59,8 @@ struct StraySnapshot: Sendable, Equatable {
     func fetchLastDisconnectError(_ id: UUID) async -> NSError?
     var onStatusChange: ((UUID, TunnelStatus) -> Void)? { get set }
     var onConfigurationChange: (() -> Void)? { get set }
+    /// A stray's status changed (2.0.1 round 3; round 5: the Diagnostics note of a waiting duplicate, and the recovery).
+    var onStrayStatusChange: (() -> Void)? { get set }
     /// E2E-3 (200003): nesessionmanager handles a configuration change asynchronously, and one that lands while a
     /// kill-switch start is pending is the failure mode. Returns once at least `settle` has passed since the last
     /// configuration mutation, whoever made it (a save, a removal, an on-demand change, the system's own rewrite).
@@ -56,7 +71,27 @@ struct StraySnapshot: Sendable, Equatable {
 
 extension VPNManaging {
     var strays: [StraySnapshot] { [] }
+    func save(_ cfg: ManagerConfiguration, onlyIf condition: @MainActor () -> Bool) async throws(LPError) -> Bool {
+        guard condition() else { return false }
+        try await save(cfg)
+        return true
+    }
     func removeStray(_ key: UUID) async throws(LPError) {}
+    func remove(_ id: UUID, onlyIf condition: @MainActor () -> Bool) async throws(LPError) -> Bool {
+        guard condition() else { return false }
+        try await remove(id)
+        return true
+    }
+    func removeStray(_ key: UUID, onlyIf condition: @MainActor () -> Bool) async throws(LPError) -> Bool {
+        guard condition() else { return false }
+        try await removeStray(key)
+        return true
+    }
+    func setOnDemandEnabled(_ on: Bool, for id: UUID, onlyIf condition: @MainActor () -> Bool) async throws(LPError) -> Bool {
+        guard condition() else { return false }
+        try await setOnDemandEnabled(on, for: id)
+        return true
+    }
     func waitUntilSettled(_ settle: Duration, cap: Duration) async -> Bool { true }
     @discardableResult
     func waitUntilSettled(_ settle: Duration) async -> Bool { await waitUntilSettled(settle, cap: .seconds(5)) }
@@ -136,6 +171,9 @@ enum ManagerClassifier {
 
     var onStatusChange: ((UUID, TunnelStatus) -> Void)?
     var onConfigurationChange: (() -> Void)?
+    var onStrayStatusChange: (() -> Void)?
+    /// The strays' current connection objects (2.0.1 round 3): their status notifications are reported too.
+    private var strayConnections: Set<ObjectIdentifier> = []
 
     init(providerBundleIdentifier: String) {
         self.providerBundleIdentifier = providerBundleIdentifier
@@ -160,6 +198,7 @@ enum ManagerClassifier {
     }
 
     private func statusNotification(_ oid: ObjectIdentifier?) {
+        if let oid, strayConnections.contains(oid) { onStrayStatusChange?(); return }
         guard let id = filter.profile(for: oid), let m = byID[id] else { return }
         onStatusChange?(id, TunnelStatus(m.connection.status))
     }
@@ -182,6 +221,7 @@ enum ManagerClassifier {
         // user's, at once (8–12 ms after another user's LockPlus created one) and inside our own or another user's
         // pending kill-switch start (U13: a removal breaks it like a save). The orphan sweep decides, at idle.
         strayByKey = Dictionary(uniqueKeysWithValues: strays.map { (UUID(), $0) })
+        strayConnections = Set(strays.map { ObjectIdentifier($0.connection) })
         byID = map
         filter.update(map.map { ($0.value.connection, $0.key) })
     }
@@ -199,7 +239,9 @@ enum ManagerClassifier {
         strayByKey.map { key, m in
             let p = m.protocolConfiguration as? NETunnelProviderProtocol
             return StraySnapshot(key: key, ownerUID: ProviderConfigurationValues.ownerUID(p?.providerConfiguration),
-                                 status: TunnelStatus(m.connection.status))
+                                 status: TunnelStatus(m.connection.status),
+                                 profileID: (p?.providerConfiguration?["profileID"] as? String).flatMap(UUID.init(uuidString:)),
+                                 includeAllNetworks: p?.includeAllNetworks)
         }
     }
 
@@ -348,6 +390,7 @@ enum ManagerClassifier {
     private(set) var strays: [StraySnapshot] = []
     @ObservationIgnored var onStatusChange: ((UUID, TunnelStatus) -> Void)?
     @ObservationIgnored var onConfigurationChange: (() -> Void)?
+    @ObservationIgnored var onStrayStatusChange: (() -> Void)?
     @ObservationIgnored private let lock = AsyncSerialLock()
     @ObservationIgnored private var reported: [UUID: TunnelStatus] = [:]
     @ObservationIgnored private(set) var loadedOnce = false
@@ -368,6 +411,10 @@ enum ManagerClassifier {
         self.inner = inner
         self.settleClock = settleClock
         inner.onStatusChange = { [weak self] id, s in self?.forward(id, s) }
+        inner.onStrayStatusChange = { [weak self] in
+            self?.refreshSnapshot()
+            self?.onStrayStatusChange?()
+        }
         inner.onConfigurationChange = { [weak self] in
             guard let self else { return }
             self.lastMutation = self.settleClock.now()       // our own save's echo or nehelper's rewrite: either one settles
@@ -480,33 +527,64 @@ enum ManagerClassifier {
         }
     }
 
-    func remove(_ id: UUID) async throws(LPError) {
-        try await locked { () throws(LPError) in
+    func save(_ cfg: ManagerConfiguration, onlyIf condition: @MainActor () -> Bool) async throws(LPError) -> Bool {
+        try await locked { () throws(LPError) -> Bool in
+            if !loadedOnce { try await loadUnlocked() }
+            guard condition() else { return false }
+            defer { lastMutation = settleClock.now() }
+            do throws(LPError) { try await inner.save(cfg) } catch where Self.isStale(error) {
+                try await loadUnlocked()
+                guard condition() else { refreshSnapshot(); return false }
+                try await inner.save(cfg)
+            }
+            refreshSnapshot()
+            return true
+        }
+    }
+
+    // Round 7 (Fable N5): one body each; the unconditional forms are the conditional ones with `{ true }`.
+    func remove(_ id: UUID) async throws(LPError) { _ = try await remove(id, onlyIf: { true }) }
+
+    func removeStray(_ key: UUID) async throws(LPError) { _ = try await removeStray(key, onlyIf: { true }) }
+
+    func remove(_ id: UUID, onlyIf condition: @MainActor () -> Bool) async throws(LPError) -> Bool {
+        try await locked { () throws(LPError) -> Bool in
+            guard condition() else { return false }
             defer { lastMutation = settleClock.now() }
             try await inner.remove(id)
             let last = reported.removeValue(forKey: id)
             missingOnce.remove(id)
             refreshSnapshot()
             if let last { reportEnd(of: [id: last]) }
+            return true
         }
     }
 
-    func removeStray(_ key: UUID) async throws(LPError) {
-        try await locked { () throws(LPError) in
+    func removeStray(_ key: UUID, onlyIf condition: @MainActor () -> Bool) async throws(LPError) -> Bool {
+        try await locked { () throws(LPError) -> Bool in
+            guard condition() else { return false }
             defer { lastMutation = settleClock.now() }
             try await inner.removeStray(key)
             refreshSnapshot()
+            return true
         }
     }
 
     func setOnDemandEnabled(_ on: Bool, for id: UUID) async throws(LPError) {
-        try await locked { () throws(LPError) in
+        _ = try await setOnDemandEnabled(on, for: id, onlyIf: { true })
+    }
+
+    func setOnDemandEnabled(_ on: Bool, for id: UUID, onlyIf condition: @MainActor () -> Bool) async throws(LPError) -> Bool {
+        try await locked { () throws(LPError) -> Bool in
+            guard condition() else { return false }
             defer { lastMutation = settleClock.now() }
             do throws(LPError) { try await inner.setOnDemandEnabled(on, for: id) } catch where Self.isStale(error) {
                 try await loadUnlocked()
+                guard condition() else { refreshSnapshot(); return false }
                 try await inner.setOnDemandEnabled(on, for: id)
             }
             refreshSnapshot()
+            return true
         }
     }
 

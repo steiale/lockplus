@@ -131,19 +131,107 @@ import TunnelEngineTestSupport
 
     /// Draft 9 (S2 E3): NE never calls `stopTunnel` after `cancelTunnelWithError`, so the adapter is stopped, the
     /// session summary written and the path watcher ended BEFORE the cancel; the cancel waits for the adapter's stop.
+    /// 2.0.1 round 3: the session stays tracked (`.stopping`) through the teardown; its protection is read again, then
+    /// the summary, then the cancel.
     @Test func cancelComesAfterTheTeardownAndTheSummary() async {
         let h = Harness()
         let a = await connected(h)
         a.s.withLock { $0.hangStop = true }
         a.emit { .fatal(LPTunnelError(.engineFatal), epoch: $0) }
         #expect(await waitUntil { a.stopCount == 1 })
-        #expect(await h.phase == .idle)
-        #expect(h.state.load().sessions.count == 1 && h.state.load().sessions[0].summary.endReason == "error:\(LPErrorCode.engineFatal.rawValue)")
+        #expect(await h.phase == .stopping)
+        #expect(!(await h.controller.isWatchingPath))
         try? await Task.sleep(for: .milliseconds(20))
         #expect(h.host.cancelledCodes.isEmpty)                            // the adapter hasn't finished stopping
         a.releaseStop()
         #expect(await waitUntil { h.host.cancelledCodes == [.engineFatal] })
-        #expect(!(await h.controller.isWatchingPath))
+        #expect(await h.phase == .idle)
+        #expect(h.state.load().sessions.count == 1 && h.state.load().sessions[0].summary.endReason == "error:\(LPErrorCode.engineFatal.rawValue)")
+    }
+
+    /// 2.0.1 round 3 (Codex 1): the kill switch enabled live while reasserting: the reconnect budget's expiry never
+    /// cancels the session (kill switch on: retry at the cap).
+    @Test func aKillSwitchEnabledLiveEndsTheReconnectBudget() async {
+        let h = Harness()
+        _ = await connected(h)
+        await settle(h, Self.none)
+        #expect(await h.waitPhase(.reasserting(.noNetwork)))
+        h.host.setIncludeAllNetworks(true)
+        for _ in 0..<3 { h.clock.advance(by: .seconds(300)); try? await Task.sleep(for: .milliseconds(2)) }
+        #expect(h.host.cancelledCodes.isEmpty)
+        #expect(await h.phase == .reasserting(.noNetwork))
+    }
+
+    // MARK: Round 4 (Fable M1): protected when the live OR the start-time flags say so
+
+    static let flagsOff = ProviderProtection(includeAllNetworks: false, enforceRoutes: false)
+
+    /// A kill-switch session whose live flags the system weakened (start-time on, live off), then an engine fatal:
+    /// held, never cancelled.
+    @Test(arguments: [false, true])
+    func aWeakenedLiveFlagStillHoldsOnAFatal(routeProtection: Bool) async {
+        let h = Harness(killSwitch: true, routeProtection: routeProtection)
+        let a = await connected(h)
+        h.host.setProtection(Self.flagsOff)
+        a.emit { .fatal(LPTunnelError(.engineFatal), epoch: $0) }
+        #expect(await h.waitPhase(.held(.blockedAfterFailure(.engineFatal))))
+        try? await Task.sleep(for: .milliseconds(20))
+        #expect(h.host.cancelledCodes.isEmpty && h.host.lastReasserting == true)
+    }
+
+    /// Start-time on, live off, the network gone: no reconnect budget is armed and nothing cancels the session.
+    @Test func aWeakenedLiveFlagArmsNoReconnectBudget() async {
+        let h = Harness(killSwitch: true)
+        _ = await connected(h)
+        h.host.setProtection(Self.flagsOff)
+        await settle(h, Self.none)
+        #expect(await h.waitPhase(.reasserting(.noNetwork)))
+        for _ in 0..<3 { h.clock.advance(by: .seconds(300)); try? await Task.sleep(for: .milliseconds(2)) }
+        #expect(h.host.cancelledCodes.isEmpty)
+        #expect(await h.phase == .reasserting(.noNetwork))
+    }
+
+    /// Start-time on, live off, before Connected: a connect timeout is WITHHELD (the start stays pending, retrying),
+    /// never a failed start.
+    @Test func aWeakenedLiveFlagStillWithholdsBeforeConnected() async {
+        let h = Harness(killSwitch: true)
+        await h.provision()
+        let t = h.start()
+        h.host.setProtection(Self.flagsOff)
+        (await h.adapter()).finishStart(.failure(.failed(LPTunnelError(.connectTimeout))))
+        #expect(await h.waitPhase(.held(.blockedAfterFailure(.connectTimeout))))
+        let done = Mutex(false)
+        let waiter = Task { _ = await t.value; done.withLock { $0 = true } }
+        try? await Task.sleep(for: .milliseconds(20))
+        #expect(!done.withLock { $0 })                                   // still pending: withheld, not failed
+        await h.controller.stop(reason: .userInitiated)
+        _ = await waiter.value
+    }
+
+    /// The other direction before Connected: start-time off, the live `includeAllNetworks` on (saved while connecting):
+    /// a connect timeout is withheld, not a failed start (a failed start would be open, E14c).
+    @Test func aLiveKillSwitchWithholdsBeforeConnected() async {
+        let h = Harness()
+        await h.provision()
+        let t = h.start()
+        h.host.setIncludeAllNetworks(true)
+        (await h.adapter()).finishStart(.failure(.failed(LPTunnelError(.connectTimeout))))
+        #expect(await h.waitPhase(.held(.blockedAfterFailure(.connectTimeout))))
+        await h.controller.stop(reason: .userInitiated)
+        _ = await t.value
+    }
+
+    /// The before-Connected latch (an on-demand start's retryable failure under the kill switch arms the backoff latch)
+    /// reads the union too: live route protection on with start-time off, and start-time on with live off.
+    @Test(arguments: [false, true])
+    func theBeforeConnectedLatchReadsLiveOrStartTimeFlags(startTimeOn: Bool) async {
+        let h = Harness(killSwitch: startTimeOn, routeProtection: true)
+        await h.provision()
+        let t = h.start(manual: false)
+        h.host.setProtection(startTimeOn ? Self.flagsOff : ProviderProtection(includeAllNetworks: false, enforceRoutes: true))
+        (await h.adapter()).finishStart(.failure(.failed(LPTunnelError(.connectTimeout))))
+        #expect(h.code(await t.value) == .connectTimeout)                // no `includeAllNetworks`: the start fails
+        #expect(h.latch?.kind == .backoff)
     }
 
     /// Draft 9 (S2 E3/E4): with the kill switch on, nothing after Connected ever calls `cancelTunnelWithError`:

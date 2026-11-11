@@ -91,7 +91,52 @@ struct OwnerTest1UITests {
     @Test func withoutProfilesStep3ContinuesWithoutASave() async throws {
         let h = Harness()
         defer { h.dir.cleanup() }
+        h.env.ui.onboarding.isPresented = true
+        h.env.ui.onboarding.step = .allowConfiguration
         h.env.ui.actions.allowVPNConfiguration()
         #expect(await eventually { h.env.ui.onboarding.configurationStep == .done })
+        // Owner test 2026-11-10: one click goes on to the profiles (it took a second Continue before).
+        #expect(h.env.ui.onboarding.step == .profiles)
+    }
+
+    /// Review L5 (2.0.1): allowed with a profile: on to the profiles, and (N2) the "not allowed" banner goes.
+    @Test func step3AllowedWithAProfileMovesOnAndClearsTheDeniedBanner() async throws {
+        let h = Harness()
+        defer { h.dir.cleanup() }
+        _ = try await h.add("Work.conf", Harness.wgConf)
+        h.env.ui.connection.vpnConfigurationDenied = true                // an earlier denial
+        h.env.ui.onboarding.isPresented = true
+        h.env.ui.onboarding.step = .allowConfiguration
+        h.env.ui.actions.allowVPNConfiguration()
+        #expect(await eventually { h.env.ui.onboarding.configurationStep == .done })
+        #expect(h.env.ui.onboarding.step == .profiles)
+        #expect(!h.env.ui.connection.vpnConfigurationDenied)
+        #expect(!h.env.connection.configurationDenied)
+    }
+
+    /// Review L5: the main window banner's "Allow…" (onboarding not showing) never moves onboarding's step.
+    @Test func theBannersAllowLeavesTheOnboardingStepAlone() async throws {
+        let h = Harness()
+        defer { h.dir.cleanup() }
+        _ = try await h.add("Work.conf", Harness.wgConf)
+        h.env.ui.onboarding.isPresented = false
+        h.env.ui.onboarding.step = .allowConfiguration
+        h.env.ui.actions.allowVPNConfiguration()
+        #expect(await eventually { h.env.ui.onboarding.configurationStep == .done })
+        #expect(h.env.ui.onboarding.step == .allowConfiguration)
+    }
+
+    /// Review L5: a deferred first save keeps step 3 (its message is read before Continue).
+    @Test func aDeferredStep3StaysOnTheStep() async throws {
+        let h = Harness()
+        defer { h.dir.cleanup() }
+        let t4 = OnDemandPause4Tests()
+        let (_, work) = try await t4.setUp(h)
+        await t4.connected(h, work)
+        h.env.ui.onboarding.isPresented = true
+        h.env.ui.onboarding.step = .allowConfiguration
+        h.env.ui.actions.allowVPNConfiguration()
+        #expect(await eventually { if case .deferred = h.env.ui.onboarding.configurationStep { true } else { false } })
+        #expect(h.env.ui.onboarding.step == .allowConfiguration)
     }
 }

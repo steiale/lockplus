@@ -47,6 +47,7 @@ struct TestDir {
     var log: [String] = []
     var onStatusChange: ((UUID, TunnelStatus) -> Void)?
     var onConfigurationChange: (() -> Void)?
+    var onStrayStatusChange: (() -> Void)?
     /// Pulsed after every state change of the fake (`until` re-checks its condition on it: event-driven, no polling).
     var onChange: (@MainActor () -> Void)?
 
@@ -178,8 +179,17 @@ final class FakeTunnelService: TunnelServicing {
         var pushOutcome: PushEndpointsReply.Outcome = .retrying
         /// Review PF-R1: when the XPC link was last interrupted (a tunnel-process crash).
         var linkInterruptedAt: Date?
+        /// Codex final 4: `tunnelSnapshot` calls wait until `releaseSnapshots()` (a slow XPC answer).
+        var holdSnapshots = false
     }
     let state = Mutex(State())
+    private let snapshotWaiters = Mutex<[CheckedContinuation<Void, Never>]>([])
+    var heldSnapshotCalls: Int { snapshotWaiters.withLock { $0.count } }
+    func releaseSnapshots() {
+        state.withLock { $0.holdSnapshots = false }
+        let w = snapshotWaiters.withLock { w in defer { w = [] }; return w }
+        for k in w { k.resume() }
+    }
     let events = AsyncStream<TunnelEvent> { _ in }
     let linkUpdates = AsyncStream<ServiceLinkStatus> { _ in }
 
@@ -191,6 +201,9 @@ final class FakeTunnelService: TunnelServicing {
 
     func call<Req: Encodable & Sendable, Resp: Decodable & Sendable>(
         _ method: LPMethod, _ request: Req, as: Resp.Type) async throws(LPError) -> Resp {
+        if method == .tunnelSnapshot, state.withLock({ $0.holdSnapshots }) {
+            await withCheckedContinuation { (k: CheckedContinuation<Void, Never>) in snapshotWaiters.withLock { $0.append(k) } }
+        }
         let s = state.withLock { $0.calls.append(method); return $0 }
         if let e = s.failAll { throw e }
         let v: Any

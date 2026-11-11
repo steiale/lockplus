@@ -70,6 +70,8 @@ enum AppMode: Sendable, Equatable {
     private var instanceLock: InstanceLock?
     let dataDirectory: AppDataDirectory
     private var started = false
+    /// 2.0.1 E2E: this launch is the first of its build (a first launch or an update): the main window opens.
+    private(set) var launchedNewBuild = false
     private var menuOpenedThisLaunch = false
     private let log = Logger(subsystem: "io.github.steiale.lockplus.mac", category: "app")
 
@@ -186,6 +188,7 @@ enum AppMode: Sendable, Equatable {
         connection.resolveEndpoints = b.resolveEndpoints
         profiles.onDemandHeldBack = { [weak connection] id in connection?.holdsBackOnDemand(of: id) ?? false }   // E2E-3
         profiles.mutationBlocked = { [weak connection] id in connection?.mutationBlocked(id) ?? false }           // review F5, R3
+        profiles.otherStartPending = { [weak connection] id in connection?.foreignStartPending(except: id) ?? false }   // round 7
         profiles.stopSessionBeforeRemoval = { [weak connection] id in                                              // review e321e10
             guard let connection else { return }
             _ = await connection.stopAndWait(id, timeout: connection.removalStopTimeout)
@@ -279,8 +282,11 @@ enum AppMode: Sendable, Equatable {
         if mode == .preview, let files { try? FileManager.default.removeItem(at: files.dir.root) }
         await acquireInstanceLock()
         let settingsProblem = await loadSettingsAtLaunch()
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
         settings.update { s in
             s.launches = Array((s.launches + [Date()]).suffix(5))
+            launchedNewBuild = AppSettings.isNewBuildLaunch(previous: s.lastLaunchedBuild, current: build)
+            s.lastLaunchedBuild = build
         }
         do throws(LPError) { try await managers.loadAll() } catch { log.error("loadAllFromPreferences: \(error.code.rawValue, privacy: .public)") }
         #if DEBUG

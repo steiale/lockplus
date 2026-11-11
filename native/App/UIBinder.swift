@@ -216,6 +216,7 @@ import Observation
         UIMapping.set(&ui.connection.anyOnDemandEnabled, c.anyOnDemandEnabled)
         UIMapping.set(&ui.connection.lastErrorDetail, c.errorDetail)
         UIMapping.set(&ui.connection.lastErrorAt, c.errorAt)
+        UIMapping.set(&ui.connection.endNotes, c.endNotes.mapValues { $0.code.message(detail: $0.detail) })
 
         let items = env.profiles.ordered.map {
             var item = UIMapping.item($0, credentials: env.profiles.credentials[$0.id], autoProfileID: env.settings.value.autoConnect.profileID,

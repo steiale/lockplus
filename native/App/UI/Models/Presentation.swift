@@ -57,6 +57,16 @@ enum MainSheet: Identifiable {
         return nil
     }
 
+    /// 2.0.1 E2E F5: the sheets shown ON TOP of onboarding. Onboarding outranks the import preview in `active`, so a
+    /// file chosen in step 4 ("Choose Files…") produced a preview nobody could see (and, once onboarding closed, the
+    /// dismissal cleared it). While onboarding is up its own sheet presents the import preview or batch.
+    @MainActor static func nested(in env: UIEnvironment) -> MainSheet? {
+        guard case .onboarding? = active(in: env) else { return nil }
+        if let p = env.importer.preview { return .importPreview(p) }
+        if let b = env.importer.batch { return .batchImport(b) }
+        return nil
+    }
+
     /// The sheet was dismissed: clear its source.
     @MainActor func clear(in env: UIEnvironment) {
         switch self {

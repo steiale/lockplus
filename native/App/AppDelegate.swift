@@ -51,8 +51,11 @@ import os
         }
         Task { @MainActor in
             await env.start()
-            // §11.3 visibility policy: open the window when the icon may be hidden (or at login when asked).
-            if env.settings.value.iconMayBeHidden || env.settings.value.openWindowAtLogin { env.ui.actions.openMainWindow() }
+            // §11.3 visibility policy: open the window on the first launch of a build (first launch, update: 2.0.1 E2E),
+            // when the icon may be hidden, or at login when asked.
+            if env.launchedNewBuild || env.settings.value.iconMayBeHidden || env.settings.value.openWindowAtLogin {
+                env.ui.actions.openMainWindow()
+            }
         }
     }
 

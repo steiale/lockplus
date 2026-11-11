@@ -136,6 +136,20 @@ struct DerivedStateTests {
         #expect(!c.showsPauseMenu(anyOnDemandEnabled: true))
     }
 
+    /// 2.0.1 round 5 (Codex 6, Fable N1): a session kept and held after another configuration's kill-switch start
+    /// interrupted it (that start was then refused) says so, not that another profile took over.
+    @Test("Row 7: held after an interrupted preemption")
+    func row7Interrupted() {
+        let c = inputs {
+            $0.status = .reasserting; $0.killSwitch = true
+            $0.snapshot.holdReason = .blockedAfterFailure(.sessionInterrupted)
+        }.condition
+        #expect(c == .blockedAfterFailure(.sessionInterrupted))
+        #expect(c.copy(for: work).message == "Work stopped: another LockPlus start interrupted its connection. No traffic leaves this Mac.")
+        #expect(c.announcement(for: work) == "Blocked. Work stopped because another LockPlus start interrupted its connection. Disconnect to restore internet.")
+        #expect(LPErrorCode.sessionInterrupted.message() == "Another LockPlus start interrupted the connection, then didn't go ahead.")
+    }
+
     @Test("Row 8: non-retryable hold under on-demand; blocked glyph only with the kill switch")
     func row8() {
         let off = inputs { $0.status = .reasserting; $0.snapshot.holdReason = .nonRetryable(.authFailed) }.condition

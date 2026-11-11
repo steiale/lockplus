@@ -8,7 +8,7 @@ import TunnelEngineTestSupport
 
 /// §7.2 rows up to Connected, the connect deadline, the start latch and the before-Connected `.fatal` rows (draft 9:
 /// withheld under `includeAllNetworks`, S2 E14).
-@Suite struct ControllerStartTests {
+@Suite(.timeLimit(.minutes(1))) struct ControllerStartTests {     // round 7 (Fable N2): a start that never ends fails, not hangs
     static func latched(_ kind: StartLatch.Kind, _ code: LPErrorCode, notBefore: Date? = nil) -> (UUID) -> PersistedTunnelState {
         { pid in
             var st = PersistedTunnelState()

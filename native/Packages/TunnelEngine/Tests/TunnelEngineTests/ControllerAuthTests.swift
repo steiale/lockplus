@@ -8,7 +8,7 @@ import TunnelEngineTestSupport
 
 /// §7.2/§8.4 auth inside the pending start (draft 9: S2 E14b measured no start time limit, so the two-start flow is
 /// gone). A first-connect prompt keeps the NE start pending; the answer becomes a new engine attempt of that start.
-@Suite struct ControllerAuthTests {
+@Suite(.timeLimit(.minutes(1))) struct ControllerAuthTests {     // round 7 (Fable N2)
 
     /// Starts, and lets the first engine attempt end with `ch`. Returns the start task and the adapter.
     func challenge(_ h: Harness, _ ch: AuthChallenge, manual: Bool = true) async -> (Task<Result<Void, LPTunnelError>, Never>, FakeAdapter) {

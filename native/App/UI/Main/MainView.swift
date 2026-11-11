@@ -119,7 +119,8 @@ private struct MainWindowPresentations: ViewModifier {
                 if new == nil, let shown = MainSheet.active(in: env) { shown.clear(in: env) }
             })) { sheet in sheet.content }
             // ONE alert, chosen by priority.
-            .alert(alertTitle(alert), isPresented: Binding(get: { alert != nil }, set: { if !$0 { alert?.clear(in: env) } }),
+            // While onboarding is shown, its own sheet presents the import alert (2.0.1 E2E F5).
+            .alert(alertTitle(alert), isPresented: Binding(get: { alert != nil && !env.onboarding.isPresented }, set: { if !$0 { alert?.clear(in: env) } }),
                    presenting: alert) { a in
                 switch a {
                 case .importError:

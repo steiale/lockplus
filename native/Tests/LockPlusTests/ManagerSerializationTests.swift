@@ -31,6 +31,32 @@ struct ManagerSerializationTests {
         #expect(fake.log.count == 6)
     }
 
+    /// 2.0.1 round 4 (Codex 2): a conditional save (the protective flag heal) checks its condition when the save is
+    /// issued, after waiting for an earlier mutation: the session left `.connected` meanwhile, nothing is saved.
+    @Test func aConditionalSaveRechecksAfterTheWait() async throws {
+        let fake = FakeVPNManager()
+        let m = SerializedVPNManager(inner: fake)
+        try await m.loadAll()
+        let c = cfg("A")
+        try await m.save(c)
+        fake.entries[c.profileID]?.status = .connected
+        final class Gate { var k: CheckedContinuation<Void, Never>?; var parked = false }
+        let gate = Gate()
+        fake.loadGate = { await withCheckedContinuation { gate.k = $0; gate.parked = true } }
+        let reload = Task { try? await m.loadAll() }                     // an earlier mutation, parked
+        while !gate.parked { await Task.yield() }
+        let saves = fake.log.filter { $0.hasPrefix("begin save") }.count
+        let heal = Task { try? await m.save(c, onlyIf: { m.status(c.profileID) == .connected }) }
+        for _ in 0..<20 { await Task.yield() }
+        fake.entries[c.profileID]?.status = .reasserting                // it left `.connected` while the heal waited
+        gate.k?.resume()
+        _ = await reload.value
+        #expect(await heal.value == false)
+        #expect(fake.log.filter { $0.hasPrefix("begin save") }.count == saves)
+        fake.entries[c.profileID]?.status = .connected
+        #expect(try await m.save(c, onlyIf: { m.status(c.profileID) == .connected }))
+    }
+
     @Test func aStaleSaveIsRetriedOnceAfterAReload() async throws {
         let fake = FakeVPNManager()
         let m = SerializedVPNManager(inner: fake)

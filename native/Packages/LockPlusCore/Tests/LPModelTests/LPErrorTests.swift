@@ -10,6 +10,9 @@ import Testing
         #expect(LPErrorCode.authFailed.rawValue == 200)
         #expect(LPErrorCode.endpointInterfaceUnusable.rawValue == 220)
         #expect(LPErrorCode.noNetwork.rawValue == 221)
+        #expect(LPErrorCode.anotherTunnelActive.rawValue == 222)
+        #expect(LPErrorCode.supersededByKillSwitch.rawValue == 223)
+        #expect(LPErrorCode.sessionInterrupted.rawValue == 224)
     }
 
     @Test func detailIsCapped() {

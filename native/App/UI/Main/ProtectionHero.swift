@@ -61,6 +61,11 @@ struct ProtectionHero: View {
                 DNSLine(verdict: env.connection.inputs.dns)
             }
 
+            // 2.0.1 E2E F2: why this (non-current) profile ended or couldn't start: refused beside another LockPlus
+            // session (222), or ended for a kill-switch profile's start (223). The current profile's hero isn't touched.
+            if !isCurrentProfile, let note = env.connection.endNotes[profile.id] {
+                InlineStrip(severity: .attention, message: note)
+            }
             if isCurrentProfile && env.connection.reconnectedAfterRestart {
                 InlineStrip(severity: .info, message: ConnectionUIModel.reconnectedAfterRestartText)
             }

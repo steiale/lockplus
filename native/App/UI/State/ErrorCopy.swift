@@ -6,6 +6,10 @@ import LPModel
 /// ("Work stopped: the server's certificate is not trusted."). `detail` is LPError's non-secret detail, used only by
 /// the codes whose copy names a thing (the rejected option, the unusable interface).
 extension LPErrorCode {
+    /// Review L2: the app's own `detail` for `.anotherTunnelActive` when no session this user can see is active (another
+    /// user's, or one LockPlus can't address): "Disconnect it first" would ask for something this user can't do.
+    static let unseenSessionDetail = "lp.app.unseen-session"
+
     func message(detail: String? = nil) -> String {
         switch self {
         case .timeout: String(localized: "The tunnel component didn't answer in time.", comment: "Error message")
@@ -50,6 +54,14 @@ extension LPErrorCode {
                 String(localized: "The server sent a setting this profile refuses. Edit the profile or ask the server's operator.", comment: "Error message (§6.15)")
             }
         case .noNetwork: String(localized: "Your Mac isn't connected to a network.", comment: "Error message (E2E-4 200011: macOS ended the VPN session because there was no network)")
+        case .anotherTunnelActive:
+            if detail == Self.unseenSessionDetail {
+                String(localized: "Another LockPlus connection is active: another user's on this Mac, or one LockPlus can't show. It has to end first.", comment: "Error message (2.0.1 review L2: a start refused beside a LockPlus session this user can't see)")
+            } else {
+                String(localized: "Another LockPlus profile is connected. Disconnect it first.", comment: "Error message (2.0.1: a start, e.g. from System Settings, refused while another LockPlus profile is connected)")
+            }
+        case .supersededByKillSwitch: String(localized: "Another LockPlus profile with the kill switch took over, so this one was disconnected.", comment: "Error message (2.0.1 review H1: a profile without the kill switch was ended for a kill-switch profile's start)")
+        case .sessionInterrupted: String(localized: "Another LockPlus start interrupted the connection, then didn't go ahead.", comment: "Error message (2.0.1 round 5: a session torn down for another configuration's kill-switch start, kept and held because it became protected meanwhile)")
         case .endpointInterfaceUnusable:
             if let detail {
                 String(localized: "This server is only reachable via \(detail), a network LockPlus's tunnel can't use. Connect the server to your main network (Wi-Fi or Ethernet).", comment: "Error message (§6.15). The argument is an interface name such as bridge100.")
@@ -104,6 +116,14 @@ extension LPErrorCode {
                 String(localized: "the server sent a setting this profile refuses", comment: "Error reason fragment")
             }
         case .noNetwork: String(localized: "your Mac isn't connected to a network", comment: "Error reason fragment")
+        case .anotherTunnelActive:
+            if detail == Self.unseenSessionDetail {
+                String(localized: "another LockPlus connection is active (another user's, or one LockPlus can't show)", comment: "Error reason fragment")
+            } else {
+                String(localized: "another LockPlus profile is connected", comment: "Error reason fragment")
+            }
+        case .supersededByKillSwitch: String(localized: "another LockPlus profile with the kill switch took over", comment: "Error reason fragment")
+        case .sessionInterrupted: String(localized: "another LockPlus start interrupted its connection", comment: "Error reason fragment")
         case .endpointInterfaceUnusable:
             if let detail {
                 String(localized: "the server is only reachable via \(detail)", comment: "Error reason fragment; the argument is an interface name")
@@ -159,6 +179,14 @@ extension LPErrorCode {
                 String(localized: "because.pushedOptionRejected", defaultValue: "the server sent a setting this profile refuses", comment: "Error cause after \"because\"")
             }
         case .noNetwork: String(localized: "because.noNetwork", defaultValue: "your Mac wasn't connected to a network", comment: "Error cause, used after \"because\" in a VoiceOver announcement")
+        case .anotherTunnelActive:
+            if detail == Self.unseenSessionDetail {
+                String(localized: "because.anotherTunnelActive.unseen", defaultValue: "another LockPlus connection was active", comment: "Error cause, used after \"because\" in a VoiceOver announcement")
+            } else {
+                String(localized: "because.anotherTunnelActive", defaultValue: "another LockPlus profile was connected", comment: "Error cause, used after \"because\" in a VoiceOver announcement")
+            }
+        case .supersededByKillSwitch: String(localized: "because.supersededByKillSwitch", defaultValue: "another LockPlus profile with the kill switch took over", comment: "Error cause, used after \"because\" in a VoiceOver announcement")
+        case .sessionInterrupted: String(localized: "because.sessionInterrupted", defaultValue: "another LockPlus start interrupted its connection", comment: "Error cause, used after \"because\" in a VoiceOver announcement")
         case .endpointInterfaceUnusable:
             if let detail {
                 String(localized: "because.endpointInterfaceUnusable.detail", defaultValue: "the server is only reachable via \(detail)", comment: "Error cause after \"because\"; the argument is an interface name")

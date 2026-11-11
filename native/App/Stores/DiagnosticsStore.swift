@@ -12,6 +12,8 @@ final class DiagnosticsStore {
     private(set) var dnsResult: DNSCheckResult?
     private(set) var resolvers: [DNSResolver] = []
     private(set) var dnsProfileID: UUID?
+    /// 2.0.1 E2E F4: the checked profile sets no DNS (`setsNoDNS`): nothing to verify.
+    private(set) var dnsNotApplicable = false
 
     @ObservationIgnored private let system: any DNSSystemReading
     @ObservationIgnored private let profiles: ProfilesStore
@@ -53,6 +55,18 @@ final class DiagnosticsStore {
     func verify(_ id: UUID) async {
         guard let p = profiles.profile(id) else { return }
         let expected = p.summary.dnsServers.map(Self.stripPort)
+        // 2.0.1 E2E F4: a WireGuard split tunnel without a DNS server sets no DNS at all; the system resolver stays as it
+        // is, so there is nothing to verify (and "overridden by another profile" was a false alarm).
+        if Self.setsNoDNS(kind: p.kind, dnsServers: expected, isFullTunnel: p.summary.isFullTunnel) {
+            dnsProfileID = id
+            dnsResult = nil
+            resolvers = []
+            dnsNotApplicable = true
+            dns = .pending
+            log.notice("DNS not checked: the profile sets no DNS server")
+            return
+        }
+        dnsNotApplicable = false
         let catchAll = p.summary.isFullTunnel || p.policy.dnsMode == .tunnelOnly
         let (result, resolvers) = await DNSVerifier.verify(system: system, expectedServers: expected, catchAll: catchAll)
         guard !Task.isCancelled else { return }
@@ -65,6 +79,11 @@ final class DiagnosticsStore {
         case .mismatch(let d): log.error("DNS mismatch: \(d, privacy: .private(mask: .hash))")
         case .unknown(let r): log.notice("DNS unverified: \(r, privacy: .public)")
         }
+    }
+
+    /// The profile's tunnel changes no DNS: WireGuard (static config, no pushed servers) split tunnel with no `DNS =`.
+    nonisolated static func setsNoDNS(kind: VPNProtocolKind, dnsServers: [String], isFullTunnel: Bool) -> Bool {
+        kind == .wireGuard && dnsServers.isEmpty && !isFullTunnel
     }
 
     nonisolated static func verdict(_ r: DNSCheckResult) -> DNSVerdict {
@@ -104,6 +123,9 @@ final class DiagnosticsStore {
         case .unknown(let r)?:
             return DiagnosticCheck(kind: .dns, result: .unknown,
                                    summary: String(localized: "Couldn't verify DNS", comment: "Diagnostics DNS row (never shown as safe)"), detail: r + "\n" + detail)
+        case nil where dnsNotApplicable:
+            return DiagnosticCheck(kind: .dns, result: .unknown,
+                                   summary: String(localized: "The profile sets no DNS server: DNS stays as it is", comment: "Diagnostics DNS row (2.0.1: WireGuard split tunnel without DNS)"), detail: "")
         case nil:
             return DiagnosticCheck(kind: .dns, result: .unknown,
                                    summary: String(localized: "Not checked yet", comment: "Diagnostics DNS row"), detail: "")

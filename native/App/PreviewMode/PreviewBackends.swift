@@ -57,6 +57,7 @@ final class PreviewWorld: Sendable {
     var challengeOnStart: Set<UUID> = []
     var onStatusChange: ((UUID, TunnelStatus) -> Void)?
     var onConfigurationChange: (() -> Void)?
+    var onStrayStatusChange: (() -> Void)?
 
     init(world: PreviewWorld) { self.world = world }
 

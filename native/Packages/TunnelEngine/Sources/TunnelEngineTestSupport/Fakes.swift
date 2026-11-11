@@ -25,10 +25,13 @@ public final class FakeHost: ProviderHost, @unchecked Sendable {
         public var applied: [TunnelSettingsSpec] = []
         public var reasserting: [Bool] = []
         public var cancelled: [LPTunnelError] = []
+        public var cancelledOwners: [ProviderLease?] = []
         public var applyError: LPTunnelError?
         public var applyGate: CheckedContinuation<Void, Never>?
         public var holdApply = false
         public var fd: Int32? = 7
+        /// What `liveProtection(owner:)` answers (the provider's live flags); nil: unknown.
+        public var protection: ProviderProtection?
     }
     public let s = Mutex(S())
     public let flow = FakeFlow()
@@ -43,12 +46,22 @@ public final class FakeHost: ProviderHost, @unchecked Sendable {
     }
     public func releaseApply() { s.withLock { st in st.holdApply = false; st.applyGate?.resume(); st.applyGate = nil } }
     public func setReasserting(_ on: Bool) { s.withLock { $0.reasserting.append(on) } }
-    public func cancel(with error: LPTunnelError) { s.withLock { $0.cancelled.append(error) } }
+    public func cancel(with error: LPTunnelError, owner: ProviderLease?) {
+        s.withLock { $0.cancelled.append(error); $0.cancelledOwners.append(owner) }
+    }
     public func tunnelFileDescriptor(matching address: String?) -> Int32? { s.withLock { $0.fd } }
+    public func liveProtection(owner: ProviderLease?) -> ProviderProtection? { s.withLock { $0.protection } }
+    public func pin() -> AnyObject? { nil }
+    /// The provider's live `includeAllNetworks` (`enforceRoutes` off); nil: unknown.
+    public func setIncludeAllNetworks(_ v: Bool?) {
+        s.withLock { $0.protection = v.map { ProviderProtection(includeAllNetworks: $0, enforceRoutes: false) } }
+    }
+    public func setProtection(_ p: ProviderProtection?) { s.withLock { $0.protection = p } }
 
     public var appliedCount: Int { s.withLock { $0.applied.count } }
     public var lastReasserting: Bool? { s.withLock { $0.reasserting.last } }
     public var cancelledCodes: [LPErrorCode] { s.withLock { $0.cancelled.map(\.code) } }
+    public var cancelledOwners: [ProviderLease?] { s.withLock { $0.cancelledOwners } }
 }
 
 // MARK: FakeFlow
@@ -181,9 +194,13 @@ public actor InMemorySecretStore: ExtensionSecretStore {
     public var puts = 0
     public init() {}
     func key(_ k: SecretKind, _ id: UUID, _ uid: uid_t) -> String { "\(uid)/\(k.rawValue)/\(id.uuidString)" }
+    /// A failure of one kind's `put` and `delete` only (round 6: a partial provision or removal).
+    public var kindFailures: [SecretKind: LPError] = [:]
     public func setFailure(_ e: LPError?) { failure = e }
+    public func setFailure(_ e: LPError?, for kind: SecretKind) { kindFailures[kind] = e }
     public func put(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t, revision: UInt64, _ bytes: SecretBytes) throws(LPError) {
         if let failure { throw failure }
+        if let f = kindFailures[kind] { throw f }
         puts += 1
         items[key(kind, id, ownerUID)] = Item(bytes: bytes.withUnsafeBytes { Array($0) }, owner: ownerUID, revision: revision)
     }
@@ -196,7 +213,10 @@ public actor InMemorySecretStore: ExtensionSecretStore {
         if let failure { throw failure }
         return items[key(kind, id, ownerUID)].map { ProvisionIndexEntry(id: id, kind: kind, revision: $0.revision, ownerUID: $0.owner, digest: nil) }
     }
-    public func delete(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t) throws(LPError) { items[key(kind, id, ownerUID)] = nil }
+    public func delete(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t) throws(LPError) {
+        if let f = kindFailures[kind] { throw f }
+        items[key(kind, id, ownerUID)] = nil
+    }
     public func deleteAll(ownerUID: uid_t) throws(LPError) { items = items.filter { $0.value.owner != ownerUID } }
     public func index(ownerUID: uid_t) throws(LPError) -> [ProvisionIndexEntry] {
         if let failure { throw failure }

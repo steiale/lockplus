@@ -41,6 +41,34 @@ struct E2E4FixTests {
         #expect(h.env.profiles.problems.last?.message.contains("LockPlus restored them") == true)
     }
 
+    /// 2.0.1 round 4 (Codex 2): the heal's save waits behind another mutation and Work starts reasserting meanwhile:
+    /// nothing is saved onto the reasserting session (the extension's hold-vs-cancel reads its live flags); it is healed
+    /// at the next `.connected`.
+    @Test func aHealWaitingWhileTheSessionLeavesConnectedIsNotSaved() async throws {
+        let h = Harness()
+        defer { h.dir.cleanup() }
+        let (_, work) = try await setUp(h)
+        await connected(h, work)
+        h.managers.entries[work.id]?.cfg.flags.includeAllNetworks = false
+        try await h.env.managers.loadAll()
+        h.managers.log = []
+        final class Gate { var k: CheckedContinuation<Void, Never>?; var parked = false }
+        let gate = Gate()
+        h.managers.loadGate = { await withCheckedContinuation { gate.k = $0; gate.parked = true } }
+        let reload = Task { try? await h.env.managers.loadAll() }          // an earlier mutation holds the lock
+        #expect(await eventually { gate.parked })
+        let heal = Task { await h.env.profiles.healProtectiveDrift(work.id) }
+        for _ in 0..<20 { await Task.yield() }
+        h.managers.emit(work.id, .reasserting)
+        gate.k?.resume()
+        _ = await reload.value
+        _ = await heal.value
+        #expect(saves(h, of: work) == 0)
+        #expect(h.env.profiles.hasDeferredSync)
+        h.managers.emit(work.id, .connected)
+        #expect(await eventually { h.managers.entries[work.id]?.cfg.flags.includeAllNetworks == true })
+    }
+
     /// The same weakening while Work is still `.connecting` (its own pending kill-switch start): nothing is saved then
     /// (E2E-3), it is noted, and it is healed at `.connected`.
     @Test func aWeakeningWhileConnectingIsHealedAtConnected() async throws {
@@ -221,6 +249,341 @@ struct E2E4FixTests {
         #expect(h.env.connection.isBusy)
         await h.env.profiles.load()
         #expect(h.managers.removed.isEmpty)
+    }
+
+    /// Round 5 (Codex 3): a weakening of the connected Work while a stray duplicate of it waits (busy: the heal is
+    /// deferred) is healed when that stray ends, with no other status or configuration event.
+    @Test func aHealDeferredByAStrayRunsWhenTheStrayEnds() async throws {
+        let h = Harness()
+        defer { h.dir.cleanup() }
+        let (_, work) = try await setUp(h)
+        await connected(h, work)
+        h.managers.strayEntries = [StraySnapshot(key: UUID(), ownerUID: getuid(), status: .connecting, profileID: work.id)]
+        h.managers.entries[work.id]?.cfg.flags.includeAllNetworks = false
+        try await h.env.managers.loadAll()
+        h.managers.log = []
+        await h.env.profiles.load()
+        #expect(saves(h, of: work) == 0)
+        #expect(h.env.profiles.hasDeferredSync)
+        h.managers.strayEntries[0].status = .disconnected               // stopped in System Settings
+        h.managers.onStrayStatusChange?()
+        #expect(await eventually { h.managers.entries[work.id]?.cfg.flags.includeAllNetworks == true })
+        #expect(saves(h, of: work) == 1)
+    }
+
+    /// Round 6 (Codex M1): an on-demand restore that queued behind an earlier mutation while idle, and a start made
+    /// elsewhere (here another user's configuration, `scutil`) begins before it gets the lock: it is skipped inside the
+    /// serialization (no save inside that pending start), the pause record stays, and it is restored once that start
+    /// ends (its status change runs the recovery).
+    @Test func aQueuedRestoreIsSkippedWhenAStartBeginsMeanwhile() async throws {
+        let h = Harness()
+        defer { h.dir.cleanup() }
+        let (auto, _) = try await setUp(h)
+        h.managers.entries[auto.id]?.onDemand = false
+        h.env.settings.update { $0.onDemandPausedByStart = [auto.id] }
+        try await h.env.managers.loadAll()
+        h.managers.log = []
+        final class Gate { var k: CheckedContinuation<Void, Never>?; var parked = false }
+        let gate = Gate()
+        h.managers.loadGate = { await withCheckedContinuation { gate.k = $0; gate.parked = true } }
+        let reload = Task { try? await h.env.managers.loadAll() }          // an earlier mutation holds the lock
+        #expect(await eventually { gate.parked })
+        h.managers.onStrayStatusChange?()                                 // a recovery trigger while idle: the restore queues
+        for _ in 0..<20 { await Task.yield() }
+        #expect(h.env.connection.restoring)
+        h.managers.strayEntries = [StraySnapshot(key: UUID(), ownerUID: getuid() &+ 1, status: .connecting)]
+        h.managers.onStrayStatusChange?()                                 // another user's kill-switch start begins
+        gate.k?.resume()
+        _ = await reload.value
+        #expect(await never { h.managers.entries[auto.id]?.onDemand == true })
+        #expect(saves(h, of: auto) == 0)
+        #expect(h.env.settings.value.onDemandPausedByStart == [auto.id])
+        h.managers.strayEntries[0].status = .disconnected
+        h.managers.onStrayStatusChange?()                                 // it ends: the recovery retries the restore
+        #expect(await eventually { h.managers.entries[auto.id]?.onDemand == true })
+        #expect(await eventually { h.env.settings.value.onDemandPausedByStart.isEmpty })
+    }
+
+    /// Round 6 (Codex M1): runs `op` (an idle-path mutation) so that its mutation queues behind an earlier one, and
+    /// another user's start (`scutil`) begins before it gets the lock.
+    func startBeginsWhileQueued(_ h: Harness, _ op: @escaping @MainActor () async -> Void) async {
+        final class Gate { var k: CheckedContinuation<Void, Never>?; var parked = false }
+        let gate = Gate()
+        h.managers.loadGate = { await withCheckedContinuation { gate.k = $0; gate.parked = true } }
+        let reload = Task { try? await h.env.managers.loadAll() }
+        #expect(await eventually { gate.parked })
+        let task = Task { await op() }
+        try? await Task.sleep(for: .milliseconds(200))                    // idle when it checked: it queued
+        h.managers.strayEntries = [StraySnapshot(key: UUID(), ownerUID: getuid() &+ 1, status: .connecting)]
+        h.managers.onStrayStatusChange?()
+        gate.k?.resume()
+        _ = await reload.value
+        await task.value
+    }
+
+    /// Round 6 (Codex M1): `load()`'s orphan removal re-checks its deferral inside the serialization.
+    @Test func aQueuedOrphanRemovalIsSkippedWhenAStartBeginsMeanwhile() async throws {
+        let h = Harness()
+        defer { h.dir.cleanup() }
+        let (auto, _) = try await setUp(h)
+        var orphan = ManagerConfiguration(profile: auto, onDemand: nil)
+        orphan.profileID = UUID()
+        orphan.provider.profileID = orphan.profileID
+        h.managers.entries[orphan.profileID] = .init(cfg: orphan, status: .disconnected, onDemand: false)
+        try await h.env.managers.loadAll()
+        await startBeginsWhileQueued(h) { await h.env.profiles.load() }
+        #expect(h.managers.removed.isEmpty)
+        #expect(h.env.profiles.hasDeferredSync)
+    }
+
+    /// Round 6 (Codex M1): `load()`'s removal of this user's stray, the same.
+    @Test func aQueuedStrayRemovalIsSkippedWhenAStartBeginsMeanwhile() async throws {
+        let h = Harness()
+        defer { h.dir.cleanup() }
+        _ = try await setUp(h)
+        let mine = StraySnapshot(key: UUID(), ownerUID: getuid(), status: .disconnected)
+        h.managers.strayEntries = [mine]
+        try await h.env.managers.loadAll()
+        await startBeginsWhileQueued(h) { await h.env.profiles.load() }
+        #expect(h.managers.removed.isEmpty)
+        #expect(h.env.profiles.hasDeferredSync)
+    }
+
+    /// Round 6 (Codex M1): `load()`'s sync of a manager behind its profile, the same.
+    /// Round 7 (Codex L5): with Work (no on-demand rules: `resaveOnDemand` never touches it), the skipped repair isn't
+    /// used up: it runs once the blocker ends, and no "couldn't be restored" is said.
+    @Test func aQueuedManagerSyncIsSkippedWhenAStartBeginsMeanwhile() async throws {
+        let h = Harness()
+        defer { h.dir.cleanup() }
+        let (_, work) = try await setUp(h)
+        let want = h.managers.entries[work.id]?.cfg.flags
+        h.managers.entries[work.id]?.cfg.flags.excludeLocalNetworks.toggle()   // drifted while idle: load re-saves it
+        try await h.env.managers.loadAll()
+        h.managers.log = []
+        await startBeginsWhileQueued(h) { await h.env.profiles.load() }
+        #expect(saves(h, of: work) == 0)
+        #expect(h.env.profiles.hasDeferredSync)
+        h.managers.strayEntries[0].status = .disconnected                     // that start ends: the recovery
+        h.managers.onStrayStatusChange?()
+        #expect(await eventually { h.managers.entries[work.id]?.cfg.flags == want })
+        #expect(!h.env.profiles.problems.contains { $0.message.contains("couldn't be restored") })
+    }
+
+    /// Round 7 (Codex M2): a resave queued while its profile was idle, and meanwhile the configuration got newer flags
+    /// and connected: "behind" is recomputed inside the serialization, so the old configuration isn't saved over it.
+    @Test func aQueuedResaveDoesNotOverwriteAConnectedManagersNewerFlags() async throws {
+        let h = Harness()
+        defer { h.dir.cleanup() }
+        let (auto, _) = try await setUp(h)
+        h.managers.entries[auto.id]?.onDemand = false                         // the resave wants it on
+        try await h.env.managers.loadAll()
+        h.managers.log = []
+        final class Gate { var k: CheckedContinuation<Void, Never>?; var parked = false }
+        let gate = Gate()
+        h.managers.loadGate = { await withCheckedContinuation { gate.k = $0; gate.parked = true } }
+        let reload = Task { try? await h.env.managers.loadAll() }
+        #expect(await eventually { gate.parked })
+        let task = Task { await h.env.profiles.resaveOnDemand() }
+        try? await Task.sleep(for: .milliseconds(200))
+        h.managers.entries[auto.id]?.cfg.flags.includeAllNetworks = true      // newer flags, then connected
+        h.managers.emit(auto.id, .connecting)
+        h.managers.emit(auto.id, .connected)
+        gate.k?.resume()
+        _ = await reload.value
+        await task.value
+        #expect(saves(h, of: auto) == 0)
+        #expect(h.managers.entries[auto.id]?.cfg.flags.includeAllNetworks == true)
+    }
+
+    /// Round 7 (Codex M4, Fable L2): a user's policy change (`saveManagerUnlessBlocked`) re-checks inside the
+    /// serialization: skipped and deferred when a start begins meanwhile.
+    @Test func aQueuedPolicySaveIsSkippedWhenAStartBeginsMeanwhile() async throws {
+        let h = Harness()
+        defer { h.dir.cleanup() }
+        let (_, work) = try await setUp(h)
+        h.managers.log = []
+        await startBeginsWhileQueued(h) { try? await h.env.profiles.updatePolicy(work.id) { $0.allowLAN.toggle() } }
+        #expect(saves(h, of: work) == 0)
+        #expect(h.env.profiles.hasDeferredSync)
+    }
+
+    /// Round 7 (Codex M4, Fable L2): a Delete's removal, the same (the orphan sweep removes it at idle).
+    @Test func aQueuedDeleteRemovalIsSkippedWhenAStartBeginsMeanwhile() async throws {
+        let h = Harness()
+        defer { h.dir.cleanup() }
+        let (_, work) = try await setUp(h)
+        await startBeginsWhileQueued(h) { await h.env.profiles.delete(work.id) }
+        #expect(!h.managers.removed.contains(work.id))
+        #expect(h.env.profiles.hasDeferredSync)
+    }
+
+    /// Round 7 (Fable L3): the one predicate a start's own configuration work (its own restore, `prepareForStart`'s
+    /// saves, the pause of the others) is re-checked against inside the serialization: another configuration in a
+    /// PENDING start (another user's, a stray, another entry of ours) blocks; a merely connected one doesn't.
+    @Test(arguments: [TunnelStatus.connected, .reasserting, .connecting])
+    func otherStartPendingCountsOnlyPendingStarts(other: TunnelStatus) async throws {
+        let h = Harness()
+        defer { h.dir.cleanup() }
+        let (auto, work) = try await setUp(h)
+        let theirs = otherUsersManager(h, like: work, status: other)
+        try await h.env.managers.loadAll()
+        #expect(h.env.connection.otherStartPending(except: auto.id) == (other == .connecting))
+        #expect(!h.env.connection.otherStartPending(except: theirs))
+        h.managers.emit(theirs, .disconnected)
+        h.managers.strayEntries = [StraySnapshot(key: UUID(), ownerUID: getuid(), status: other)]
+        h.managers.onStrayStatusChange?()
+        #expect(h.env.connection.otherStartPending(except: auto.id) == (other == .connecting))
+    }
+
+    /// Round 7 (Fable L3): a Connect while another user's configuration is in a pending start: the pause of the auto
+    /// profile's on-demand (a configuration change inside that start) is skipped, so this start doesn't run.
+    @Test func theCrossPauseIsSkippedInsideAnotherUsersPendingStart() async throws {
+        let h = Harness()
+        defer { h.dir.cleanup() }
+        let (auto, work) = try await setUp(h)
+        _ = otherUsersManager(h, like: work, status: .connecting)
+        try await h.env.managers.loadAll()
+        #expect(h.managers.entries[auto.id]?.onDemand == true)
+        h.env.connection.connect(work.id)
+        #expect(await eventually { h.env.profiles.problems.contains { $0.message.contains("couldn't be paused") } })
+        #expect(h.managers.entries[auto.id]?.onDemand == true)
+        #expect(h.managers.starts.isEmpty)
+        #expect(h.env.connection.errorDetail == LPErrorCode.unseenSessionDetail)    // round 8 (Fable L2)
+    }
+
+    /// Round 7 (Fable L3): `prepareForStart`'s sync of a manager behind its profile, the same: not saved inside another
+    /// user's pending start, and the start doesn't run.
+    @Test func prepareForStartDoesNotSaveInsideAnotherUsersPendingStart() async throws {
+        let h = Harness()
+        defer { h.dir.cleanup() }
+        let (_, work) = try await setUp(h)
+        h.env.settings.update { $0.autoConnect.enabled = false }          // nothing to pause
+        await h.env.profiles.resaveOnDemand()
+        _ = otherUsersManager(h, like: work, status: .connecting)
+        h.managers.entries[work.id]?.cfg.flags.excludeLocalNetworks.toggle()
+        try await h.env.managers.loadAll()
+        h.managers.log = []
+        h.env.connection.connect(work.id)
+        #expect(await never { saves(h, of: work) > 0 || !h.managers.starts.isEmpty })
+        // Round 8 (Fable L2): the blocker is another user's: the copy says so (not "another profile is connected").
+        #expect(h.env.connection.errorDetail == LPErrorCode.unseenSessionDetail)
+    }
+
+    /// Round 7/8: a policy change (or a rename) whose manager save landed, whose metadata write then failed, and whose
+    /// rollback is skipped because another user's start began meanwhile: the manager is one metadata revision ahead.
+    /// The skip is remembered in memory, so `load()` doesn't read it as a replay; one reload that misses the manager
+    /// doesn't forget it (round 8, Codex M3); the rollback is saved once that start ends. `relaunch`: the memory is gone,
+    /// so the profile is quarantined as any replay (fail closed, round 8), the manager untouched.
+    @Test(arguments: [false, true], [false, true])
+    func aSkippedRollbackIsRetriedOnlyInMemory(relaunch: Bool, rename: Bool) async throws {
+        let h = Harness()
+        defer { h.dir.cleanup() }
+        let (_, work) = try await setUp(h)
+        let before = try #require(h.env.profiles.profile(work.id)).metaRevision
+        // The metadata write fails: a non-empty directory in place of the metadata file (`rename` can't replace it).
+        let meta = h.dir.data.profiles.appending(path: "\(work.id.uuidString).json")
+        let metaData = try Data(contentsOf: meta)
+        h.managers.onSave = { id in
+            guard id == work.id else { return }
+            h.managers.onSave = nil
+            try? FileManager.default.removeItem(at: meta)
+            try? FileManager.default.createDirectory(at: meta.appending(path: "x"), withIntermediateDirectories: true)
+            h.managers.strayEntries = [StraySnapshot(key: UUID(), ownerUID: getuid() &+ 1, status: .connecting)]
+            h.managers.onStrayStatusChange?()                               // another user's start begins
+        }
+        await #expect(throws: LPError.self) {
+            if rename { try await h.env.profiles.rename(work.id, to: "Work 2") } else { try await h.env.profiles.updatePolicy(work.id) { $0.allowLAN.toggle() } }
+        }
+        try FileManager.default.removeItem(at: meta)
+        try metaData.write(to: meta)                                        // the metadata as it was (old revision)
+        #expect(h.managers.entries[work.id]?.cfg.provider.metaRev == before + 1)   // the rollback was skipped
+        if relaunch {
+            let h2 = Harness(dir: h.dir, managers: h.managers, keychain: h.keychain)
+            h2.env.settings.replaceAll(try #require(await h2.env.files?.loadSettingsChecked().settings))
+            try await h2.env.managers.loadAll()
+            await h2.env.profiles.load()
+            #expect(h2.env.profiles.tampered == [work.id])
+            #expect(h.managers.entries[work.id]?.cfg.provider.metaRev == before + 1)
+            return
+        }
+        await h.env.profiles.load()                                         // still busy: deferred, and no replay
+        #expect(h.env.profiles.tampered.isEmpty)
+        // One reload misses the manager (an incomplete preferences load), then it is back.
+        let removed = h.managers.entries.removeValue(forKey: work.id)
+        let entry = try #require(removed)
+        for _ in 0..<3 where h.env.managers.managers.contains(where: { $0.profileID == work.id }) { try await h.env.managers.loadAll() }
+        #expect(!h.env.managers.managers.contains { $0.profileID == work.id })
+        await h.env.profiles.load()
+        h.managers.entries[work.id] = entry
+        try await h.env.managers.loadAll()
+        await h.env.profiles.load()
+        #expect(h.env.profiles.tampered.isEmpty)
+        h.managers.strayEntries[0].status = .disconnected                   // that start ends: the rollback is saved
+        h.managers.onStrayStatusChange?()
+        #expect(await eventually { h.managers.entries[work.id]?.cfg.provider.metaRev == before })
+        await h.env.profiles.load()
+        #expect(h.env.profiles.tampered.isEmpty)
+    }
+
+    /// Round 9 (Fable N1): an edit made while a rollback is pending (still busy: its manager save is deferred) commits
+    /// the metadata at old+2, so the manager (holding the failed change at old+1) is plainly behind, and is brought to
+    /// the edit's content once the blocker ends. No equal revisions with other content, no quarantine.
+    @Test func anEditWhileARollbackIsPendingSkipsTheBurnedRevision() async throws {
+        let h = Harness()
+        defer { h.dir.cleanup() }
+        let (_, work) = try await setUp(h)
+        let before = try #require(h.env.profiles.profile(work.id)).metaRevision
+        let meta = h.dir.data.profiles.appending(path: "\(work.id.uuidString).json")
+        let metaData = try Data(contentsOf: meta)
+        h.managers.onSave = { id in
+            guard id == work.id else { return }
+            h.managers.onSave = nil
+            try? FileManager.default.removeItem(at: meta)
+            try? FileManager.default.createDirectory(at: meta.appending(path: "x"), withIntermediateDirectories: true)
+            h.managers.strayEntries = [StraySnapshot(key: UUID(), ownerUID: getuid() &+ 1, status: .connecting)]
+            h.managers.onStrayStatusChange?()
+        }
+        await #expect(throws: LPError.self) { try await h.env.profiles.updatePolicy(work.id) { $0.allowLAN.toggle() } }
+        try FileManager.default.removeItem(at: meta)
+        try metaData.write(to: meta)
+        #expect(h.managers.entries[work.id]?.cfg.provider.metaRev == before + 1)
+        try await h.env.profiles.rename(work.id, to: "Work 3")             // still busy: the manager save is deferred
+        #expect(h.env.profiles.profile(work.id)?.metaRevision == before + 2)
+        #expect(h.managers.entries[work.id]?.cfg.provider.metaRev == before + 1)
+        await h.env.profiles.load()
+        #expect(h.env.profiles.tampered.isEmpty)
+        h.managers.strayEntries[0].status = .disconnected
+        h.managers.onStrayStatusChange?()
+        #expect(await eventually { h.managers.entries[work.id]?.cfg.provider.metaRev == before + 2 })
+        #expect(h.managers.entries[work.id]?.cfg.name == "Work 3")
+        await h.env.profiles.load()
+        #expect(h.env.profiles.tampered.isEmpty)
+    }
+
+    /// Round 8 (Codex H1, Fable M1): same-user code restores an authentic older metadata file (before the kill switch was
+    /// turned on) and writes a "pending rollback" into settings.json: the key is ignored, the profile is quarantined
+    /// and the manager keeps its flags.
+    @Test func aForgedRollbackRecordInSettingsIsIgnored() async throws {
+        let h = Harness()
+        defer { h.dir.cleanup() }
+        let (_, work) = try await setUp(h)
+        let meta = h.dir.data.profiles.appending(path: "\(work.id.uuidString).json")
+        let old = try Data(contentsOf: meta)
+        let rev = try #require(h.env.profiles.profile(work.id)).metaRevision
+        try await h.env.profiles.updatePolicy(work.id) { $0.allowLAN.toggle() }
+        let flags = h.managers.entries[work.id]?.cfg.flags
+        #expect(h.managers.entries[work.id]?.cfg.provider.metaRev == rev + 1)
+        try old.write(to: meta)                                             // the authentic older file
+        var json = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: h.dir.data.settings)) as? [String: Any])
+        json["pendingRollbacks"] = [work.id.uuidString, rev]
+        try JSONSerialization.data(withJSONObject: json).write(to: h.dir.data.settings)
+        let h2 = Harness(dir: h.dir, managers: h.managers, keychain: h.keychain)
+        h2.env.settings.replaceAll(try #require(await h2.env.files?.loadSettingsChecked().settings))
+        try await h2.env.managers.loadAll()
+        await h2.env.profiles.load()
+        #expect(h2.env.profiles.tampered == [work.id])
+        #expect(h.managers.entries[work.id]?.cfg.provider.metaRev == rev + 1)
+        #expect(h.managers.entries[work.id]?.cfg.flags == flags)
     }
 
     /// A delete while another user's session starts: the removal waits for idle (it would break that start, U13).

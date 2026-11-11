@@ -240,8 +240,12 @@ struct ProfileRow: View {
                 // (DotSeparatedText), else it wraps to a second line for longer German text (UI-M17) and truncates
                 // only beyond two lines.
                 Text(profile.name).font(.headline).lineLimit(1).truncationMode(.middle).modifier(HelpWhenTruncated(text: profile.name)).modifier(SidebarInk())
-                if let subtitle = ProfileSubtitle.text(for: profile, env: env) {
-                    DotSeparatedText(text: subtitle, wrapLimit: 2).font(.subheadline).modifier(SidebarInk())
+                // 2.0.1 E2E F3: "Protected · 0:02" is hours:minutes; it is re-read every 30 s, so it moves even when
+                // nothing else in the row changes (a session started outside the app).
+                TimelineView(.periodic(from: .now, by: 30)) { ctx in
+                    if let subtitle = ProfileSubtitle.text(for: profile, env: env, now: ctx.date) {
+                        DotSeparatedText(text: subtitle, wrapLimit: 2).font(.subheadline).modifier(SidebarInk())
+                    }
                 }
             }
             Spacer(minLength: 4)

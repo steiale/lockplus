@@ -97,9 +97,24 @@ public struct StartRequest: Sendable {
     /// Overrides `ControllerConfig.dataPlane` for this session. Only the Tunnel target's FaultInjection switch
     /// (`LP_FAULT_INJECTION`, for the leak harness's per-mode runs, §15.3) ever sets it; production starts pass nil.
     public var dataPlaneOverride: DataPlane?
+    /// 2.0.1 re-check N3: the NE protocol's own flags, kept beside the optional `configuration`, so the kill-switch
+    /// priority (§7.2 start guard) and the before-Connected hold hold even when `providerConfiguration` doesn't parse.
+    public var protocolIncludeAllNetworks = false
+    public var protocolEnforceRoutes = false
     public init(options: StartOptions, configuration: ProviderConfiguration?, dataPlaneOverride: DataPlane? = nil) {
         self.options = options; self.configuration = configuration; self.dataPlaneOverride = dataPlaneOverride
     }
+
+    /// The provider's form: the configuration and the protocol's flags from the same `protocolConfiguration`.
+    public init(options: StartOptions, protocolConfiguration proto: NEVPNProtocol?, dataPlaneOverride: DataPlane? = nil) {
+        self.init(options: options, configuration: ProviderConfiguration(proto), dataPlaneOverride: dataPlaneOverride)
+        let p = proto as? NETunnelProviderProtocol
+        protocolIncludeAllNetworks = p?.includeAllNetworks ?? false
+        protocolEnforceRoutes = p?.enforceRoutes ?? false
+    }
+
+    /// `includeAllNetworks` of this start: the configuration's, else the protocol's (N3).
+    public var includeAllNetworks: Bool { configuration?.includeAllNetworks ?? protocolIncludeAllNetworks }
 }
 
 public enum StopReason: Sendable, Equatable {

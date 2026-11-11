@@ -94,6 +94,9 @@ struct AppSettings: Codable, Sendable, Equatable {
     var menuOpenedLaunches: [Date] = []
     /// Launch timestamps, newest last (≤ 5), for the "menu not opened in the last 5 launches" rule.
     var launches: [Date] = []
+    /// 2.0.1 E2E: the build (`CFBundleVersion`) of the last launch; a different one is a first launch or an update, and
+    /// the main window opens (UI-CONCEPT §11.3 visibility: "opens once on first launch and after every update").
+    var lastLaunchedBuild: String?
     var autoConnect = AutoConnectRules()
     var newProfileDefaults = NetworkPolicy(killSwitch: true)
     /// §5.5 / §11.2: a launch-time snapshot error is shown only if it is newer than this.
@@ -150,6 +153,7 @@ struct AppSettings: Codable, Sendable, Equatable {
         launchAtLoginOffer = (try? c.decodeIfPresent(Bool.self, forKey: .launchAtLoginOffer)) ?? false
         menuOpenedLaunches = (try? c.decodeIfPresent([Date].self, forKey: .menuOpenedLaunches)) ?? []
         launches = (try? c.decodeIfPresent([Date].self, forKey: .launches)) ?? []
+        lastLaunchedBuild = try? c.decodeIfPresent(String.self, forKey: .lastLaunchedBuild)
         autoConnect = (try? c.decodeIfPresent(AutoConnectRules.self, forKey: .autoConnect)) ?? AutoConnectRules()
         newProfileDefaults = (try? c.decodeIfPresent(NetworkPolicy.self, forKey: .newProfileDefaults)) ?? def.newProfileDefaults
         lastQuitAt = try? c.decodeIfPresent(Date.self, forKey: .lastQuitAt)
@@ -170,6 +174,9 @@ struct AppSettings: Codable, Sendable, Equatable {
             schema = Self.currentSchema
         }
     }
+
+    /// §11.3 visibility (2.0.1 E2E): the first launch of a build (a first launch or an update) opens the main window.
+    static func isNewBuildLaunch(previous: String?, current: String) -> Bool { previous != current }
 
     /// §11.3 item 2: the menu wasn't opened in any of the last 5 launches.
     var iconMayBeHidden: Bool {

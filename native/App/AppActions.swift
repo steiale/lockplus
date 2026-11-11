@@ -430,8 +430,14 @@ import UniformTypeIdentifiers
         guard let env else { return }
         env.ui.onboarding.configurationStep = .requesting
         Task { @MainActor in
+            // Review L5 (2.0.1): this is also the main window banner's "Allow…" action, and it runs after the system alert
+            // however long that stays up: only onboarding's own step 3, still showing, moves on.
+            let advance = { if env.ui.onboarding.isPresented, env.ui.onboarding.step == .allowConfiguration { env.ui.onboarding.step = .profiles } }
             guard let p = env.profiles.profiles.first else {
-                env.ui.onboarding.configurationStep = .done       // macOS asks at the first import instead
+                // macOS asks at the first import instead: one click moves on (owner test 2026-11-10: it took two clicks
+                // with nothing happening in between).
+                env.ui.onboarding.configurationStep = .done
+                advance()
                 return
             }
             do throws(LPError) {
@@ -439,6 +445,10 @@ import UniformTypeIdentifiers
                 // Review 5 #5: said as it is, not "done".
                 if try await env.profiles.saveManagerUnlessBlocked(p) {
                     env.ui.onboarding.configurationStep = .done
+                    // Review N2: allowed now, so the "VPN configurations not allowed" banner goes.
+                    env.ui.connection.vpnConfigurationDenied = false
+                    env.connection.configurationAllowed()
+                    advance()                                         // allowed: on to the profiles, no second click
                 } else {
                     env.ui.onboarding.configurationStep = .deferred(message: Self.deferredFirstSaveLine(p, busy: env.connection.busyReason, profiles: env.profiles))
                 }

@@ -29,8 +29,10 @@ public struct EngineServiceBackend<C: Clock>: TunnelServiceBackend where C.Durat
             case .removeProfile:
                 let r = try LPWire.decode(ProfileRequest.self, request, max: method.requestLimit)
                 try await secrets.delete(.payload, r.profileID, ownerUID: peer.uid)
-                try await secrets.delete(.credential, r.profileID, ownerUID: peer.uid)
+                // Round 6 (Codex M2, Fable N3): the removal is committed with the payload: a waiting or guarded start
+                // of it ends now, even if the credential delete below throws.
                 await controller.profileRemoved(r.profileID, ownerUID: peer.uid)
+                try await secrets.delete(.credential, r.profileID, ownerUID: peer.uid)
                 return .success(nil)
             case .wipeAllSecrets:
                 try await secrets.deleteAll(ownerUID: peer.uid)
@@ -77,7 +79,13 @@ public struct EngineServiceBackend<C: Clock>: TunnelServiceBackend where C.Durat
                 return .success(try LPWire.encode(SessionSummariesReply(sessions: await controller.sessionSummaries(ownerUID: peer.uid, after: r.after))))
             case .tunnelSnapshot:
                 let r = try LPWire.decode(ProfileRequest.self, request, max: method.requestLimit)
-                try await requireProvisioned(r.profileID, peer)
+                do throws(LPError) { try await requireProvisioned(r.profileID, peer) } catch where error.code == .profileNotProvisioned {
+                    // Round 9 (Codex LOW): the caller's own recorded error (a refusal) stays readable when the payload is
+                    // gone (the app's freshness check needs its time); nothing else of the profile. None: as before.
+                    let snap = await controller.lastErrorSnapshot(profileID: r.profileID, ownerUID: peer.uid)
+                    guard snap.lastError != nil else { throw error }
+                    return .success(try LPWire.encode(snap))
+                }
                 return .success(try LPWire.encode(await controller.snapshot(profileID: r.profileID, ownerUID: peer.uid)))
             case .pendingAuthPrompt:
                 let r = try LPWire.decode(ProfileRequest.self, request, max: method.requestLimit)
@@ -139,15 +147,21 @@ public struct EngineServiceBackend<C: Clock>: TunnelServiceBackend where C.Durat
             throw LPError(.profileInvalid, detail: error.detail)
         }
         try await secrets.put(.payload, r.profileID, ownerUID: peer.uid, revision: r.revision, payload)
+        // Profile change FIRST, committed with the payload (round 6, Codex M2): a higher revision ends a waiting start of
+        // the old configuration before any credential I/O can fail; a same-revision retry after such a failure still
+        // ends the starts of an OLDER revision (`payloadCommitted` compares with each start's own revision). Only then
+        // may new credentials retry a hold (which, after a profile change, is gone). Review L2.
+        if higher {
+            await controller.profileProvisioned(r.profileID, ownerUID: peer.uid, revision: r.revision)
+        } else {
+            await controller.payloadCommitted(r.profileID, ownerUID: peer.uid, revision: r.revision)
+        }
         if let c = r.credentials {
             let secrets = CredentialSecrets(username: SecretBytes.fromData(c.username), password: SecretBytes.fromData(c.password),
                                             keyPassphrase: SecretBytes.fromData(c.keyPassphrase),
                                             proxyUsername: SecretBytes.fromData(c.proxyUsername), proxyPassword: SecretBytes.fromData(c.proxyPassword))
             try await self.secrets.put(.credential, r.profileID, ownerUID: peer.uid, revision: r.revision, CredentialCodec.encode(secrets))
         }
-        // Profile change FIRST: a higher revision ends a waiting start of the old configuration; only then may new
-        // credentials retry a hold (which, after a profile change, is gone). Review L2.
-        if higher { await controller.profileProvisioned(r.profileID, ownerUID: peer.uid, revision: r.revision) }
         if r.credentials != nil { await controller.credentialsUpdated(r.profileID, ownerUID: peer.uid) }
     }
 

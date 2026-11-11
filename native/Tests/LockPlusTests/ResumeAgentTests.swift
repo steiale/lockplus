@@ -63,7 +63,9 @@ struct ResumeAgentTests {
             let s = AtomicFile.loadJSON(AppSettings.self, from: dir.data.settings)
             return "cleared=\(s?.autoConnect.pausedUntil == nil && s?.pausedState == nil) started=\(h.managers.starts.count) onDemand=\(h.managers.entries[p.id]?.onDemand == true)"
         }
-        let r = await HeadlessResume.perform(dir: dir.data, managers: h.managers, agent: agent, keychain: h.keychain)
+        // The real watchdog budget (5 s of wall time) ran out under full-suite load (2.0.1 round 3 runs: 15 s for this
+        // test); the budget's own behaviour is covered by `aConfigurationThatNeverSettlesIsNoHeadlessStart`.
+        let r = await HeadlessResume.perform(dir: dir.data, managers: h.managers, agent: agent, keychain: h.keychain, budget: .seconds(60))
         #expect(r == .resumed(restarted: p.id, onDemand: [p.id]))
         #expect((h.managers.starts.first?.1[StartOptionKey.manual] as? NSNumber)?.intValue == 1)
         #expect(agent.calls == ["unregister:cleared=true started=1 onDemand=true"])

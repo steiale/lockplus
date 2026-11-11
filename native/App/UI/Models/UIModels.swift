@@ -172,6 +172,8 @@ struct PasswordReveal: Identifiable {
     var lastErrorDetail: String?
     /// Details… disclosure: code, time, the extension's non-secret detail (DESIGN §11.7).
     var lastErrorAt: Date?
+    /// 2.0.1 E2E F2: a non-current profile's last 222/223 end, as its detail pane says it (ConnectionStore.endNotes).
+    var endNotes: [ProfileItem.ID: String] = [:]
     /// Another VPN app is active (§6.15 attention strip): its display name.
     var otherVPNName: String?
     /// macOS hasn't allowed LockPlus to add VPN configurations (§6.15 banner).

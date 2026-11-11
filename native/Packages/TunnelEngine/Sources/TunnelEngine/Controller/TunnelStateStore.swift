@@ -43,9 +43,15 @@ public protocol TunnelStateStore: Sendable {
 
 public final class InMemoryTunnelStateStore: TunnelStateStore {
     private let s: Mutex<PersistedTunnelState>
+    private let onSave = Mutex<(@Sendable (PersistedTunnelState) -> Void)?>(nil)
     public init(_ initial: PersistedTunnelState = .init()) { s = Mutex(initial) }
     public func load() -> PersistedTunnelState { s.withLock { $0 } }
-    public func save(_ v: PersistedTunnelState) { s.withLock { $0 = v } }
+    public func save(_ v: PersistedTunnelState) {
+        s.withLock { $0 = v }
+        onSave.withLock { $0 }?(v)
+    }
+    /// Tests: runs after every save, on the saving thread (a barrier inside the controller's plist I/O).
+    public func setOnSave(_ f: (@Sendable (PersistedTunnelState) -> Void)?) { onSave.withLock { $0 = f } }
 }
 
 /// Root-owned 0600 plist in the container (`Application Support/state.plist`), written atomically.

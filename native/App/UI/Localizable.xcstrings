@@ -469,6 +469,17 @@
         }
       }
     },
+    "A second configuration of %@ was started outside LockPlus and is waiting. Stop it in System Settings › VPN." : {
+      "comment" : "Diagnostics note (2.0.1 round 5): a duplicate VPN configuration of an active profile, started elsewhere, waits in the extension and keeps LockPlus from changing configurations",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine zweite Konfiguration von %@ wurde außerhalb von LockPlus gestartet und wartet. Stoppe sie in den Systemeinstellungen › VPN."
+          }
+        }
+      }
+    },
     "a server option; not needed by a client" : {
       "comment" : "Import reason, ignored directive",
       "localizations" : {
@@ -874,6 +885,28 @@
         }
       }
     },
+    "another LockPlus start interrupted its connection" : {
+      "comment" : "Error reason fragment",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ein anderer LockPlus-Start hat die Verbindung unterbrochen"
+          }
+        }
+      }
+    },
+    "Another LockPlus start interrupted the connection, then didn't go ahead." : {
+      "comment" : "Error message (2.0.1 round 5: a session torn down for another configuration's kill-switch start, kept and held because it became protected meanwhile)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein anderer LockPlus-Start hat die Verbindung unterbrochen und wurde dann nicht fortgesetzt."
+          }
+        }
+      }
+    },
     "Another VPN (%@) is active. Connecting %@ will disconnect it." : {
       "comment" : "Attention strip (§6.15)",
       "localizations" : {
@@ -887,6 +920,39 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Another VPN (%1$@) is active. Connecting %2$@ will disconnect it."
+          }
+        }
+      }
+    },
+    "Another LockPlus profile is connected. Disconnect it first." : {
+      "comment" : "Error message (2.0.1: a start, e.g. from System Settings, refused while another LockPlus profile is connected)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein anderes LockPlus-Profil ist verbunden. Trenne es zuerst."
+          }
+        }
+      }
+    },
+    "Another LockPlus connection is active: another user's on this Mac, or one LockPlus can't show. It has to end first." : {
+      "comment" : "Error message (2.0.1 review L2: a start refused beside a LockPlus session this user can't see)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine andere LockPlus-Verbindung ist aktiv: die eines anderen Benutzers dieses Macs oder eine, die LockPlus nicht anzeigen kann. Sie muss zuerst beendet werden."
+          }
+        }
+      }
+    },
+    "Another LockPlus profile with the kill switch took over, so this one was disconnected." : {
+      "comment" : "Error message (2.0.1 review H1: a profile without the kill switch was ended for a kill-switch profile's start)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein anderes LockPlus-Profil mit Kill Switch hat übernommen, deshalb wurde dieses getrennt."
           }
         }
       }
@@ -1206,6 +1272,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fehler im Hintergrund erscheinen hier statt als Hinweise."
+          }
+        }
+      }
+    },
+    "because.sessionInterrupted" : {
+      "comment" : "Error cause, used after \"because\" in a VoiceOver announcement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ein anderer LockPlus-Start die Verbindung unterbrochen hat"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "another LockPlus start interrupted its connection"
           }
         }
       }
@@ -1821,6 +1905,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zeile kopieren"
+          }
+        }
+      }
+    },
+    "Couldn't connect" : {
+      "comment" : "Notification title (2.0.1: a kill-switch profile's start was refused)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Verbindung"
           }
         }
       }
@@ -3314,6 +3409,17 @@
         }
       }
     },
+    "LockPlus didn't retry %@ automatically: another connection is active." : {
+      "comment" : "Diagnostics note (2.0.1 round 7): the automatic retry after re-installing a profile was skipped because another VPN connection became active",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus hat %@ nicht automatisch erneut verbunden: Eine andere Verbindung ist aktiv."
+          }
+        }
+      }
+    },
     "LockPlus handles reconnecting" : {
       "comment" : "Import reason, ignored directive",
       "localizations" : {
@@ -4213,6 +4319,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nicht jetzt"
+          }
+        }
+      }
+    },
+    "The profile sets no DNS server: DNS stays as it is" : {
+      "comment" : "Diagnostics DNS row (2.0.1: WireGuard split tunnel without DNS)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Profil legt keinen DNS-Server fest: DNS bleibt unverändert"
           }
         }
       }
@@ -8142,6 +8259,60 @@
         }
       }
     },
+    "because.anotherTunnelActive" : {
+      "comment" : "Error cause, used after \"because\" in a VoiceOver announcement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ein anderes LockPlus-Profil verbunden war"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "another LockPlus profile was connected"
+          }
+        }
+      }
+    },
+    "because.anotherTunnelActive.unseen" : {
+      "comment" : "Error cause, used after \"because\" in a VoiceOver announcement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "eine andere LockPlus-Verbindung aktiv war"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "another LockPlus connection was active"
+          }
+        }
+      }
+    },
+    "because.supersededByKillSwitch" : {
+      "comment" : "Error cause, used after \"because\" in a VoiceOver announcement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ein anderes LockPlus-Profil mit Kill Switch übernommen hat"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "another LockPlus profile with the kill switch took over"
+          }
+        }
+      }
+    },
     "because.noNetwork" : {
       "comment" : "Error cause, used after \"because\" in a VoiceOver announcement",
       "extractionState" : "extracted_with_value",
@@ -9431,6 +9602,39 @@
         }
       }
     },
+    "another LockPlus profile is connected" : {
+      "comment" : "Error reason fragment",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ein anderes LockPlus-Profil ist verbunden"
+          }
+        }
+      }
+    },
+    "another LockPlus connection is active (another user's, or one LockPlus can't show)" : {
+      "comment" : "Error reason fragment",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "eine andere LockPlus-Verbindung ist aktiv (die eines anderen Benutzers oder eine, die LockPlus nicht anzeigen kann)"
+          }
+        }
+      }
+    },
+    "another LockPlus profile with the kill switch took over" : {
+      "comment" : "Error reason fragment",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ein anderes LockPlus-Profil mit Kill Switch hat übernommen"
+          }
+        }
+      }
+    },
     "your Mac isn't connected to a network" : {
       "comment" : "Error reason fragment",
       "localizations" : {
@@ -10178,6 +10382,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Das alte LockPlus hat Netzwerkeinstellungen hinterlassen. Wenn Websites nicht laden, stelle DNS in Systemeinstellungen › Netzwerk wieder auf „Automatisch“ und starte deinen Mac neu."
+          }
+        }
+      }
+    },
+    "%@ couldn't connect because another LockPlus profile is connected. Its kill switch isn't active." : {
+      "comment" : "Notification body (2.0.1 review H1); profile name",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ konnte keine Verbindung herstellen, weil ein anderes LockPlus-Profil verbunden ist. Sein Kill Switch ist nicht aktiv."
+          }
+        }
+      }
+    },
+    "%@ stopped: %@." : {
+      "comment" : "Problem (2.0.1 review H1): a profile was ended for another profile's kill-switch start",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ wurde beendet: %2$@."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ stopped: %2$@."
           }
         }
       }

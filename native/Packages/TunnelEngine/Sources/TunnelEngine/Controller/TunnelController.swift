@@ -110,6 +110,8 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
     final class Session {
         let config: ProviderConfiguration?
         let options: StartOptions
+        /// The provider instance whose `startTunnel` began this session (nil: a caller that names none, the tests).
+        let owner: ProviderLease?
         /// `ControllerConfig.dataPlane`, or the request's FaultInjection override; fixed for the session.
         let dataPlane: DataPlane
         var adapter: (any TunnelAdapter)?
@@ -153,15 +155,18 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
         var authDeadlinePassedAsleep = false
         /// T15: the stored username, offered as `savedUsername` in this session's prompts (not secret, ≤ 512 B).
         var savedUsername: String?
-        init(config: ProviderConfiguration?, options: StartOptions, dataPlane: DataPlane, backoff: Backoff) {
-            self.config = config; self.options = options; self.dataPlane = dataPlane; self.backoff = backoff
+        init(config: ProviderConfiguration?, options: StartOptions, owner: ProviderLease?, dataPlane: DataPlane, backoff: Backoff) {
+            self.config = config; self.options = options; self.owner = owner; self.dataPlane = dataPlane; self.backoff = backoff
         }
         var key: ProfileKey? { config.map(ProfileKey.init) }
         var c16: Bool { !options.isManual || (config?.hasOnDemandRules ?? false) }
+        /// The NE protocol's flags, for a start whose `providerConfiguration` didn't parse (re-check N3).
+        var protocolIncludeAllNetworks = false
+        var protocolEnforceRoutes = false
         /// `includeAllNetworks` or route protection (after-Connected hold, never cancel).
-        var killSwitch: Bool { config?.policy.killSwitch ?? false }
+        var killSwitch: Bool { config?.policy.killSwitch ?? (protocolIncludeAllNetworks || protocolEnforceRoutes) }
         /// `includeAllNetworks` (draft 9: withhold before Connected, no provider DNS).
-        var includeAllNetworks: Bool { config?.includeAllNetworks ?? false }
+        var includeAllNetworks: Bool { config?.includeAllNetworks ?? protocolIncludeAllNetworks }
         /// The start is pending and waits on the user or a retry (held, or a prompt that ended the engine attempt).
         var isWaitingBeforeConnected: Bool { !startCompleted && startGate != nil }
     }
@@ -182,6 +187,8 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
     private let endpointCheck: (any EndpointInterfaceCheck)?
     private let sink: (any TunnelEventSink)?
     public let config: ControllerConfig
+    /// The live provider instances of this process (the 2.0.1 start guard, `start(_:owner:bind:)`).
+    public nonisolated let providers: ProviderInstances
 
     // MARK: state
 
@@ -200,17 +207,37 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
     private var pendingPath: PathSnapshot?
     private var eventTask: Task<Void, Never>?
     private var statsSampledAt: Date?
+    /// Review L3: when a refusal's `lastError` was last written to disk, per profile (repeated refusals coalesce).
+    private var refusalSavedAt: [ProfileKey: Date] = [:]
+    /// Codex final 3: the accepted kill-switch start that preempted a session holds the slot across its teardown.
+    private var reservation: (lease: ProviderLease, key: ProfileKey?)?
+    /// Final review M1: starts waiting beside a running session of the same kill-switch profile.
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    /// Round 5 (Codex 2): every start inside the guard (waiting beside a session, holding a reservation across a
+    /// preemption's teardown, or tearing a stale session down), by start: its lease, its key and its configuration's
+    /// revision. `profileRemoved`, `secretsWiped` and a higher revision's provision invalidate it (the error it ends
+    /// with), and it is checked after every suspension, before admission: it never begins on a removed or changed profile.
+    /// `lease` identifies the reservation holder (left out of a revision change, round 6). `staleRevision`: that holder
+    /// was left out of one (round 7, Fable L1): it may only proceed into the slot its preemption freed, never wait.
+    private struct GuardedStart {
+        let lease: ProviderLease?; let key: ProfileKey?; let revision: UInt64
+        var invalidated: LPTunnelError?
+        var staleRevision = false
+    }
+    private var guardedStarts: [UInt64: GuardedStart] = [:]
+    private var guardedSeq: UInt64 = 0
 
     public init(host: any ProviderHost, secrets: any ExtensionSecretStore, stateStore: any TunnelStateStore,
                 adapters: any TunnelAdapterFactory, validator: (any PayloadValidator)?, clock: C,
                 wallClock: @escaping @Sendable () -> Date = { Date() },
                 rng: any RandomNumberGenerator = SystemRandomNumberGenerator(),
                 pathSource: (any PathSource)? = nil, endpointCheck: (any EndpointInterfaceCheck)? = nil,
-                sink: (any TunnelEventSink)? = nil, config: ControllerConfig = ControllerConfig()) {
+                sink: (any TunnelEventSink)? = nil, config: ControllerConfig = ControllerConfig(),
+                providers: ProviderInstances = ProviderInstances()) {
         self.host = host; self.secrets = secrets; self.stateStore = stateStore; self.adapters = adapters
         self.validator = validator; self.clock = clock; self.wallClock = wallClock
         self.rng = rng; self.pathSource = pathSource; self.endpointCheck = endpointCheck; self.sink = sink
-        self.config = config
+        self.config = config; self.providers = providers
         persisted = stateStore.load()
     }
 
@@ -218,32 +245,299 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
 
     /// Completes (returns or throws) exactly once per call. Draft 9: with `includeAllNetworks` it returns only on
     /// Connected or throws only when the user stops (or the profile changes): failures before Connected are held.
-    public func start(_ req: StartRequest) async throws(LPTunnelError) {
-        let now = wallClock()
+    ///
+    /// The 2.0.1 start guard (DESIGN §7.2): `owner` is the calling provider instance's `startTunnel` (its lease). A
+    /// session that another instance's CURRENT lease began (or an accepted kill-switch start's reservation, Codex final 3)
+    /// is not displaced (the same profile included: Codex review 3); a duplicate kill-switch configuration of the running
+    /// kill-switch profile waits, pending (final review M1); and one exception:
+    /// - review H1, kill-switch priority: this start has `includeAllNetworks` and that session's effective protection
+    ///   (its provider's live flag, Codex final 1) hasn't. That session is
+    ///   ended visibly (`.supersededByKillSwitch`: its pending start fails, or its own provider is cancelled after the
+    ///   teardown) and this start goes on. A failed `includeAllNetworks` start is open (E14c), so a split session that
+    ///   got in first must never keep a kill-switch profile down.
+    /// Otherwise this start fails with `.anotherTunnelActive` and that session, its host binding and its packet flow
+    /// stay untouched (kill switch against kill switch: first wins; a start without the flag beside a kill-switch
+    /// session: refused). A session of the same instance, of a lease that is no longer current (stopped, freed, reused)
+    /// or of no named instance is stale and is torn down first, as before. Review M3: a start whose own lease stopped
+    /// meanwhile ends with `.startCancelled`. `bind` binds the caller as the process's provider (`ProcessProviderHost`)
+    /// and says whether it still exists; it runs only for an accepted start, on the actor, with no suspension between
+    /// the last check and the new session.
+    public func start(_ req: StartRequest, owner: ProviderLease? = nil, bind: @Sendable () -> Bool = { true }) async throws(LPTunnelError) {
         // Row idle → starting, FIRST: an on-demand start against a latch does no credential or network I/O. Without
         // the flag it fails at once; with `includeAllNetworks` it is held (a failed start would be open, E14c).
-        var latched: StartLatch?
-        if !req.options.isManual, let cfg = req.configuration, let l = persisted.latches[ProfileKey(cfg)]?.latch,
-           l.kind == .hard || (l.notBefore.map { now < $0 } ?? false) {
+        if let l = activeLatch(req, at: wallClock()) {
             engineLog.info("start latched: \(l.code.rawValue)")
-            guard cfg.includeAllNetworks else { throw LPTunnelError(l.code, detail: "start latched") }
-            latched = l
+            guard req.includeAllNetworks else { throw LPTunnelError(l.code, detail: "start latched") }
         }
-        while session != nil {
-            // NE never starts while a session runs; a stale session left by a cancel is torn down first. A loop, not
-            // an `if`: a concurrent start must never overwrite (and leak the continuation of) another start's session.
-            await stop(reason: .other(-1))
+        let key = req.configuration.map(ProfileKey.init)
+        let killSwitchStart = req.includeAllNetworks
+        var notedWait = false
+        guardedSeq &+= 1
+        let gid = guardedSeq
+        guardedStarts[gid] = GuardedStart(lease: owner, key: key, revision: req.configuration?.revision ?? 0, invalidated: nil)
+        // Round 7 (Fable L1): an exempted holder of an old revision that would wait (its preemption was vetoed) ends.
+        func staleHolder() -> LPTunnelError? {
+            guardedStarts[gid]?.staleRevision == true ? .of(.startCancelled, "profile changed") : nil
         }
+        // Codex final 3: a reservation this start took for a preemption ends with the start (accepted or not).
+        defer {
+            guardedStarts[gid] = nil
+            if let owner, reservation?.lease == owner { reservation = nil; wakeWaiters() }
+        }
+        while true {
+            // Re-check L3: a start NE already stopped (or whose instance it reused) never preempts or replaces anything.
+            if let owner, !providers.isCurrent(owner) { throw abandoned() }
+            // Round 5 (Codex 2): its profile was removed, wiped or changed while it waited.
+            if let e = guardedStarts[gid]?.invalidated { throw e }
+            // Phase 0 (2026-11-10, 26.6.2 and 27.2): macOS DOES start a second LockPlus configuration while one runs,
+            // in this same process. Displacing the running session black-holed it while NE still reported it Connected.
+            // A loop: after each `await` the state is checked again from the top (a session or reservation may be a
+            // concurrent start's, and is never overwritten, which would leak its continuation).
+            //
+            // Codex final 3: an accepted kill-switch replacement reserves the slot across the preempted session's
+            // teardown; other starts meet that reservation like a running kill-switch session.
+            if let r = reservation, r.lease.token != owner?.token, providers.isCurrent(r.lease) {
+                switch verdict(killSwitchStart: killSwitchStart, key: key, incumbentKey: r.key, incumbentIncludeAllNetworks: true) {
+                case .wait:
+                    if let e = staleHolder() { throw e }
+                    await waitForChange(); continue
+                case .refuse, .preempt: throw refuse(key, sameProfile: key != nil && r.key == key)
+                }
+            }
+            guard let s = session else { break }
+            // Codex review 3: no exception for the same `ProfileKey` (a payload namespace, not an NE configuration;
+            // duplicate configurations are a supported state): a live lease is never overridden by key equality. The
+            // incumbent is replaced only once its lease is no longer current (NE stopped, freed or reused it).
+            if let o = s.owner, o.token != owner?.token, providers.isCurrent(o) {
+                // Round 3 (Codex 4): a session already ending (its engine's teardown, then the cancel or, if it turned
+                // out protected, a hold) is waited for, then decided against as it ends up.
+                if phase == .stopping {
+                    await waitForChange()
+                    continue
+                }
+                // Codex final 1 / round 3: the incumbent's EFFECTIVE protection now (a flag save on a connected session
+                // changes its enforcement at once, U7), not the flag it started with.
+                switch verdict(killSwitchStart: killSwitchStart, key: key, incumbentKey: s.key,
+                               incumbentIncludeAllNetworks: effectiveProtection(s).includeAllNetworks) {
+                case .preempt:
+                    engineLog.notice("start of a kill-switch profile ends the running session without the kill switch")
+                    if let owner { reservation = (owner, key) }
+                    await endForReplacement(LPTunnelError(.supersededByKillSwitch, detail: "another LockPlus profile with the kill switch took over"),
+                                            reasonText: "superseded by a kill-switch profile")
+                    if session != nil {                                     // vetoed: the session was kept
+                        // (A stale holder ends at its next `.wait`, round 7; round 9, Fable N3: no check needed here.)
+                        // Round 8 (Fable L1): the reservation goes back, so this start is a plain waiter from here on
+                        // (a later revision invalidates it like any other).
+                        if let owner, reservation?.lease == owner { reservation = nil; wakeWaiters() }
+                    }
+                    continue
+                case .wait:
+                    if let e = staleHolder() { throw e }
+                    // Final review M1: a duplicate kill-switch configuration of the running kill-switch profile waits,
+                    // pending (blocked, so closed: E14a), bound to nothing and with no I/O, until that session ends or
+                    // its instance stops; its own stop ends the wait. An instance NE abandoned keeps it waiting: closed.
+                    if !notedWait {                     // round 3 N4: once per start
+                        notedWait = true
+                        engineLog.notice("start of the running kill-switch profile from another configuration waits for that session to end")
+                    }
+                    await waitForChange()
+                    continue
+                case .refuse:
+                    throw refuse(key, sameProfile: key != nil && s.key == key)
+                }
+            }
+            await stop(reason: .superseded)
+        }
+        if let owner, !providers.isCurrent(owner) { throw abandoned() }
+        // (No invalidation check here: the loop's check runs after its last suspension.)
+        // Round 5 (Codex 5): the latch as persisted NOW, after every wait (credentials updated meanwhile clear it; one
+        // installed meanwhile counts), with nothing suspending between this read and the new session.
+        let latched = activeLatch(req, at: wallClock())
+        if let l = latched, !req.includeAllNetworks { throw LPTunnelError(l.code, detail: "start latched") }
+        guard bind() else { throw LPTunnelError(.startCancelled, detail: "provider gone") }
         let result: Result<Void, LPTunnelError> = await withCheckedContinuation { k in
-            beginStart(req, k, latched: latched)
+            if let owner, reservation?.lease == owner { reservation = nil }
+            beginStart(req, k, owner: owner, latched: latched)
+            wakeWaiters()                        // starts waiting on the reservation re-check against this session
         }
         switch result { case .success: return; case .failure(let e): throw e }
     }
 
-    private func beginStart(_ req: StartRequest, _ k: CheckedContinuation<Result<Void, LPTunnelError>, Never>, latched: StartLatch?) {
+    private enum Verdict { case preempt, wait, refuse }
+
+    /// The start latch that applies to `req` at `now`: an on-demand start of a profile with a `.hard` latch, or a
+    /// `.backoff` latch not yet expired. nil for a manual start.
+    private func activeLatch(_ req: StartRequest, at now: Date) -> StartLatch? {
+        guard !req.options.isManual, let cfg = req.configuration, let l = persisted.latches[ProfileKey(cfg)]?.latch,
+              l.kind == .hard || (l.notBefore.map { now < $0 } ?? false) else { return nil }
+        return l
+    }
+
+    /// Round 5 (Codex 2): marks the guarded starts `match` selects with `e` and wakes them; each throws it at its next
+    /// check, before admission.
+    private func invalidateGuardedStarts(_ e: LPTunnelError, where match: (GuardedStart) -> Bool) {
+        var any = false
+        for (id, g) in guardedStarts where g.invalidated == nil && match(g) {
+            guardedStarts[id]?.invalidated = e
+            any = true
+        }
+        if any { wakeWaiters() }
+    }
+
+    /// The start guard's policy (DESIGN §7.2) for a start beside another live start's session or reservation:
+    /// kill-switch priority over a session without the flag; a duplicate configuration of the running kill-switch
+    /// profile waits; everything else is refused (first wins).
+    private func verdict(killSwitchStart: Bool, key: ProfileKey?, incumbentKey: ProfileKey?, incumbentIncludeAllNetworks: Bool) -> Verdict {
+        if killSwitchStart && !incumbentIncludeAllNetworks { return .preempt }
+        if killSwitchStart, let key, incumbentKey == key { return .wait }
+        return .refuse
+    }
+
+    /// `.anotherTunnelActive`, recorded like any failed start's error (the app's freshness check reads it as this
+    /// attempt's). Review N3: under the app-asserted key, before any payload lookup (like every pre-validation failure,
+    /// §1.3 A2); a constant, non-secret detail in the root-owned state file.
+    private func refuse(_ key: ProfileKey?, sameProfile: Bool) -> LPTunnelError {
+        let e = LPTunnelError(.anotherTunnelActive, detail: "another LockPlus tunnel is active")
+        if let key { recordRefusal(e, key, sameProfile: sameProfile) }
+        return e
+    }
+
+    /// The GUARD's read of a session's protection, used ONLY by the start guard's verdict and by the preemption's
+    /// keep-or-cancel after the teardown (round 4, Fable M1: the two use the same read, or the start loop preempts, keeps
+    /// and preempts again without suspending). Its provider's LIVE flags (a flag save on a connected session is
+    /// enforced at once, U7), else the flags the session started with (the provider is gone or unbound).
+    func effectiveProtection(_ s: Session) -> ProviderProtection {
+        host.liveProtection(owner: s.owner) ?? startProtection(s)
+    }
+
+    /// Round 4 (Fable M1): the read for every hold-vs-cancel, withhold, latch and reconnect-budget decision. Protected
+    /// when the live flags OR the start-time flags say so: the app never weakens a live session's flags itself (L-KS-2),
+    /// so start-time on with live off is a system change (the drift `healProtectiveDrift` repairs only at `.connected`),
+    /// and a protected session is HELD (or withheld), never cancelled or failed.
+    func holdProtection(_ s: Session) -> ProviderProtection {
+        let st = startProtection(s)
+        guard let live = host.liveProtection(owner: s.owner) else { return st }
+        return ProviderProtection(includeAllNetworks: st.includeAllNetworks || live.includeAllNetworks,
+                                  enforceRoutes: st.enforceRoutes || live.enforceRoutes)
+    }
+
+    private func startProtection(_ s: Session) -> ProviderProtection {
+        ProviderProtection(includeAllNetworks: s.includeAllNetworks, enforceRoutes: s.killSwitch && !s.includeAllNetworks)
+    }
+
+    /// Final review M1: suspends a waiting start until something it waits on may have changed (a session ended, a stop
+    /// or a provider's release arrived, a reservation ended). The caller re-checks everything.
+    private func waitForChange() async {
+        await withCheckedContinuation { (k: CheckedContinuation<Void, Never>) in waiters.append(k) }
+    }
+
+    private func wakeWaiters() {
+        guard !waiters.isEmpty else { return }
+        let w = waiters
+        waiters = []
+        for k in w { k.resume() }
+    }
+
+    #if DEBUG
+    /// Tests only: a latch installed as a session's failure would (round 6, Fable L4: one appearing while a start waits).
+    func installLatchForTesting(_ key: ProfileKey, _ latch: StartLatch) {
+        persisted.latches[key] = .init(latch: latch, interval: nil)
+    }
+    #endif
+
+    /// A provider instance was freed, or a provider's protection changed (`ProviderSeat`): waiting starts re-check.
+    public func recheckWaitingStarts() { wakeWaiters() }
+
+    private func abandoned() -> LPTunnelError {
+        engineLog.notice("start abandoned: its provider was stopped meanwhile")
+        return LPTunnelError(.startCancelled, detail: "provider stopped")
+    }
+
+    /// Review H1: the running session (decided unprotected BEFORE this, by `verdict`) yields to a kill-switch start,
+    /// visibly to NE. A pending start fails with `e`. A started session stays TRACKED (phase `.stopping`) while its
+    /// engine is torn down, under the starter's reservation; then its protection is read again (round 3, Codex 4): if it
+    /// got `includeAllNetworks` meanwhile it is kept, HELD (closed), and the starter re-decides against it; otherwise it
+    /// ends and its OWN provider is cancelled, so NE never keeps it Connected with nothing behind it.
+    private func endForReplacement(_ e: LPTunnelError, reasonText: String) async {
+        guard let s = session else { return }
+        if s.startGate != nil {
+            let previousError = s.key.flatMap { persisted.lastErrors[$0] }
+            recordLastError(e, s.key)
+            // Round 7 (Codex M3): read again after that I/O, right before failing the start (the guard's read, as in
+            // the verdict): protected by then, it is kept and the 223 withdrawn; the preemptor re-decides against it.
+            if session === s, effectiveProtection(s).includeAllNetworks {
+                if let key = s.key { persisted.lastErrors[key] = previousError; save() }
+                engineLog.notice("pending session protected by the time its 223 was recorded: kept")
+                return
+            }
+            await stopSession(reasonText: reasonText, startError: e)
+            return
+        }
+        beginEnding(s)
+        for t in Array(teardowns.values) { await t.value }
+        // The guard's read, as in the verdict (round 4, Fable M1). Round 4 N4: 223 is recorded only once it ends.
+        // Round 5 (Codex 6, Fable N1): kept, it is held as interrupted, not as superseded (that start was refused).
+        _ = finishEnding(s, e, reasonText: reasonText, recordError: true, keptAs: .sessionInterrupted,
+                         keepIf: { self.effectiveProtection($0).includeAllNetworks })
+    }
+
+    /// The first half of ending a started session visibly: timers, prompt, engine and path watcher end; the session stays
+    /// tracked as `.stopping` (a start beside it waits) until `finishEnding`.
+    private func beginEnding(_ s: Session) {
+        cancelSessionTimers()
+        resolveLivePrompt()                     // round 4 N3: an after-Connected prompt showing is resolved for the app
+        teardownAdapter()
+        stopPathWatcher()
+        phase = .stopping
+    }
+
+    /// The second half, after the engine's teardown: the protection is read again right before the cancel. Kept as a
+    /// HELD session (`keepIf`) or ended and cancelled on its own provider. False: kept. A session that ended meanwhile
+    /// (its own stop, or a successor's start) is left alone: NE ends it.
+    ///
+    /// Round 4 (Codex 2): the session stays tracked through the summary's plist I/O (S2 E3: written before the cancel,
+    /// NE never calls `stopTunnel` after it), and the protection is read once more AFTER that I/O, immediately before
+    /// the cancel, with nothing in between. A flag NE saves between that read and `cancelTunnelWithError` can't be
+    /// excluded from our side (DESIGN §20 risk 27, accepted residual).
+    /// `keptAs`: the hold code of a kept session (default: `e`'s).
+    private func finishEnding(_ s: Session, _ e: LPTunnelError, reasonText: String, recordError: Bool = false,
+                              keptAs: LPErrorCode? = nil, keepIf: (Session) -> Bool) -> Bool {
+        guard session === s, phase == .stopping else { return true }
+        let holdCode = keptAs ?? e.code
+        if keepIf(s) { holdEnding(holdCode); return false }
+        // Round 4 N4: the error is recorded only for a session that ends; one save carries it with the summary.
+        let key = recordError ? s.key : nil
+        let previousError = key.flatMap { persisted.lastErrors[$0] }
+        if let key { persisted.lastErrors[key] = .init(error: e.asLPError, at: wallClock()) }
+        let previousSessions = persisted.sessions          // round 5 (Fable N2): the append may trim the oldest
+        let written = appendSummary(s, reason: reasonText)
+        if key != nil, !written { save() }
+        if keepIf(s) {                                      // protected during the I/O: kept, the end withdrawn
+            if written { persisted.sessions = previousSessions }
+            if let key { persisted.lastErrors[key] = previousError }
+            save()
+            holdEnding(holdCode)
+            return false
+        }
+        forgetSession()
+        host.cancel(with: e, owner: s.owner)
+        return true
+    }
+
+    private func holdEnding(_ code: LPErrorCode) {
+        engineLog.notice("session protected by the time its teardown finished: held, not cancelled")
+        phase = .held(.blockedAfterFailure(code))
+        host.setReasserting(true)
+        wakeWaiters()
+    }
+
+    private func beginStart(_ req: StartRequest, _ k: CheckedContinuation<Result<Void, LPTunnelError>, Never>,
+                            owner: ProviderLease?, latched: StartLatch?) {
         epoch &+= 1
-        let s = Session(config: req.configuration, options: req.options, dataPlane: req.dataPlaneOverride ?? config.dataPlane,
-                        backoff: config.backoff)
+        let s = Session(config: req.configuration, options: req.options, owner: owner,
+                        dataPlane: req.dataPlaneOverride ?? config.dataPlane, backoff: config.backoff)
+        s.protocolIncludeAllNetworks = req.protocolIncludeAllNetworks
+        s.protocolEnforceRoutes = req.protocolEnforceRoutes
         s.startGate = k
         session = s
         phase = .starting
@@ -606,11 +900,11 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
             } else if nonRetryable {
                 armLatch(key, e.code, .hard)        // C16 rows win over kill-switch rows
                 sessionEnded(e)
-            } else if s.killSwitch {
+            } else if holdProtection(s).killSwitch {
                 armLatch(key, e.code, .backoff)     // retryable kill-switch failure under on-demand
             }
         }
-        if s.includeAllNetworks {
+        if holdProtection(s).includeAllNetworks {
             let reason: HoldReason = s.c16 && nonRetryable ? .nonRetryable(e.code) : .blockedAfterFailure(e.code)
             // Review L4: under the flag nothing inside the hold can add endpoint IPs (no provider DNS; the app resolves
             // only when the user connects), so a resolution failure waits for the user instead of retrying the same map.
@@ -665,7 +959,7 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
             phase = .held(.nonRetryable(e.code))
             host.setReasserting(true)
             sessionEnded(e)
-        } else if s.killSwitch {
+        } else if holdProtection(s).killSwitch {
             // S2 E3/E4: `cancelTunnelWithError` is OPEN under the flag; `held` with the adapter down blocks (and
             // `reasserting` alone would not: E4r). The user's Disconnect ends it.
             teardownAdapter()          // closes only the engine's dup; NE's utun fd and the session stay (§7.3)
@@ -677,22 +971,20 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
     }
 
     /// Kill switch off only. S2 E3: NE never calls `stopTunnel` after `cancelTunnelWithError`, so everything
-    /// `stopTunnel` would do happens first: the adapter stops (its descriptors close), the session summary is written,
-    /// the pump and the path watcher end. Only then the cancel.
+    /// `stopTunnel` would do happens first: the adapter stops (its descriptors close), the pump and the path watcher
+    /// end, the session summary is written. Only then the cancel, on the session's own provider (review M1). Round 3
+    /// (Codex 1): the session stays tracked (`.stopping`) through the teardown and its EFFECTIVE protection is read
+    /// again right before the cancel; protected by then (the kill switch enabled live), it is held instead.
     private func cancelAfterTeardown(_ e: LPTunnelError) {
         guard let s = session else { return }
-        guard !s.killSwitch else {             // never under the kill switch: hold instead
+        guard !holdProtection(s).killSwitch else {                  // never under the kill switch: hold instead
             teardownAdapter(); phase = .held(.blockedAfterFailure(e.code)); host.setReasserting(true); return
         }
-        cancelSessionTimers()
-        teardownAdapter()
+        beginEnding(s)
         let pending = Array(teardowns.values)
-        stopPathWatcher()
-        endSession(reason: "error:\(e.code.rawValue)")
-        let host = host
         Task {
             for t in pending { await t.value }
-            host.cancel(with: e)               // L-LC-1: as soon as the teardown is done
+            _ = finishEnding(s, e, reasonText: "error:\(e.code.rawValue)", keepIf: { self.holdProtection($0).killSwitch })   // L-LC-1
         }
     }
 
@@ -706,7 +998,7 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
         s.reassertReason = reason
         if s.reassertRemaining == nil {             // new episode
             s.attempt = 0; s.backoff.reset()
-            if !s.killSwitch { s.reassertRemaining = config.reassertBudget; resumeReassertBudget() }
+            if !holdProtection(s).killSwitch { s.reassertRemaining = config.reassertBudget; resumeReassertBudget() }
         }
         publish()
         if reason == .noNetwork { cancel(.attempt); cancel(.retry); return }   // wait for a satisfied path, no backoff consumed
@@ -763,13 +1055,14 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
     }
 
     private func resumeReassertBudget() {
-        guard let s = session, let rem = s.reassertRemaining, !s.killSwitch else { return }
+        guard let s = session, let rem = s.reassertRemaining, !holdProtection(s).killSwitch else { return }
         s.reassertArmedAt = clock.now
         arm(.reassertBudget, after: rem) { $0.reassertBudgetExhausted() }
     }
 
     private func reassertBudgetExhausted() {
-        guard let s = session, !s.killSwitch else { return }
+        // Round 3 (Codex 1): a kill switch enabled live ends the budget (kill switch on: retry at the cap, never cancel).
+        guard let s = session, !holdProtection(s).killSwitch else { return }
         switch phase { case .reasserting: break; default: return }
         afterConnectedFatal(mapTimeout(.of(.peerUnreachable)))
     }
@@ -928,7 +1221,9 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
 
     // MARK: - sleep / wake
 
-    public func sleep() async {
+    /// Review L4: `owner` is the calling provider's lease; another instance's sleep or wake never drives this session.
+    public func sleep(owner: ProviderLease? = nil) async {
+        if let owner, let o = session?.owner, o != owner { return }
         guard let s = session, s.startCompleted, let a = s.adapter else { return }
         switch phase {
         case .connected, .reasserting, .awaitingAuth(beforeConnected: false): break
@@ -943,7 +1238,8 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
         await capped(config.sleepCap) { await a.sleep() }
     }
 
-    public func wake() async {
+    public func wake(owner: ProviderLease? = nil) async {
+        if let owner, let o = session?.owner, o != owner { return }
         guard phase == .sleeping, let s = session, let a = s.adapter else { return }
         s.wakeAt = clock.now
         if s.sleptInAuth {
@@ -969,23 +1265,36 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
 
     /// Idempotent. Order (§7.2): cancel the start task; complete the start (`.startCancelled`, or the held error `e`
     /// when the stop ends a before-Connected hold, §5.5); tear down; return (the caller then calls NE's completion).
-    public func stop(reason: StopReason) async {
+    /// `owner`: the provider instance whose `stopTunnel` this is. It never ends a session another live instance owns
+    /// (a refused start's provider, or a stop that lands after a newer instance replaced this one's session).
+    public func stop(reason: StopReason, owner: ProviderLease? = nil) async {
+        wakeWaiters()                             // a waiting start (its own stop, or its incumbent's) re-checks
+        if let owner, let o = session?.owner, o != owner, providers.isCurrent(o) {
+            engineLog.notice("stop ignored: another provider instance owns the running session")
+            // Review N1: this instance's own replaced session may still be tearing down; NE's stop completion waits.
+            for t in Array(teardowns.values) { await t.value }
+            return
+        }
+        await stopSession(reasonText: reason == .userInitiated ? "user" : reason == .sleep ? "sleep" : "\(reason)", startError: nil)
+    }
+
+    /// `stop`'s body. `startError`: what a pending start completes with (default: the held error, else `.startCancelled`).
+    private func stopSession(reasonText: String, startError: LPTunnelError?) async {
         if let s = session {
             if s.startGate != nil {
                 s.startTask?.cancel()
                 resolveLivePrompt()
-                completeStart(.failure(s.heldError ?? .of(.startCancelled)))
+                completeStart(.failure(startError ?? s.heldError ?? .of(.startCancelled)))
             }
             phase = .stopping
             cancelAllTimers()
             teardownAdapter()
-            let reasonText = reason == .userInitiated ? "user" : reason == .sleep ? "sleep" : "\(reason)"
             endSession(reason: reasonText)
         }
         stopPathWatcher()
-        let pending = Array(teardowns.values)
-        teardowns = [:]
-        for t in pending { await t.value }
+        // Re-check N1: the tasks stay in `teardowns` until each removes itself (`teardownFinished`), so a stop that
+        // arrives meanwhile (an ignored late stop, a second stop) waits for the same engine stops.
+        for t in Array(teardowns.values) { await t.value }
     }
 
     // MARK: - teardown helpers
@@ -1043,18 +1352,30 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
 
     private func endSession(reason: String) {
         guard let s = session else { return }
+        _ = appendSummary(s, reason: reason)
+        forgetSession()
+    }
+
+    /// The session's summary (plist I/O). True: one was written.
+    private func appendSummary(_ s: Session, reason: String) -> Bool {
+        guard let id = s.sessionID, let key = s.key, let at = s.connectedAt else { return false }
+        let summary = SessionSummary(id: id, profileID: key.profileID, start: at, end: wallClock(),
+                                     rxBytes: s.stats.rxBytes, txBytes: s.stats.txBytes, endReason: reason)
+        persisted.sessions.append(.init(ownerUID: key.ownerUID, summary: summary))
+        if persisted.sessions.count > 100 { persisted.sessions.removeFirst(persisted.sessions.count - 100) }
+        save()
+        return true
+    }
+
+    /// The bookkeeping half of ending a session: no I/O.
+    private func forgetSession() {
+        guard let s = session else { return }
         cancelAllTimers()
         s.answer = nil
         resolveLivePrompt()
-        if let id = s.sessionID, let key = s.key, let at = s.connectedAt {
-            let summary = SessionSummary(id: id, profileID: key.profileID, start: at, end: wallClock(),
-                                         rxBytes: s.stats.rxBytes, txBytes: s.stats.txBytes, endReason: reason)
-            persisted.sessions.append(.init(ownerUID: key.ownerUID, summary: summary))
-            if persisted.sessions.count > 100 { persisted.sessions.removeFirst(persisted.sessions.count - 100) }
-            save()
-        }
         session = nil
         phase = .idle
+        wakeWaiters()
         pump?.endSession(); pump = nil              // T16: every end path; the next session gets a fresh pump
     }
 
@@ -1086,6 +1407,26 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
 
     private func clearLatch(_ key: ProfileKey) {
         if persisted.latches.removeValue(forKey: key) != nil { save() }
+    }
+
+    /// Review L3: a refusal's error is always current in memory (the app's freshness check reads it through the
+    /// snapshot), but repeated refusals of one profile (NE retrying an on-demand start) reach the disk at most once a
+    /// minute, and are logged at notice level only then.
+    private func recordRefusal(_ e: LPTunnelError, _ key: ProfileKey, sameProfile: Bool) {
+        let now = wallClock()
+        persisted.lastErrors[key] = .init(error: e.asLPError, at: now)
+        if let at = refusalSavedAt[key], now.timeIntervalSince(at) < 60, at <= now {
+            engineLog.debug("start refused again: another provider instance owns the running session")
+            return
+        }
+        if sameProfile {
+            // Codex final 6: throttled with the refusal (once a minute per profile), not per start.
+            engineLog.fault("start of the running session's own profile from another live provider instance (a duplicate configuration, or an instance NE never stopped): refused")
+        }
+        engineLog.notice("start refused: another provider instance owns the running session")
+        refusalSavedAt = refusalSavedAt.filter { now.timeIntervalSince($0.value) < 60 }   // re-check N4: bounded
+        refusalSavedAt[key] = now
+        save()
     }
 
     private func recordLastError(_ e: LPTunnelError, _ key: ProfileKey?) {
@@ -1134,6 +1475,14 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
     /// `tunnelSnapshot` (M2): the full snapshot only when (ownerUID, profileID) IS the running session. Any other
     /// profile gets its own latch/lastError and `.idle`, never the running session's phase detail, endpoint,
     /// addresses, cipher, retry state or epoch (NEW-7: epoch 0, the adapter generation is the running session's).
+    /// Round 9 (Codex LOW): only the caller's own recorded last error, for a profile whose payload is gone (a refusal is
+    /// recorded before any payload lookup, and the app's freshness check reads its time). No session data.
+    public func lastErrorSnapshot(profileID: UUID, ownerUID: uid_t) -> TunnelSnapshot {
+        var snap = TunnelSnapshot(profileID: profileID, phase: .idle, epoch: 0)
+        if let le = persisted.lastErrors[ProfileKey(ownerUID: ownerUID, profileID: profileID)] { snap.lastError = le.error; snap.lastErrorAt = le.at }
+        return snap
+    }
+
     public func snapshot(profileID: UUID, ownerUID: uid_t) -> TunnelSnapshot {
         let key = ProfileKey(ownerUID: ownerUID, profileID: profileID)
         if let s = session, s.key == key { return sessionSnapshot() }
@@ -1369,7 +1718,23 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
         let key = ProfileKey(ownerUID: ownerUID, profileID: pid)
         if let l = persisted.latches[key]?.latch, revision > l.revision { clearLatch(key) }
         broker.dropPrepared(key)
+        payloadCommitted(pid, ownerUID: ownerUID, revision: revision)
+    }
+
+    /// Round 6 (Codex M2, Fable N3): the payload of `revision` is stored (called right after the write, before any
+    /// credential I/O, and again by a same-revision retry after a partial failure: idempotent). A waiting start and every
+    /// start in the guard of an OLDER revision end. Round 6 (Fable L3): not the start holding the reservation of a
+    /// preemption already decided (its teardown can't be undone): it proceeds on the new payload (`runStarting` accepts
+    /// a configuration older than the payload).
+    public func payloadCommitted(_ pid: UUID, ownerUID: uid_t, revision: UInt64) {
+        let key = ProfileKey(ownerUID: ownerUID, profileID: pid)
         if let cfg = session?.config, ProfileKey(cfg) == key, revision > cfg.revision { endWaitingStart(key, reason: "profile changed") }
+        let holder = reservation?.lease
+        let isHolder: (GuardedStart) -> Bool = { $0.lease != nil && $0.lease == holder }
+        for (id, g) in guardedStarts where g.key == key && revision > g.revision && isHolder(g) { guardedStarts[id]?.staleRevision = true }
+        invalidateGuardedStarts(.of(.startCancelled, "profile changed")) {
+            $0.key == key && revision > $0.revision && !isHolder($0)
+        }
     }
     /// New credentials: the latch and the resend guard go; a before-Connected hold retries now (they may fix it).
     public func credentialsUpdated(_ pid: UUID, ownerUID: uid_t) {
@@ -1383,6 +1748,7 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
     public func profileRemoved(_ pid: UUID, ownerUID: uid_t) {
         let key = ProfileKey(ownerUID: ownerUID, profileID: pid)
         endWaitingStart(key, reason: "profile removed")
+        invalidateGuardedStarts(.of(.startCancelled, "profile removed")) { $0.key == key }
         clearLatch(key); broker.dropPrepared(key)
         persisted.lastErrors[key] = nil; persisted.endpointHosts[key] = nil; persisted.authFailedAt[key] = nil; save()
     }
@@ -1390,6 +1756,7 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
     /// entries (NEW-6) and prompts only; other uids keep theirs.
     public func secretsWiped(ownerUID: uid_t) {
         if let key = session?.key, key.ownerUID == ownerUID { endWaitingStart(key, reason: "secrets wiped") }
+        invalidateGuardedStarts(.of(.startCancelled, "secrets wiped")) { $0.key?.ownerUID == ownerUID }
         persisted.latches = persisted.latches.filter { $0.key.ownerUID != ownerUID }
         persisted.authFailedAt = persisted.authFailedAt.filter { $0.key.ownerUID != ownerUID }
         persisted.lastErrors = persisted.lastErrors.filter { $0.key.ownerUID != ownerUID }

@@ -14,6 +14,9 @@ final class Harness: Sendable {
     let clock = ManualClock()
     let wall = MutableWallClock()
     let host = FakeHost()
+    /// `routed`: the controller talks to the production router (`ProviderHostRouter`) over per-start fake hosts that the
+    /// test binds itself (Codex review 1), instead of `host`.
+    let router = ProviderHostRouter<FakeHost>()
     let secrets = InMemorySecretStore()
     let state: InMemoryTunnelStateStore
     let factory = FakeAdapterFactory()
@@ -34,7 +37,8 @@ final class Harness: Sendable {
     init(pid: UUID = UUID(), kind: VPNProtocolKind = .openVPN, killSwitch: Bool = false, routeProtection: Bool = false,
          onDemandRules: Bool = false,
          rejectPayload: Bool = false, flaggedInterface: String? = nil, dataPlane: DataPlane = .utunFD,
-         state: (UUID) -> PersistedTunnelState = { _ in .init() }, configure: (inout ControllerConfig) -> Void = { _ in }) {
+         state: (UUID) -> PersistedTunnelState = { _ in .init() }, routed: Bool = false,
+         configure: (inout ControllerConfig) -> Void = { _ in }) {
         self.pid = pid; self.kind = kind; self.onDemandRules = onDemandRules
         let state = state(pid)
         policy = NetworkPolicy(killSwitch: killSwitch)
@@ -42,7 +46,7 @@ final class Harness: Sendable {
         self.state = InMemoryTunnelStateStore(state)
         var cfg = ControllerConfig(); cfg.dataPlane = dataPlane; configure(&cfg)
         interfaceCheck = FakeInterfaceCheck(flaggedInterface)
-        controller = TestController(host: host, secrets: secrets, stateStore: self.state, adapters: factory,
+        controller = TestController(host: routed ? router : host, secrets: secrets, stateStore: self.state, adapters: factory,
                                     validator: FakeValidator(reject: rejectPayload), clock: clock,
                                     wallClock: wall.function, rng: SplitMix64(seed: 1), pathSource: paths,
                                     endpointCheck: interfaceCheck, sink: sink, config: cfg)

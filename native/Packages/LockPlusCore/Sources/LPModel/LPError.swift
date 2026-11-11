@@ -29,7 +29,10 @@ public enum LPErrorCode: Int, Codable, Sendable, CaseIterable {
          secretStoreUnavailable, blockedAfterFailure, startCancelled, engineDied, dnsPlanMissing,
          pushedOptionRejected,       // draft 7: a pull-filter `reject` matched a pushed option (§8.5)
          endpointInterfaceUnusable,  // draft 7.3: server reachable only via a non-primary interface (§9.3)
-         noNetwork                   // E2E-4 200011: NE ended the session for want of a network (NEVPNConnectionError 2; app-side, never on the wire)
+         noNetwork,                  // E2E-4 200011: NE ended the session for want of a network (NEVPNConnectionError 2; app-side, never on the wire)
+         anotherTunnelActive,        // 2.0.1: a start refused while another LockPlus configuration's session runs in the extension
+         supersededByKillSwitch,     // 2.0.1 (review H1): a session without the kill switch ended for a kill-switch profile's start
+         sessionInterrupted          // 2.0.1 round 5: a session torn down for a kill-switch start, then kept (protected meanwhile) and held
 }
 
 /// The tunnel error keeps its code across `fetchLastDisconnectError` (CustomNSError, §5.5).
