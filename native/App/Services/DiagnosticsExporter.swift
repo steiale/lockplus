@@ -123,6 +123,7 @@ extension AppEnvironment {
         i.history = history
         i.crashReports = await host.crashReports()
         i.legacy = await legacyFindingsJSON()
+        i.selfTest = diagnostics.selfTest?.bundleText()              // 2.0.2: the last connection self-test (selftest.txt)
         i.sensitive = sensitiveLiterals()
         return i
     }

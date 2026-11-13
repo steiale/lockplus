@@ -31,6 +31,8 @@ final class SilentService: NSObject, LPTunnelServiceXPC, NSXPCListenerDelegate, 
     func sessionSummaries(_ req: Data, reply: @escaping LPReply2) {}
     func measureLatency(_ req: Data, reply: @escaping LPReply2) {}
     func pushEndpoints(_ req: Data, reply: @escaping LPReply2) {}
+    func armStart(_ req: Data, reply: @escaping LPReply2) {}
+    func revokeUnattended(_ req: Data, reply: @escaping LPReply1) {}
 }
 
 @Suite struct ClientTimeoutTests {

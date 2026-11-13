@@ -1,4 +1,4 @@
-// Shared/ActiveRequirements.swift — a member of the LockPlus, LockPlusTunnel and RequirementTests targets (DESIGN §5.3).
+// Shared/ActiveRequirements.swift — a member of the LockPlus, LockPlusTunnel, LockPlusValidator and RequirementTests targets (DESIGN §5.3).
 // The Release strings come from LPWire.SigningRequirements; this file only chooses the signer clause per configuration.
 import LPWire
 
@@ -13,7 +13,11 @@ let activeSigner = #"((certificate 1[field.1.2.840.113635.100.6.2.6] and certifi
 let activeSigner = SigningRequirements.releaseSigner
 #endif
 
-/// The app's requirement, applied by the extension's listener (injected into TunnelServiceListener).
+/// The app's requirement, applied by the extension's listener (injected into TunnelServiceListener) and, per connection,
+/// by the validator service (injected into ValidatorListenerDelegate). Carries the build floor
+/// (`SigningRequirements.minimumAppBuild`, 2.0.2).
 let APP_REQ = SigningRequirements.appReq(signer: activeSigner)
 /// The extension's requirement, applied by the app's client (injected into TunnelServiceClient).
 let EXT_REQ = SigningRequirements.extReq(signer: activeSigner)
+/// The validator service's requirement (2.0.2), applied by the app's validator client.
+let VALIDATOR_REQ = SigningRequirements.validatorReq(signer: activeSigner)

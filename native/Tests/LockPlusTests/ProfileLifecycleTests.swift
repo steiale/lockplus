@@ -48,7 +48,7 @@ struct ProfileLifecycleTests {
         let old = try await repo.payload(for: p)                           // the committed revision still opens
         #expect(old.withUnsafeBytes { String(decoding: $0, as: UTF8.self) }.contains("PrivateKey"))
         // A complete replace prunes the older revision.
-        let a = await ImportCoordinator.analyse(fileName: "Work.conf", bytes: Array(Harness.wgConf.utf8), service: h.service, probe: NullProbe())
+        let a = await ImportCoordinator.analyse(fileName: "Work.conf", bytes: Array(Harness.wgConf.utf8), validator: h.validator, probe: NullProbe())
         let d = try #require(h.env.importer.draft(a, name: "Work", killSwitch: true, allowLAN: false))
         let after = try await h.env.profiles.replacePayload(p.id, with: d)
         let sealed = try FileManager.default.contentsOfDirectory(atPath: h.dir.data.profiles.path).filter { $0.hasSuffix(".sealed") }
@@ -72,17 +72,22 @@ struct ImportKindTests {
 @MainActor @Suite("Small lifecycle fixes (L5-L7)", .serialized)
 struct SmallLifecycleTests {
     @Test func aRejectedProfileIsNotRecheckedOnEveryHello() async throws {
-        let h = Harness()
+        let h = Harness(validator: FakeProfileValidator(.fails(LPError(.extensionUnavailable))))
         defer { h.dir.cleanup() }
         h.service.state.withLock { $0.failAll = LPError(.extensionUnavailable) }
         let p = try await h.add("Office.ovpn", PreviewSeed.officeOvpn)
-        h.service.state.withLock { $0.failAll = nil; $0.validateAccepts = false }
+        #expect(h.env.profiles.profile(p.id)?.engineVerified == false)
+        h.service.state.withLock { $0.failAll = nil }
+        h.validator.outcome = .rejected(category: "UNUSED_OPTIONS")
+        await h.env.profiles.load()                                  // reconcile runs only on a loaded store
         await h.env.profiles.reconcile()
+        #expect(h.env.profiles.profile(p.id)?.importReport?.items.contains { $0.reason == .engineValidationFailed(category: "UNUSED_OPTIONS") } == true)
         let rev = try #require(h.env.profiles.profile(p.id)).metaRevision
         await h.env.profiles.reconcile()
         await h.env.profiles.reconcile()
         #expect(h.env.profiles.profile(p.id)?.metaRevision == rev)
-        #expect(h.service.calls(.validateProfile) == 1)
+        #expect(h.validator.checked.count == 2)       // the import, then one re-verify; a rejected file is not re-checked
+        #expect(h.service.calls(.validateProfile) == 0)
     }
 
     @Test func retryApprovalStartsOnlyAfterTheOldAttemptIsDown() async throws {

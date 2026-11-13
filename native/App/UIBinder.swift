@@ -224,6 +224,7 @@ import Observation
                                       protectionMismatch: env.profiles.protectionMismatch($0.id))
             // Review 5 §3: every Connect of this profile is disabled while the store would ignore it, with the reason.
             item.connectHeld = UIMapping.startHold(c.connectHold(for: $0.id), name: name)?.explanation
+            item.verificationStalled = !$0.engineVerified && env.profiles.verificationStalled($0.id)     // round 2 (L8)
             return item
         }
         UIMapping.set(&ui.profiles.profiles, items)
@@ -262,7 +263,7 @@ import Observation
         // models only when they changed since the last push (E2E-2 bug 1). Pushing on every render overwrote a toggle
         // the user had just clicked before `…FromUI` persisted it: Auto-Connect clicks "bounced" on 26 and auto-connect
         // was never saved.
-        if env.settings.value != env.uiAppliedSettings {
+        if env.settings.value.uiComparable != env.uiAppliedSettings?.uiComparable {
             // §6.14: a change made by the app itself (the Go migration carries the 1.x theme over) never comes through
             // `settingsFromUI` as a difference, so it is applied here.
             let appearanceChanged = env.settings.value.appearance != env.uiAppliedSettings?.appearance
@@ -336,7 +337,7 @@ import Observation
                 let before = env.settings.value
                 env.settings.update { UIMapping.read(env.ui.settings, into: &$0) }
                 let after = env.settings.value
-                if env.uiAppliedSettings == before { env.uiAppliedSettings = after }        // the UI's own edit: nothing to push back
+                if env.uiAppliedSettings?.uiComparable == before.uiComparable { env.uiAppliedSettings = after }   // the UI's own edit: nothing to push back
                 if after.appearance != before.appearance { AppAppearanceApplier.apply(after.appearance) }              // §6.14: live
                 if after.receiveReleaseCandidates != before.receiveReleaseCandidates { env.updater.channelsChanged() }   // §12.1
                 if after.notifications != before.notifications { Task { await env.notificationModeChanged(to: after.notifications) } }
@@ -373,7 +374,7 @@ import Observation
                     // Turning Auto-Connect on for a profile ends its "suspended until the next network change".
                     if let id = AutoConnectRules.turnedOn(from: before.autoConnect, to: $0.autoConnect) { $0.endOnDemandSuspension([id]) }
                 }
-                if env.uiAppliedSettings == before { env.uiAppliedSettings = env.settings.value }
+                if env.uiAppliedSettings?.uiComparable == before.uiComparable { env.uiAppliedSettings = env.settings.value }
                 if env.settings.value.autoConnect != before.autoConnect { requestOnDemandResave(env) }
             }
         }

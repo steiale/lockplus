@@ -20,7 +20,7 @@ import Testing
     @Test func embeddedExtensionIsFoundAndVersioned() {
         let m = SystemExtensionManager(bundle: .main, quiescer: NoTunnelsQuiescer())
         #expect(m.extensionIdentifier == "io.github.steiale.lockplus.mac.tunnel")
-        #expect(m.embeddedVersion?.shortVersion == "2.0.1")
+        #expect(m.embeddedVersion?.shortVersion == "2.0.2")
         // NEMachServiceName is a dot-descendant of the app group and carries the build number (§2.5, §2.6).
         let name = m.machServiceName ?? ""
         #expect(name.hasPrefix("M53GHX9FAY.io.github.steiale.lockplus.mac.tunnel.v"))

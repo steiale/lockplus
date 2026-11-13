@@ -218,6 +218,7 @@ enum PreviewData {
                                                             username: p.credentials?.username ?? "", onSave: { _, _, _ in })
     }
     func forgetPassword(_ profileID: ProfileItem.ID) { record("forgetPassword") }
+    func checkAgain(_ profileID: ProfileItem.ID) { record("checkAgain") }
     func showPassword(_ profileID: ProfileItem.ID) {
         record("showPassword")
         guard let env, let p = env.profiles.profile(profileID) else { return }

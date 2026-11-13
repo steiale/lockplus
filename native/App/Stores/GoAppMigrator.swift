@@ -17,7 +17,7 @@ import LPWire
     private let profiles: ProfilesStore
     private let settings: SettingsStore
     private let files: SettingsFileStore?
-    private let service: any TunnelServicing
+    private let validator: any OpenVPN3ProfileValidating
     private let probe: any EndpointRouteProbing
     private let keychain: (any LegacyKeychainReading)?
     /// Migration matrix: upstream WireGuide's `…/wireguide` has tunnels (never imported automatically; the report says how).
@@ -42,13 +42,13 @@ import LPWire
     private(set) var isRunning = false
 
     init(source: @escaping @Sendable () -> (any GoAppDataSource)?, profiles: ProfilesStore, settings: SettingsStore,
-         files: SettingsFileStore?, service: any TunnelServicing, probe: any EndpointRouteProbing = RouteProbe(),
+         files: SettingsFileStore?, validator: any OpenVPN3ProfileValidating, probe: any EndpointRouteProbing = RouteProbe(),
          keychain: (any LegacyKeychainReading)? = nil) {
         self.source = source
         self.profiles = profiles
         self.settings = settings
         self.files = files
-        self.service = service
+        self.validator = validator
         self.probe = probe
         self.keychain = keychain
     }
@@ -418,7 +418,7 @@ import LPWire
                                 engineVerified: true, origin: .migratedGo(t.oldName), notes: t.notes)
         case .openVPN(let r0):
             guard r0.verdict != .rejected else { return nil }
-            let r = await OVPNImporter.validateWithEngine(r0, validator: XPCProfileValidator(service: service))
+            let r = await OVPNImporter.validateWithEngine(r0, validator: validator)
             guard let text = r.canonicalText, r.verdict != .rejected else { return nil }
             let c = r.credentials
             let rec: CredentialRecord? = c.isEmpty ? nil : CredentialRecord(

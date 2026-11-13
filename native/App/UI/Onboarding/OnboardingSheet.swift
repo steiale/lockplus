@@ -271,10 +271,7 @@ private struct ProfilesStep: View {
                         .font(.caption).foregroundStyle(.secondary)
                     HStack { VStack { Divider() }; Text("or", comment: "Separator").foregroundStyle(.secondary); VStack { Divider() } }
                 }
-                HStack {
-                    Button(String(localized: "Choose Files…", comment: "Button")) { ImportPanel.run(env) }
-                    Button(String(localized: "QR Image…", comment: "Button")) { ImportPanel.run(env, imagesOnly: true) }
-                }
+                Button(String(localized: "Choose Files…", comment: "Button")) { ImportPanel.run(env) }
                 if ob.migration == nil { VPNConfigurationHint(includesSavedLogins: false) }
                 if ob.etcWireGuardCount > 0 {
                     HStack {

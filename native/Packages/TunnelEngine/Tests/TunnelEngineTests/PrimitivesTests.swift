@@ -125,12 +125,13 @@ import TunnelEngineTestSupport
     }
 
     /// Draft 9 (S2 E1): NE replays the original options on its own restart, so they carry nothing one-shot. The parser
-    /// knows exactly two keys; a promptID (or anything else) in the options has no effect.
+    /// knows exactly three keys (2.0.2: the start nonce, which is what NE's replay is matched against; it is not secret
+    /// from the extension and a replay with it is the point); a promptID (or anything else) in the options has no effect.
     @Test func startOptionsCarryNoOneShotValues() {
         let o = StartOptions(["lp.manual": NSNumber(value: 1), "lp.promptID": UUID().uuidString as NSString,
                               "lp.otp": "123456" as NSString])
         #expect(o == StartOptions(isManual: true))
-        #expect(Mirror(reflecting: o).children.compactMap(\.label).sorted() == ["endpoints", "isManual"])
+        #expect(Mirror(reflecting: o).children.compactMap(\.label).sorted() == ["endpoints", "isManual", "nonce"])
     }
 
     @Test func startOptionsBoundTheEndpointMap() {

@@ -182,4 +182,7 @@ final class TunnelServiceHandler: NSObject, LPTunnelServiceXPC, @unchecked Senda
     func sessionSummaries(_ req: Data, reply: @escaping LPReply2) { forward(.sessionSummaries, req, reply) }
     func measureLatency(_ req: Data, reply: @escaping LPReply2) { forward(.measureLatency, req, reply) }
     func pushEndpoints(_ req: Data, reply: @escaping LPReply2) { forward(.pushEndpoints, req, reply) }
+    /// 2.0.2 Phase 0: forwarded like every method; the backend answers `.extensionBusy` until the engine implements it.
+    func armStart(_ req: Data, reply: @escaping LPReply2) { forward(.armStart, req, reply) }
+    func revokeUnattended(_ req: Data, reply: @escaping LPReply1) { forward1(.revokeUnattended, req, reply) }
 }

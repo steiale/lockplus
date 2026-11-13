@@ -42,7 +42,7 @@ import os
         let existing = target.profileID.flatMap { env.profiles.profile($0) }
         let kind = existing?.kind ?? target.newKind ?? .wireGuard
         let fileName = name + (kind == .wireGuard ? ".conf" : ".ovpn")
-        let a = await ImportCoordinator.analyse(fileName: fileName, bytes: Array(text.utf8), service: env.service, probe: NoRouteProbe())
+        let a = await ImportCoordinator.analyse(fileName: fileName, bytes: Array(text.utf8), validator: env.validator, probe: NoRouteProbe())
         guard a.kind == kind else { throw SaveError(message: String(localized: "The text is not a \(kind == .wireGuard ? "WireGuard" : "OpenVPN") configuration.", comment: "Editor error")) }
         let policy = existing?.policy ?? env.settings.value.newProfileDefaults
         guard var draft = env.importer.draft(a, name: name, killSwitch: existing?.policy.killSwitch ?? a.summary.isFullTunnel,
@@ -71,10 +71,8 @@ import os
         }
     }
 
-    var openVPNValidator: (any OpenVPN3ProfileValidating)? {
-        guard let env, case .ready = env.extensionStore.state else { return nil }
-        return XPCProfileValidator(service: env.service)
-    }
+    /// The sandboxed validator service (PLAN-2.0.2 §1.4): independent of the tunnel component's state.
+    var openVPNValidator: (any OpenVPN3ProfileValidating)? { env?.validator }
 
     /// "Save and Reconnect": stop, wait for `.disconnected` (≤ 10 s), start again.
     private func reconnect(_ id: UUID, _ env: AppEnvironment) async {

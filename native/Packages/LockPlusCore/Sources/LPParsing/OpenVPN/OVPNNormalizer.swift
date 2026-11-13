@@ -91,7 +91,7 @@ public enum OVPNNormalizer {
         // protection) and are not applied.
         case "reneg-bytes", "reneg-pkts", "replay-window": .rekeyReplayTuningNotApplied
         // Packet size: tuning only. The tunnel MTU comes from NetworkSettingsBuilder and openvpn3's default mssfix is
-        // always active (the appended mssfix floor is skipped when link-mtu is present).
+        // always active. Round 1 (Codex 8): link-mtu is not emitted, so it doesn't suppress the appended mssfix floor.
         case "link-mtu", "tun-mtu-extra", "mtu-disc": .mtuManaged
         // Routing niceties: delay between route adds, FQDN routes, routes to the server through the tunnel. Ignoring
         // each is the stricter or neutral behaviour.
@@ -385,11 +385,13 @@ public enum OVPNNormalizer {
         if let rct = deduped.last(where: { $0.name == "remote-cert-tls" }), rct.args.first == "server", !names.contains("remote-cert-eku") {
             appended.append(("remote-cert-eku", ["TLS Web Server Authentication"], .remoteCertEKUAppended))
         }
-        if !present.contains("keepalive") && !present.contains("ping") && !present.contains("ping-restart") {
+        // Round 1 (Codex 8): floors are decided by what is EMITTED, so normalising the canonical text again appends
+        // nothing (a fixed point). `link-mtu` is dropped (mtuManaged), so it no longer suppresses the mssfix floor.
+        if !names.contains("keepalive") && !names.contains("ping") && !names.contains("ping-restart") {
             appended.append(("ping", ["10"], .keepaliveFloorAppended))
             appended.append(("ping-restart", ["60"], .keepaliveFloorAppended))
         }
-        if !present.contains("mssfix") && !present.contains("tun-mtu") && !present.contains("link-mtu") {
+        if !names.contains("mssfix") && !names.contains("tun-mtu") {
             appended.append(("mssfix", ["1300"], .mssfixFloorAppended))
         }
         if otpClass && !names.contains("auth-nocache") {

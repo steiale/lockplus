@@ -125,7 +125,6 @@ struct LockPlusCommands: Commands {
             Button(String(localized: "Import from Clipboard", comment: "Menu command")) { env.actions.importFromClipboard() }
                 .keyboardShortcut("v", modifiers: [.command, .shift])
                 .disabled(env.settings.clipboardDenied)
-            Button(String(localized: "Import QR Code Image…", comment: "Menu command")) { ImportPanel.run(env, imagesOnly: true) }
             Divider()
             Button(String(localized: "Export…", comment: "Menu command")) { if let id = env.profiles.selection { env.actions.export(id) } }
                 .keyboardShortcut("e", modifiers: [.command, .shift])

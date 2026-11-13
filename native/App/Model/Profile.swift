@@ -8,6 +8,7 @@ import LPWire
 enum ProfileOrigin: Codable, Sendable, Equatable {
     case file(String)
     case zip(String)
+    /// No longer created (2.0.2 removed QR import); kept so stores written by 2.0.0/2.0.1 still decode. Don't delete.
     case qr
     case editor
     case migratedGo(String)

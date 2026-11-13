@@ -58,6 +58,8 @@ struct ProfileItem: Identifiable, Sendable, Equatable {
     /// OpenVPN step [7] hasn't run (the extension wasn't available at import): Connect stays disabled until the
     /// engine accepts the profile (DESIGN §8.1, `EngineCheck.notChecked`).
     var notYetVerified = false
+    /// Round 2 (Fable L8): the file check timed out in several launches and isn't retried automatically ("Check Again").
+    var verificationStalled = false
     /// E2E-1: the system's VPN configuration doesn't carry this profile's protection settings right now; LockPlus is
     /// restoring them (and refuses to connect until they are verified).
     var protectionRepairing = false
@@ -73,8 +75,12 @@ struct ProfileItem: Identifiable, Sendable, Equatable {
     static var protectionRepairingExplanation: String {
         String(localized: "Restoring this profile's protection settings in macOS. The kill switch isn't active until they're verified, and LockPlus won't connect before that.", comment: "Protection settings being repaired (E2E-1)")
     }
+    static var verificationStalledExplanation: String {
+        String(localized: "LockPlus's file check didn't finish for this profile in several tries, so it isn't retried automatically any more. Until it passes, the profile can't connect.",
+               comment: "Not yet verified, check stalled (2.0.2 round 2): shown with a Check Again button")
+    }
     static var notYetVerifiedExplanation: String {
-        String(localized: "LockPlus hasn't checked this profile with its OpenVPN engine yet. It's checked as soon as the tunnel component is running; until then it can't connect.", comment: "Not yet verified explanation (§8.1)")
+        String(localized: "LockPlus hasn't checked this profile with its OpenVPN engine yet. It tries again automatically; until then the profile can't connect.", comment: "Not yet verified explanation (§8.1)")
     }
     var protocolName: String {
         switch kind {

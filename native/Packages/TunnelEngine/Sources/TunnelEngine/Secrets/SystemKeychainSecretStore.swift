@@ -75,8 +75,9 @@ public actor SystemKeychainSecretStore: ExtensionSecretStore {
     private var keyChecked = false
 
     /// `servicePrefix`: Release `…tunnel.`, Debug builds `…tunnel.dev.` (§6.3; chosen by the Tunnel target, since
-    /// package code can't see target conditions, §2.2).
-    public init(backend: any GenericPasswordBackend = SecItemBackend(), servicePrefix: String = releasePrefix,
+    /// package code can't see target conditions, §2.2). `backend` has no default (round 6, Fable r6 N3): production passes
+    /// `SecItemBackend()` explicitly, tests a fake, so a test can never reach the System keychain by leaving it out.
+    public init(backend: any GenericPasswordBackend, servicePrefix: String = releasePrefix,
                 onReset: @escaping @Sendable (_ unmatchedItems: Int, _ reason: String) -> Void = DiagnosticsHook.secretStoreReset) {
         self.backend = backend; prefix = servicePrefix; self.onReset = onReset
     }
@@ -229,11 +230,7 @@ public actor SystemKeychainSecretStore: ExtensionSecretStore {
     }
 
     public func get(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t) throws(LPError) -> SecretBytes? {
-        guard let k = try key(create: false), var r = try read(kind, id, ownerUID, account: Self.account(k, kind, id, ownerUID)) else {
-            return nil
-        }
-        defer { r.data.resetBytes(in: 0..<r.data.count) }
-        return SecretBytes(copying: r.data[r.body])
+        try load(kind, id, ownerUID: ownerUID)?.bytes
     }
 
     public func entry(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t) throws(LPError) -> ProvisionIndexEntry? {
@@ -242,6 +239,21 @@ public actor SystemKeychainSecretStore: ExtensionSecretStore {
         }
         r.data.resetBytes(in: 0..<r.data.count)
         return r.meta.entry
+    }
+
+    public func load(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t) throws(LPError) -> (entry: ProvisionIndexEntry, bytes: SecretBytes)? {
+        guard let k = try key(create: false), var r = try read(kind, id, ownerUID, account: Self.account(k, kind, id, ownerUID)) else {
+            return nil
+        }
+        defer { r.data.resetBytes(in: 0..<r.data.count) }
+        return (r.meta.entry, SecretBytes(copying: r.data[r.body]))
+    }
+
+    /// Synchronous inside the actor: no other store call runs between the payload read and the write.
+    public func putCredential(_ id: UUID, ownerUID: uid_t, ifPayloadRevision revision: UInt64, _ bytes: SecretBytes) throws(LPError) -> Bool {
+        guard try entry(.payload, id, ownerUID: ownerUID)?.revision == revision else { return false }
+        try put(.credential, id, ownerUID: ownerUID, revision: revision, bytes)
+        return true
     }
 
     public func delete(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t) throws(LPError) {

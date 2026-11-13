@@ -71,7 +71,7 @@ struct AppRootMappingTests {
         #expect(auth["interactive"] as? Bool == true)
         let size = try PropertyListSerialization.data(fromPropertyList: d, format: .binary, options: 0).count
         #expect(size <= ProviderConfigurationValues.maxEncodedBytes)
-        #expect(ProviderConfigurationValues.stored(d) == .init(revision: 3, metaRev: 7, ownerUID: 501))
+        #expect(ProviderConfigurationValues.stored(d) == .init(revision: 3, metaRev: 7, ownerUID: 501, onDemand: true))
         let wg = ProviderConfigurationValues(profile: profile(full: false, killSwitch: false), hasOnDemandRules: false).dictionary
         #expect(wg["kind"] as? String == "wg" && wg["auth"] == nil && wg["onDemand"] as? Bool == false)
     }

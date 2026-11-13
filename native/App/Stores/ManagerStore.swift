@@ -61,6 +61,10 @@ struct StraySnapshot: Sendable, Equatable {
     var onConfigurationChange: (() -> Void)? { get set }
     /// A stray's status changed (2.0.1 round 3; round 5: the Diagnostics note of a waiting duplicate, and the recovery).
     var onStrayStatusChange: (() -> Void)? { get set }
+    /// Round 2 (Fable M2): a connection object the last load doesn't know turned connecting, connected or reasserting
+    /// (a configuration started before our reload of it, E2E F7), or a stray turned so while its profile's addressable
+    /// copy is idle (the F8 tie-break saw no status at load time). `SerializedVPNManager` reloads, coalesced.
+    var onUnknownConnectionActive: (() -> Void)? { get set }
     /// E2E-3 (200003): nesessionmanager handles a configuration change asynchronously, and one that lands while a
     /// kill-switch start is pending is the failure mode. Returns once at least `settle` has passed since the last
     /// configuration mutation, whoever made it (a save, a removal, an on-demand change, the system's own rewrite).
@@ -71,6 +75,7 @@ struct StraySnapshot: Sendable, Equatable {
 
 extension VPNManaging {
     var strays: [StraySnapshot] { [] }
+    var onUnknownConnectionActive: (() -> Void)? { get { nil } set {} }
     func save(_ cfg: ManagerConfiguration, onlyIf condition: @MainActor () -> Bool) async throws(LPError) -> Bool {
         guard condition() else { return false }
         try await save(cfg)
@@ -136,11 +141,42 @@ enum ManagerClassifier {
         var owner: uid_t?
         /// `stored?.metaRev`; nil when the dictionary isn't ours to parse (counts as the oldest).
         var metaRev: UInt64?
+        /// Round 1 (E2E F8 / stray investigation): the tie-break between two of this user's configurations with the same
+        /// metadata revision (a same-content copy, e.g. a clone started outside LockPlus).
+        var status: TunnelStatus = .disconnected
+        var includeAllNetworks = false
+        var enforceRoutes = false
+
+        /// connected > reasserting > connecting > disconnecting > none: the one a session runs on (or starts on) is the
+        /// profile's, so the row shows that session and the other is the stray (F8: at launch a PENDING duplicate was
+        /// taken for the profile while the real one was connected).
+        var liveRank: Int {
+            switch status {
+            case .connected: 4
+            case .reasserting: 3
+            case .connecting: 2
+            case .disconnecting: 1
+            default: 0
+            }
+        }
+        /// The stronger protection is kept as the profile's (the weaker copy is the stray the idle sweep removes); its
+        /// flags are re-synced from the authenticated metadata like any manager's (drift heal).
+        var protectionRank: Int { (includeAllNetworks ? 2 : 0) + (enforceRoutes ? 1 : 0) }
+    }
+
+    /// Deterministic for this user's equal-revision pair: higher `liveRank`, then higher `protectionRank`, then the first.
+    /// A configuration's content is a function of the profile's authenticated metadata and settings (name, flags,
+    /// on-demand, provider configuration), so keeping either copy loses no user setting; what differs (flags weakened
+    /// by same-user code) is healed from the metadata, never kept.
+    static func preferred<M>(_ c: Candidate<M>, over other: Candidate<M>) -> Bool {
+        let a = (c.metaRev ?? 0, c.liveRank, c.protectionRank), b = (other.metaRev ?? 0, other.liveRank, other.protectionRank)
+        return a > b
     }
 
     /// - No (or unparsable) profile ID: a stray (review M3).
     /// - A duplicate profile ID: when both are wholly this user's (owner readable and `me`), the newest metadata
-    ///   revision is addressable and the older is a stray, a tie keeps the first. Otherwise (another user's, or one
+    ///   revision is addressable and the older is a stray; on a tie the live one, then the more protective one, then
+    ///   the first (round 1: `preferred`). Otherwise (another user's, or one
     ///   whose owner can't be read) the later one is a stray too (E2E-4 review L2): never silently dropped, so its
     ///   live status counts as busy; removal stays gated by the owner (`ProfilesStore.load`).
     static func classify<M>(_ candidates: [Candidate<M>], me: uid_t) -> (addressable: [UUID: M], strays: [M]) {
@@ -149,7 +185,7 @@ enum ManagerClassifier {
         for c in candidates {
             guard let ids = c.profileID, let id = UUID(uuidString: ids) else { strays.append(c.manager); continue }
             guard let other = map[id] else { map[id] = c; continue }
-            if c.owner == me, other.owner == me, (c.metaRev ?? 0) > (other.metaRev ?? 0) {
+            if c.owner == me, other.owner == me, preferred(c, over: other) {
                 strays.append(other.manager)
                 map[id] = c
             } else {
@@ -172,16 +208,19 @@ enum ManagerClassifier {
     var onStatusChange: ((UUID, TunnelStatus) -> Void)?
     var onConfigurationChange: (() -> Void)?
     var onStrayStatusChange: (() -> Void)?
-    /// The strays' current connection objects (2.0.1 round 3): their status notifications are reported too.
-    private var strayConnections: Set<ObjectIdentifier> = []
+    var onUnknownConnectionActive: (() -> Void)?
+    /// The strays' current connection objects (2.0.1 round 3): their status notifications are reported too. The value:
+    /// the profile the stray duplicates, when its ID parses (round 2, M2).
+    private var strayConnections: [ObjectIdentifier: UUID?] = [:]
 
     init(providerBundleIdentifier: String) {
         self.providerBundleIdentifier = providerBundleIdentifier
         // queue: .main, Sendable values extracted, then assumeIsolated (ref/swift-concurrency SC16).
         statusObserver = NotificationCenter.default.addObserver(forName: .NEVPNStatusDidChange, object: nil, queue: .main) { @Sendable [weak self] note in
             let oid = note.object.map { ObjectIdentifier($0 as AnyObject) }
+            let status = (note.object as? NEVPNConnection).map { TunnelStatus($0.status) }
             MainActor.assumeIsolated {       // SAFETY: queue .main
-                self?.statusNotification(oid)
+                self?.statusNotification(oid, status)
             }
         }
         configObserver = NotificationCenter.default.addObserver(forName: .NEVPNConfigurationChange, object: nil, queue: .main) { @Sendable [weak self] _ in
@@ -197,9 +236,24 @@ enum ManagerClassifier {
         if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
     }
 
-    private func statusNotification(_ oid: ObjectIdentifier?) {
-        if let oid, strayConnections.contains(oid) { onStrayStatusChange?(); return }
-        guard let id = filter.profile(for: oid), let m = byID[id] else { return }
+    private func statusNotification(_ oid: ObjectIdentifier?, _ status: TunnelStatus?) {
+        if let oid, let duplicated = strayConnections[oid] {
+            onStrayStatusChange?()
+            // Round 2 (Fable M2, F8): the tie-break between equal revisions read the status at load time; a stray that
+            // goes live while its profile's addressable copy is idle is classified again.
+            if status?.isActive == true, let pid = duplicated, let m = byID[pid], !TunnelStatus(m.connection.status).isActive {
+                onUnknownConnectionActive?()
+            }
+            return
+        }
+        guard let id = filter.profile(for: oid), let m = byID[id] else {
+            // Round 1 (E2E F7): a connection this load doesn't know (a configuration created and started before our
+            // reload of it finished, e.g. a duplicate started at once with `scutil --nc start`) means the list is stale.
+            // Round 2 (Fable M2): only when it is starting or running (the F7 case), never for the stale objects of
+            // earlier loads going idle (S5), and coalesced by `SerializedVPNManager`, which doesn't count it as a mutation.
+            if oid != nil, status?.isActive == true { onUnknownConnectionActive?() }
+            return
+        }
         onStatusChange?(id, TunnelStatus(m.connection.status))
     }
 
@@ -214,14 +268,19 @@ enum ManagerClassifier {
             guard let p = m.protocolConfiguration as? NETunnelProviderProtocol, p.providerBundleIdentifier == providerBundleIdentifier else { return nil }
             return .init(manager: m, profileID: p.providerConfiguration?["profileID"] as? String,
                          owner: ProviderConfigurationValues.ownerUID(p.providerConfiguration),
-                         metaRev: ProviderConfigurationValues.stored(p.providerConfiguration)?.metaRev)
+                         metaRev: ProviderConfigurationValues.stored(p.providerConfiguration)?.metaRev,
+                         status: TunnelStatus(m.connection.status), includeAllNetworks: p.includeAllNetworks,
+                         enforceRoutes: p.enforceRoutes)
         }
         let (map, strays) = ManagerClassifier.classify(candidates, me: getuid())
         // E2E-4: a load never removes anything. It removed every unaddressable configuration of our provider, any
         // user's, at once (8–12 ms after another user's LockPlus created one) and inside our own or another user's
         // pending kill-switch start (U13: a removal breaks it like a save). The orphan sweep decides, at idle.
         strayByKey = Dictionary(uniqueKeysWithValues: strays.map { (UUID(), $0) })
-        strayConnections = Set(strays.map { ObjectIdentifier($0.connection) })
+        strayConnections = Dictionary(strays.map { m in
+            let pid = ((m.protocolConfiguration as? NETunnelProviderProtocol)?.providerConfiguration?["profileID"] as? String).flatMap(UUID.init(uuidString:))
+            return (ObjectIdentifier(m.connection), pid)
+        }, uniquingKeysWith: { a, _ in a })
         byID = map
         filter.update(map.map { ($0.value.connection, $0.key) })
     }
@@ -423,6 +482,69 @@ enum ManagerClassifier {
                 self.onConfigurationChange?()
             }
         }
+        inner.onUnknownConnectionActive = { [weak self] in self?.unknownConnectionActive() }
+    }
+
+    // MARK: Unknown live connections (round 2, Fable M2)
+
+    /// At most one such reload per `unknownReloadInterval`; a reload that found no new configuration (a stale object's
+    /// status, not a new copy) silences the trigger for `unknownReloadQuiet`, so it can never loop. Not a mutation: the
+    /// settle clock (`waitUntilSettled`) doesn't move.
+    static let unknownReloadInterval: Duration = .seconds(1)
+    static let unknownReloadQuiet: Duration = .seconds(10)
+    @ObservationIgnored private var unknownReloadAt: Duration?
+    @ObservationIgnored private var unknownQuietUntil: Duration?
+    @ObservationIgnored private var unknownReload: Task<Void, Never>?
+    /// Reloads made for an unknown live connection (tests, and the E2E count).
+    @ObservationIgnored private(set) var unknownReloads = 0
+
+    /// Round 3 (Fable N4): a trigger suppressed by the quiet period is remembered: one reload when the quiet ends (so a
+    /// real new copy that posted inside it is still found), never more than one per quiet period.
+    @ObservationIgnored private var unknownAfterQuiet: Task<Void, Never>?
+    /// Round 3 (Fable N4): a trigger that arrived while a reload was already under way (its copy may postdate that
+    /// reload's read): handled once more when the reload ends.
+    @ObservationIgnored private var unknownDuringReload = false
+
+    private func unknownConnectionActive() {
+        let now = settleClock.now()
+        if let q = unknownQuietUntil, now < q {
+            guard unknownAfterQuiet == nil else { return }
+            let clock = settleClock
+            unknownAfterQuiet = Task { @MainActor [weak self] in
+                await clock.sleep(q - now)
+                guard let self else { return }
+                self.unknownAfterQuiet = nil
+                self.unknownConnectionActive()
+            }
+            return
+        }
+        guard unknownReload == nil else { unknownDuringReload = true; return }      // made up when the pending one ends
+        let wait = unknownReloadAt.map { max(.zero, Self.unknownReloadInterval - (now - $0)) } ?? .zero
+        let clock = settleClock
+        unknownReload = Task { @MainActor [weak self] in
+            if wait > .zero { await clock.sleep(wait) }
+            guard let self else { return }
+            let before = self.configurationIdentity
+            self.unknownReloadAt = clock.now()
+            self.unknownReloads += 1
+            try? await self.loadAll()
+            self.unknownReload = nil
+            let again = self.unknownDuringReload
+            self.unknownDuringReload = false
+            if self.configurationIdentity == before {
+                self.unknownQuietUntil = clock.now() + Self.unknownReloadQuiet
+            } else {
+                self.onConfigurationChange?()
+            }
+            if again { self.unknownConnectionActive() }        // in the quiet: once at its end; else ≤ 1 per interval
+        }
+    }
+
+    /// What a reload can newly find: the addressable profiles and the strays (by the profile they duplicate and their
+    /// status, which re-classification can change).
+    private var configurationIdentity: [String] {
+        managers.map { "m \($0.profileID) \($0.status)" }.sorted()
+            + strays.map { "s \($0.profileID?.uuidString ?? "-") \($0.status)" }.sorted()
     }
 
     /// NEVPNError.configurationStale, as `NEManagerStore.map` reports it.

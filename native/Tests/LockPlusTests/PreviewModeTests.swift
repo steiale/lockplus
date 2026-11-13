@@ -8,9 +8,8 @@ import Testing
 @MainActor @Suite("Preview mode")
 struct PreviewModeTests {
     @Test func everySeedProfileImports() async {
-        let service = PreviewTunnelService(world: PreviewWorld())
         for (name, text) in PreviewSeed.files {
-            let a = await ImportCoordinator.analyse(fileName: name, bytes: Array(text.utf8), service: service, probe: NoRouteProbe())
+            let a = await ImportCoordinator.analyse(fileName: name, bytes: Array(text.utf8), validator: PreviewProfileValidator(), probe: NoRouteProbe())
             #expect(a.canonical != nil, "\(name): \(a.report.plainText())")
             #expect(a.engineVerified, "\(name)")
         }

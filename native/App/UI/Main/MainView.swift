@@ -270,7 +270,7 @@ private struct DropOverlay: View {
                 .padding(16)
             VStack(spacing: 10) {
                 Image(systemName: "square.and.arrow.down").font(.system(size: 40)).foregroundStyle(Color.lp.softSage)
-                Text("Drop .conf, .ovpn, .zip or a QR code image", comment: "Drop overlay (§6.3)")
+                Text("Drop .conf, .ovpn or .zip", comment: "Drop overlay (§6.3)")
                     .font(.title3)
                     .foregroundStyle(Color.lp.label)
             }
@@ -292,7 +292,6 @@ struct MainToolbar: ToolbarContent {
                 Button(String(localized: "New OpenVPN Profile", comment: "Menu item")) { env.actions.newProfile(.openVPN) }
                 Divider()
                 Button(String(localized: "Import File…", comment: "Menu item")) { ImportPanel.run(env) }
-                Button(String(localized: "Import QR Code Image…", comment: "Menu item")) { ImportPanel.run(env, imagesOnly: true) }
                 Button(env.settings.clipboardDenied ? String(localized: "Clipboard access is off for LockPlus", comment: "Menu item (§6.8)")
                                                     : String(localized: "Import from Clipboard", comment: "Menu item")) {
                     if env.settings.clipboardDenied { SystemSettingsLink.open(SystemSettingsLink.pastePrivacy) } else { env.actions.importFromClipboard() }
@@ -338,17 +337,13 @@ struct ToolbarConnectButton: View {
     }
 }
 
-/// File and QR import panels (§6.8). Reading files happens in the ImportCoordinator, not here.
+/// File import panel (§6.8). Reading files happens in the ImportCoordinator, not here.
 enum ImportPanel {
-    @MainActor static func run(_ env: UIEnvironment, imagesOnly: Bool = false) {
+    @MainActor static func run(_ env: UIEnvironment) {
         let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = !imagesOnly
+        panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
-        var types: [UTType] = [.image]
-        if !imagesOnly {
-            types += [.zip, UTType(filenameExtension: "conf"), UTType(filenameExtension: "ovpn")].compactMap { $0 }
-        }
-        panel.allowedContentTypes = types
+        panel.allowedContentTypes = [.zip, UTType(filenameExtension: "conf"), UTType(filenameExtension: "ovpn")].compactMap { $0 }
         panel.prompt = String(localized: "Import", comment: "Open panel button")
         if panel.runModal() == .OK { env.actions.importFiles(panel.urls) }
     }

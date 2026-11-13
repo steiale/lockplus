@@ -18,6 +18,7 @@ let package = Package(
         .package(path: "../../Packages/LockPlusCore"),
         .package(path: "../../Packages/TunnelEngine"),
         .package(path: "../../Packages/OpenVPN3Shim"),
+        .package(path: "../../Packages/ProfileValidator"),
     ],
     targets: [
         // The adapters as the Release extension compiles them (no LP_DEV_SIGNING).
@@ -29,6 +30,7 @@ let package = Package(
                 .product(name: "LPWire", package: "LockPlusCore"),
                 .product(name: "TunnelEngine", package: "TunnelEngine"),
                 .product(name: "OpenVPN3Shim", package: "OpenVPN3Shim"),
+                .product(name: "LPOptionsParser", package: "ProfileValidator"),
             ],
             swiftSettings: lpSwiftSettings
         ),
@@ -48,6 +50,7 @@ let package = Package(
                 .product(name: "TunnelEngine", package: "TunnelEngine"),
                 .product(name: "TunnelEngineTestSupport", package: "TunnelEngine"),
                 .product(name: "OpenVPN3Shim", package: "OpenVPN3Shim"),
+                .product(name: "LPOptionsParser", package: "ProfileValidator"),
             ],
             swiftSettings: lpSwiftSettings
         ),

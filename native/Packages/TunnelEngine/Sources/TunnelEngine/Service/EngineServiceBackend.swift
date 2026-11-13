@@ -6,6 +6,7 @@ import LPWire
 /// namespace only (review H1): every store call and every controller query is addressed by (peer.uid, profileID), so
 /// another uid's profile with the same UUID is simply not there (`.profileNotProvisioned`). `.notOwner` remains for
 /// auth prompts, whose promptIDs are global.
+/// `validateProfile` answers `.extensionBusy` (2.0.2: profile evaluation left the root extension).
 /// `measureLatency` answers `.extensionBusy`: S2 E5 showed a provider-originated connection works but leaves en0
 /// OUTSIDE the tunnel, so the extension opens no connection besides the engines' own transport (§10.1.1 E5).
 /// Logs are not on the XPC surface (review M1): see `DiagnosticsHook`.
@@ -16,7 +17,7 @@ public struct EngineServiceBackend<C: Clock>: TunnelServiceBackend where C.Durat
     public let capabilities: Set<Capability>
 
     public init(controller: TunnelController<C>, secrets: any ExtensionSecretStore, validator: (any PayloadValidator)?,
-                capabilities: Set<Capability> = [.openVPN, .wireGuard, .keyPassphrase]) {
+                capabilities: Set<Capability> = [.openVPN, .wireGuard, .keyPassphrase, .startAuthorisation]) {
         self.controller = controller; self.secrets = secrets; self.validator = validator; self.capabilities = capabilities
     }
 
@@ -60,12 +61,9 @@ public struct EngineServiceBackend<C: Clock>: TunnelServiceBackend where C.Durat
                     .map { ProvisionedEntry(id: $0.id, revision: $0.revision, digest: $0.digest ?? "") }   // "" → reconcile re-provisions
                 return .success(try LPWire.encode(ListProvisionedReply(entries: Array(entries))))
             case .validateProfile:
-                // The full §8.1 [7a] verdict comes from the validator itself (review simplification 5: no router).
-                let r = try LPWire.decode(ValidateProfileRequest.self, request, max: method.requestLimit)
-                let payload = SecretBytes(copying: r.payload)
-                let reply = validator?.evaluate(kind: r.kind, payload: payload, disableClientCert: r.kind == .openVPN ? r.disableClientCert : nil)
-                    ?? ValidateProfileReply(error: nil)
-                return .success(try LPWire.encode(reply))
+                // 2.0.2 (PLAN §1.5): the checks that need openvpn3 moved to the app's validator service. The method stays
+                // on the wire (additive rule) and answers busy without decoding the (up to 300 KiB) payload.
+                return .failure(LPError(.extensionBusy, detail: "validateProfile moved to the app's validator service"))
             case .cancelAuth:
                 let r = try LPWire.decode(CancelAuthRequest.self, request, max: method.requestLimit)
                 try await controller.cancelAuth(promptID: r.promptID, callerUID: peer.uid)
@@ -119,6 +117,24 @@ public struct EngineServiceBackend<C: Clock>: TunnelServiceBackend where C.Durat
                 try await requireProvisioned(r.profileID, peer)
                 let outcome = await controller.pushEndpoints(profileID: r.profileID, ownerUID: peer.uid, endpoints: r.endpoints)
                 return .success(try LPWire.encode(PushEndpointsReply(outcome: outcome)))
+            case .armStart:
+                // 2.0.2 (PLAN §3): the arm is bound to the kernel-reported uid of this connection AND to a profile this uid
+                // has provisioned in its own namespace, so another user's copy of the UUID can't arm this one's configuration.
+                let r = try LPWire.decode(ArmStartRequest.self, request, max: method.requestLimit)
+                try await requireProvisioned(r.profileID, peer)
+                let expires = await controller.armStart(profileID: r.profileID, ownerUID: peer.uid, nonce: r.nonce)
+                return .success(try LPWire.encode(ArmStartReply(expiresAt: expires)))
+            case .revokeUnattended:
+                // Round 1 (Codex 4): only the caller's own keys (peer.uid); a profile it hasn't provisioned has no record.
+                let r = try LPWire.decode(RevokeUnattendedRequest.self, request, max: method.requestLimit)
+                // Round 3 (Codex r3 #8): a paginated keep set is applied once complete.
+                if let batch = r.batch, r.pageCount > 1 {
+                    await controller.revokeUnattendedPage(batch: batch, page: r.page, count: r.pageCount,
+                                                          keeping: Set(r.keepProfileIDs), ownerUID: peer.uid)
+                } else {
+                    await controller.revokeUnattended(keeping: Set(r.keepProfileIDs), ownerUID: peer.uid)
+                }
+                return .success(nil)
             case .hello, .measureLatency:
                 return .failure(LPError(.extensionBusy, detail: "\(method.rawValue) not available in this build"))
             }
@@ -143,14 +159,16 @@ public struct EngineServiceBackend<C: Clock>: TunnelServiceBackend where C.Durat
         }
         if let c = r.credentials, !c.isWithinLimits { throw LPError(.malformedRequest, detail: "credentials") }
         let payload = SecretBytes(copying: r.payload)
-        do throws(LPTunnelError) { try validator?.validate(kind: r.kind, payload: payload) } catch {
+        do throws(LPTunnelError) { try validator?.validateForProvision(kind: r.kind, payload: payload) } catch {
             throw LPError(.profileInvalid, detail: error.detail)
         }
         try await secrets.put(.payload, r.profileID, ownerUID: peer.uid, revision: r.revision, payload)
         // Profile change FIRST, committed with the payload (round 6, Codex M2): a higher revision ends a waiting start of
         // the old configuration before any credential I/O can fail; a same-revision retry after such a failure still
-        // ends the starts of an OLDER revision (`payloadCommitted` compares with each start's own revision). Only then
-        // may new credentials retry a hold (which, after a profile change, is gone). Review L2.
+        // ends the starts without a kill switch of an OLDER configuration revision (`payloadCommitted` compares with the
+        // revision NE started each with, even when it already loaded this payload). A kill-switch start goes on and is
+        // compared with the payload revision its attempt loaded (D10.7-1, round 5). Only then may new credentials retry
+        // a hold (which, after a profile change, is gone). Review L2.
         if higher {
             await controller.profileProvisioned(r.profileID, ownerUID: peer.uid, revision: r.revision)
         } else {

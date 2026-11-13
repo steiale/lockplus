@@ -119,6 +119,60 @@ import TunnelEngineTestSupport
         #expect(sess.sessions.isEmpty)
     }
 
+    /// 2.0.2 (PLAN §3.2): `armStart` is served from the caller's own namespace only: an unprovisioned profile (another
+    /// uid's copy of the UUID included) can't be armed, and the reply carries the 15 s expiry.
+    @Test func armStartRequiresProvisionedProfileInCallersNamespace() async throws {
+        let nonce = UUID()
+        #expect(err(await call(.armStart, ArmStartRequest(profileID: h.pid, nonce: nonce), as: alice)) == .profileNotProvisioned)
+        _ = await provision()
+        #expect(err(await call(.armStart, ArmStartRequest(profileID: h.pid, nonce: nonce), as: mallory)) == .profileNotProvisioned)
+        let before = h.wall.now
+        let reply = try LPWire.decode(ArmStartReply.self, try #require(try await call(.armStart, ArmStartRequest(profileID: h.pid, nonce: nonce),
+                                                                                       as: alice).get()), max: 1 << 14)
+        #expect(reply.expiresAt == before.addingTimeInterval(15))
+    }
+
+    /// The arm lands under the CALLER's uid: alice provisioned the profile, mallory's arm attempt failed above, and a
+    /// mallory-provisioned copy of the same UUID arms mallory's key, never alice's configuration.
+    @Test func anArmOfACopyOfTheUUIDDoesNotAuthoriseTheOwnersConfiguration() async throws {
+        let enforcing = Harness(authorisation: true)
+        let b = EngineServiceBackend(controller: enforcing.controller, secrets: enforcing.secrets, validator: FakeValidator())
+        try? await enforcing.secrets.put(.payload, enforcing.pid, ownerUID: 502, revision: 1, .text("client\n"))
+        await enforcing.provision()
+        let nonce = UUID()
+        let r = await b.handle(.armStart, request: try! LPWire.encode(ArmStartRequest(profileID: enforcing.pid, nonce: nonce)), peer: mallory)
+        #expect(err(r) == nil)
+        let t = enforcing.start(nonce: nonce)                                   // alice's configuration (ownerUID 501)
+        #expect(enforcing.code(await t.value) == .startNotAuthorised)
+    }
+
+    /// Round 1 (Fable H1a, Sonnet L10): a provision through the backend, same revision or higher, never clears the
+    /// authorisation of the connected session ("Save Only" on a connected profile).
+    @Test func aProvisionThroughTheBackendKeepsTheSessionsAuthorisation() async throws {
+        let enforcing = Harness(authorisation: true)
+        let b = EngineServiceBackend(controller: enforcing.controller, secrets: enforcing.secrets, validator: FakeValidator())
+        func provision(_ rev: UInt64) async -> LPErrorCode? {
+            err(await b.handle(.provisionProfile, request: try! LPWire.encode(ProvisionRequest(profileID: enforcing.pid, kind: .openVPN,
+                revision: rev, payload: Data("client\n".utf8), credentials: CredentialRecord(username: Data("a".utf8), password: Data("p".utf8)))),
+                peer: alice))
+        }
+        #expect(await provision(1) == nil)
+        let (nonce, t) = await enforcing.armedStart()
+        let a = await enforcing.adapter(0)
+        _ = await a.requestSettings(Harness.plan).value()
+        a.finishStart()
+        #expect(enforcing.code(await t.value) == nil)
+        #expect(await provision(1) == nil)                                  // same-revision retry
+        #expect(enforcing.state.load().authorisedStarts[enforcing.key]?.nonce == nonce)
+        #expect(await provision(2) == nil)                                  // higher revision
+        #expect(enforcing.state.load().authorisedStarts[enforcing.key]?.nonce == nonce)
+        #expect(await enforcing.phase == .connected)
+    }
+
+    @Test func startAuthorisationIsADefaultCapability() {
+        #expect(backend.capabilities.contains(.startAuthorisation))
+    }
+
     /// M1: the log methods are gone from the XPC surface (method table, protocol, backend).
     @Test func logMethodsAreNotOnTheWire() {
         #expect(!LPMethod.allCases.map(\.rawValue).contains { $0 == "recentLogs" || $0 == "setLogLevel" })
@@ -218,11 +272,16 @@ import TunnelEngineTestSupport
         #expect(c.state.load().latches[malloryKey] == nil)
     }
 
-    @Test func validateProfileReportsTheEngineCheck() async throws {
-        let bad = EngineServiceBackend(controller: h.controller, secrets: h.secrets, validator: FakeValidator(reject: true))
-        let r = try LPWire.decode(ValidateProfileReply.self, try #require(try await bad.handle(.validateProfile,
-                    request: LPWire.encode(ValidateProfileRequest(kind: .wireGuard, payload: Data("x".utf8))), peer: alice).get()), max: 1 << 14)
-        #expect(!r.isValid && r.error?.code == .profileInvalid)
+    /// 2.0.2 (PLAN §1.5): profile evaluation left the root extension. The method stays on the wire, answers busy, and
+    /// never decodes (or validates) the payload.
+    @Test func validateProfileAnswersBusyWithoutDecoding() async {
+        let v = FakeValidator()
+        let b = EngineServiceBackend(controller: h.controller, secrets: h.secrets, validator: v)
+        let r = await b.handle(.validateProfile, request: Data("not a plist".utf8), peer: alice)     // undecodable on purpose
+        #expect(err(r) == .extensionBusy)
+        let ok = await b.handle(.validateProfile, request: try! LPWire.encode(ValidateProfileRequest(kind: .wireGuard, payload: Data("x".utf8))), peer: alice)
+        #expect(err(ok) == .extensionBusy)
+        #expect(v.provisionCalls == 0 && v.startCalls == 0)
     }
 
     @Test func oversizedRequestIsNeverDecoded() async {

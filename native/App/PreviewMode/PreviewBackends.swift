@@ -172,7 +172,7 @@ final class PreviewTunnelService: TunnelServicing {
 
     var events: AsyncStream<TunnelEvent> { world.events }
 
-    static let serverHello = ServerHello(extVersion: "2.0.0", extBuild: "preview", capabilities: [.openVPN, .wireGuard, .keyPassphrase])
+    static let serverHello = ServerHello(extVersion: "2.0.0", extBuild: "preview", capabilities: [.openVPN, .wireGuard, .keyPassphrase, .startAuthorisation])
 
     func hello() async throws(LPError) -> ServerHello {
         linkCont.yield(ServiceLinkStatus(link: .validated(Self.serverHello), busy: false))
@@ -203,9 +203,7 @@ final class PreviewTunnelService: TunnelServicing {
         case .listProvisioned:
             value = ListProvisionedReply(entries: world.state.withLock { Array($0.provisioned.values) })
         case .validateProfile:
-            guard let r = request as? ValidateProfileRequest else { throw LPError(.malformedRequest) }
-            let text = String(decoding: r.payload, as: UTF8.self)
-            value = ValidateProfileReply(error: nil, autologin: !text.contains("auth-user-pass"))
+            throw LPError(.extensionBusy)                            // 2.0.2: as the real extension (the validator service checks)
         case .pendingAuthPrompt:
             guard let r = request as? ProfileRequest else { throw LPError(.malformedRequest) }
             value = PendingAuthPromptReply(prompt: world.state.withLock { $0.prompts[r.profileID] })
@@ -223,6 +221,9 @@ final class PreviewTunnelService: TunnelServicing {
             value = MeasureLatencyReply(results: [])
         case .pushEndpoints:
             value = PushEndpointsReply(outcome: .notHeld)            // preview starts never hold
+        case .armStart:
+            guard request is ArmStartRequest else { throw LPError(.malformedRequest) }
+            value = ArmStartReply(expiresAt: Date().addingTimeInterval(15))      // preview arms always succeed
         default:
             throw LPError(.malformedRequest, detail: "preview: \(method.rawValue)")
         }
@@ -251,12 +252,29 @@ final class PreviewTunnelService: TunnelServicing {
             }
         case .wipeAllSecrets:
             world.state.withLock { $0.provisioned = [:] }
+        case .revokeUnattended:
+            break                                                    // preview: no start authorisation to revoke
         default:
             break
         }
     }
 
     func resetAfterUserAction() async {}
+}
+
+/// Preview mode: [6]/[7] stand-in. Accepts every profile that passed [1]-[5]; auto-login unless it asks for a username and
+/// password. The live app uses `ServiceProfileValidator` over the sandboxed validator service; hosted tests use
+/// `FakeProfileValidator`.
+struct PreviewProfileValidator: OpenVPN3ProfileValidating {
+    func validate(canonical: String, disableClientCert: Bool) async throws -> OVPNEngineEvaluation {
+        OVPNEngineEvaluation(verdict: .accepted, autologin: !canonical.contains("auth-user-pass"), staticChallenge: nil,
+                             staticChallengeEcho: false, privateKeyPasswordRequired: false)
+    }
+}
+
+/// Preview mode: no archive reader (zips aren't part of the demo).
+struct PreviewZipArchiveReader: ZipArchiveReading {
+    func read(_ data: Data) async throws(ZipArchiveError) -> ZipProfiles { throw .checkUnavailable }
 }
 
 /// Fake extension lifecycle: "Installing…" for a moment, then ready. Deactivation reports a cancelled admin dialog,

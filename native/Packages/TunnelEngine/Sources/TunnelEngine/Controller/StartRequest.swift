@@ -11,16 +11,19 @@ public struct StartOptions: Sendable, Equatable {
     public var isManual: Bool
     /// `[hostname: [IP literal]]` the app resolved before the start (§9.3, S2 E10).
     public var endpoints: [String: [String]]
+    /// 2.0.2 (PLAN §3): `lp.startNonce`, binding a manual start to the owner's `armStart`. Only read from a manual start.
+    public var nonce: UUID?
 
-    public init(isManual: Bool, endpoints: [String: [String]] = [:]) {
-        self.isManual = isManual; self.endpoints = endpoints
+    public init(isManual: Bool, endpoints: [String: [String]] = [:], nonce: UUID? = nil) {
+        self.isManual = isManual; self.endpoints = endpoints; self.nonce = nonce
     }
 
     /// A manual start is one carrying the app's `lp.manual = 1` marker (§5.2). Any other options dictionary (a foreign
     /// caller) is treated like an on-demand start: the start latch applies and its endpoint IPs are ignored.
     public init(_ options: [String: NSObject]?) {
         guard let o = options, (o[StartOptionKey.manual] as? NSNumber)?.intValue == 1 else { self.init(isManual: false); return }
-        self.init(isManual: true, endpoints: Self.endpoints(o[StartOptionKey.endpoints]))
+        self.init(isManual: true, endpoints: Self.endpoints(o[StartOptionKey.endpoints]),
+                  nonce: (o[StartOptionKey.startNonce] as? String).flatMap { UUID(uuidString: $0) })
     }
 
     /// Bounded and validated: ≤ 8 hostnames of ≤ 253 bytes, ≤ 16 IP literals each; anything else is dropped.

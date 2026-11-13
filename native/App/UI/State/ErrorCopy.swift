@@ -28,6 +28,7 @@ extension LPErrorCode {
         case .profileRevisionStale: String(localized: "The profile changed while connecting. Connect again.", comment: "Error message")
         case .unsupportedDirective: String(localized: "The profile uses a setting LockPlus doesn't support.", comment: "Error message")
         case .killSwitchNotApplied: String(localized: "Couldn't apply the kill switch. LockPlus won't connect unprotected.", comment: "Error message (E2E-1: the system dropped the kill switch from the VPN configuration)")
+        case .profileCheckCrashed: String(localized: "LockPlus couldn't check this profile safely.", comment: "Error message (2.0.2: LockPlus's sandboxed file checker stopped twice on this profile)")
         case .authFailed: String(localized: "The server rejected the sign-in.", comment: "Error message")
         case .authRequired: String(localized: "The server asks you to sign in.", comment: "Error message")
         case .authTimedOut: String(localized: "Sign-in took too long.", comment: "Error message")
@@ -62,6 +63,7 @@ extension LPErrorCode {
             }
         case .supersededByKillSwitch: String(localized: "Another LockPlus profile with the kill switch took over, so this one was disconnected.", comment: "Error message (2.0.1 review H1: a profile without the kill switch was ended for a kill-switch profile's start)")
         case .sessionInterrupted: String(localized: "Another LockPlus start interrupted the connection, then didn't go ahead.", comment: "Error message (2.0.1 round 5: a session torn down for another configuration's kill-switch start, kept and held because it became protected meanwhile)")
+        case .startNotAuthorised: String(localized: "This profile was started outside LockPlus (for example from System Settings) and was refused. Connect it from LockPlus.", comment: "Error message (2.0.2, D-1: a start of a profile that its owner's LockPlus didn't make, e.g. a System Settings toggle or scutil, was refused with error 225)")
         case .endpointInterfaceUnusable:
             if let detail {
                 String(localized: "This server is only reachable via \(detail), a network LockPlus's tunnel can't use. Connect the server to your main network (Wi-Fi or Ethernet).", comment: "Error message (§6.15). The argument is an interface name such as bridge100.")
@@ -90,6 +92,7 @@ extension LPErrorCode {
         case .profileRevisionStale: String(localized: "the profile changed while connecting", comment: "Error reason fragment")
         case .unsupportedDirective: String(localized: "the profile uses an unsupported setting", comment: "Error reason fragment")
         case .killSwitchNotApplied: String(localized: "the kill switch couldn't be applied", comment: "Error reason fragment")
+        case .profileCheckCrashed: String(localized: "LockPlus couldn't check the profile safely", comment: "Error reason fragment")
         case .authFailed: String(localized: "the server rejected the sign-in", comment: "Error reason fragment")
         case .authRequired: String(localized: "the server asks you to sign in", comment: "Error reason fragment")
         case .authTimedOut: String(localized: "sign-in took too long", comment: "Error reason fragment")
@@ -124,6 +127,7 @@ extension LPErrorCode {
             }
         case .supersededByKillSwitch: String(localized: "another LockPlus profile with the kill switch took over", comment: "Error reason fragment")
         case .sessionInterrupted: String(localized: "another LockPlus start interrupted its connection", comment: "Error reason fragment")
+        case .startNotAuthorised: String(localized: "it was started outside LockPlus", comment: "Error reason fragment")
         case .endpointInterfaceUnusable:
             if let detail {
                 String(localized: "the server is only reachable via \(detail)", comment: "Error reason fragment; the argument is an interface name")
@@ -153,6 +157,7 @@ extension LPErrorCode {
         case .profileRevisionStale: String(localized: "because.profileRevisionStale", defaultValue: "the profile changed while connecting", comment: "Error cause, used after \"because\" in a VoiceOver announcement")
         case .unsupportedDirective: String(localized: "because.unsupportedDirective", defaultValue: "the profile uses an unsupported setting", comment: "Error cause, used after \"because\" in a VoiceOver announcement")
         case .killSwitchNotApplied: String(localized: "because.killSwitchNotApplied", defaultValue: "the kill switch couldn't be applied", comment: "Error cause, used after \"because\" in a VoiceOver announcement")
+        case .profileCheckCrashed: String(localized: "because.profileCheckCrashed", defaultValue: "LockPlus couldn't check the profile safely", comment: "Error cause, used after \"because\" in a VoiceOver announcement")
         case .authFailed: String(localized: "because.authFailed", defaultValue: "the server rejected the sign-in", comment: "Error cause, used after \"because\" in a VoiceOver announcement")
         case .authRequired: String(localized: "because.authRequired", defaultValue: "the server asks you to sign in", comment: "Error cause, used after \"because\" in a VoiceOver announcement")
         case .authTimedOut: String(localized: "because.authTimedOut", defaultValue: "sign-in took too long", comment: "Error cause, used after \"because\" in a VoiceOver announcement")
@@ -187,6 +192,7 @@ extension LPErrorCode {
             }
         case .supersededByKillSwitch: String(localized: "because.supersededByKillSwitch", defaultValue: "another LockPlus profile with the kill switch took over", comment: "Error cause, used after \"because\" in a VoiceOver announcement")
         case .sessionInterrupted: String(localized: "because.sessionInterrupted", defaultValue: "another LockPlus start interrupted its connection", comment: "Error cause, used after \"because\" in a VoiceOver announcement")
+        case .startNotAuthorised: String(localized: "because.startNotAuthorised", defaultValue: "it was started outside LockPlus", comment: "Error cause, used after \"because\" in a VoiceOver announcement")
         case .endpointInterfaceUnusable:
             if let detail {
                 String(localized: "because.endpointInterfaceUnusable.detail", defaultValue: "the server is only reachable via \(detail)", comment: "Error cause after \"because\"; the argument is an interface name")

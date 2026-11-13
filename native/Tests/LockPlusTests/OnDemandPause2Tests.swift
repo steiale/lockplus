@@ -245,8 +245,9 @@ struct OnDemandPause2Tests {
         let sm = SerializedVPNManager(inner: h.managers, settleClock: fake.clock)
         let work = try await h.add("Work.conf", Harness.wgConf)
         var s = AppSettings()
-        s.autoConnect.pausedUntil = Date().addingTimeInterval(-5)
-        s.pausedState = PausedState(profileID: work.id, onDemandEnabledIDs: [work.id], agentBuild: "1")
+        s.autoConnect.pausedUntil = ResumeIntent.wholeSeconds(Date().addingTimeInterval(-5))
+        s.pausedState = PausedState(profileID: work.id, onDemandEnabledIDs: [work.id], agentBuild: "1",
+                                   intent: await resumeIntent(work.id, until: s.autoConnect.pausedUntil!, keychain: h.keychain, dir: h.dir.data))
         try AtomicFile.saveJSON(s, to: h.dir.data.settings)
         let managers = h.managers
         let startsAtSleep = LockBox<Int>(-1)
@@ -257,7 +258,8 @@ struct OnDemandPause2Tests {
         #expect(fake.sleeps == [.seconds(1)])
     }
 
-    /// A configuration that never settles: no headless start, everything paused comes back, fail closed.
+    /// A configuration that never settles: no headless start (fail closed). 2.0.2 RC review (Fable M1): out of time, not
+    /// failed: nothing is spent, the pause stays and the next run retries (HeadlessResumeRetryTests).
     @Test func aConfigurationThatNeverSettlesIsNoHeadlessStart() async throws {
         let inner = FakeVPNManager()
         let h = Harness(managers: inner)
@@ -266,12 +268,14 @@ struct OnDemandPause2Tests {
         let work = try await h.add("Work.conf", Harness.wgConf)
         let auto = try await h.add("Home NAS.conf", Harness.splitConf)
         var s = AppSettings()
-        s.autoConnect.pausedUntil = Date().addingTimeInterval(-5)
-        s.pausedState = PausedState(profileID: work.id, onDemandEnabledIDs: [work.id, auto.id], agentBuild: "1")
+        s.autoConnect.pausedUntil = ResumeIntent.wholeSeconds(Date().addingTimeInterval(-5))
+        s.pausedState = PausedState(profileID: work.id, onDemandEnabledIDs: [work.id, auto.id], agentBuild: "1",
+                                   intent: await resumeIntent(work.id, until: s.autoConnect.pausedUntil!, keychain: h.keychain, dir: h.dir.data))
         try AtomicFile.saveJSON(s, to: h.dir.data.settings)
         let r = await HeadlessResume.perform(dir: h.dir.data, managers: sm, agent: ProbeResumeAgent(), keychain: h.keychain)
-        #expect(r == .resumed(restarted: nil, onDemand: [work.id, auto.id]))
+        #expect(r == .outOfTime(.settle))
         #expect(inner.starts.isEmpty)
+        #expect(AtomicFile.loadJSON(AppSettings.self, from: h.dir.data.settings)?.pausedState == s.pausedState)
     }
 
     /// Nit: the headless run never rebuilds `credential-facts.json` from the keychain.
@@ -280,8 +284,9 @@ struct OnDemandPause2Tests {
         defer { h.dir.cleanup() }
         let work = try await h.add("Work.conf", Harness.wgConf)
         var s = AppSettings()
-        s.autoConnect.pausedUntil = Date().addingTimeInterval(-5)
-        s.pausedState = PausedState(profileID: work.id, onDemandEnabledIDs: [], agentBuild: "1")
+        s.autoConnect.pausedUntil = ResumeIntent.wholeSeconds(Date().addingTimeInterval(-5))
+        s.pausedState = PausedState(profileID: work.id, onDemandEnabledIDs: [], agentBuild: "1",
+                                   intent: await resumeIntent(work.id, until: s.autoConnect.pausedUntil!, keychain: h.keychain, dir: h.dir.data))
         try AtomicFile.saveJSON(s, to: h.dir.data.settings)
         try? FileManager.default.removeItem(at: h.dir.data.credentialFacts)
         _ = await HeadlessResume.perform(dir: h.dir.data, managers: h.managers, agent: ProbeResumeAgent(), keychain: h.keychain)

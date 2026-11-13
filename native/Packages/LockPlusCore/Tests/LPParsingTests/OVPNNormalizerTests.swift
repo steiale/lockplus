@@ -255,9 +255,12 @@ struct OVPNNormalizerTests {
     }
 
     @Test func noMssfixFloorWithMTUDirective() {
-        for d in ["mssfix 1400", "tun-mtu 1400", "link-mtu 1500"] {
+        for d in ["mssfix 1400", "tun-mtu 1400"] {
             #expect(!(OVPNFixtures.importing(OVPNFixtures.base(d + "\n")).stream ?? []).contains(["mssfix", "1300"]), "\(d)")
         }
+        // Round 1 (Codex 8): link-mtu is dropped from the canonical text, so the floor is appended (else the canonical
+        // text would get it on the next normalisation and fail the fixed-point check).
+        #expect((OVPNFixtures.importing(OVPNFixtures.base("link-mtu 1500\n")).stream ?? []).contains(["mssfix", "1300"]))
     }
 
     @Test func remoteCertEKUAppendedExactlyWhenNeeded() {

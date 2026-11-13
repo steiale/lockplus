@@ -1,5 +1,6 @@
 import Foundation
 import LPModel
+import LPWire
 import Observation
 import os
 
@@ -15,20 +16,41 @@ final class DiagnosticsStore {
     /// 2.0.1 E2E F4: the checked profile sets no DNS (`setsNoDNS`): nothing to verify.
     private(set) var dnsNotApplicable = false
 
+    /// 2.0.2 self-test: the last report of this session (cleared by any status change); runs only on the user's request.
+    private(set) var selfTest: SelfTestReport?
+    private(set) var selfTestRunning = false
+    /// The profile whose tunnel is `.connected` right now; the test needs it (nil = "Connect first").
+    private(set) var connectedProfileID: UUID?
+    /// The session's snapshot (endpoint, tunnel addresses); the app root wires it to `ConnectionStore.snapshot`.
+    @ObservationIgnored var snapshotProvider: @MainActor () -> TunnelSnapshot? = { nil }
+    @ObservationIgnored private let selfTestNetworking: any SelfTestNetworking
+    @ObservationIgnored private var selfTestTask: Task<Void, Never>?
+    @ObservationIgnored private var selfTestGeneration = 0
+
     @ObservationIgnored private let system: any DNSSystemReading
     @ObservationIgnored private let profiles: ProfilesStore
     @ObservationIgnored private let delay: Duration
     @ObservationIgnored private var verifyTask: Task<Void, Never>?
     @ObservationIgnored private let log = Logger(subsystem: "io.github.steiale.lockplus.mac", category: "diagnostics")
 
-    init(system: any DNSSystemReading, profiles: ProfilesStore, delay: Duration = DNSVerifier.delayAfterConnect) {
+    init(system: any DNSSystemReading, profiles: ProfilesStore, delay: Duration = DNSVerifier.delayAfterConnect,
+         selfTest: any SelfTestNetworking = LiveSelfTestNetworking()) {
         self.system = system
         self.profiles = profiles
         self.delay = delay
+        self.selfTestNetworking = selfTest
     }
 
     /// From ConnectionStore's status stream: `.connected` schedules a check; anything else makes it pending again.
     func statusChanged(_ id: UUID, _ status: TunnelStatus) {
+        // The self-test describes one connection: any change (a reassert included) makes its report stale.
+        if status == .connected {
+            if connectedProfileID != id || selfTest != nil || selfTestRunning { discardSelfTest() }
+            connectedProfileID = id
+        } else if connectedProfileID == id {
+            connectedProfileID = nil
+            discardSelfTest()
+        }
         if status == .connected {
             schedule(id)                         // §10.2: after EVERY .connected, a reassert included
         } else if dnsProfileID == id {
@@ -37,6 +59,42 @@ final class DiagnosticsStore {
             dnsResult = nil
             if status != .reasserting { dnsProfileID = nil }
         }
+    }
+
+    private func discardSelfTest() {
+        selfTestGeneration += 1
+        selfTestTask?.cancel()
+        selfTestTask = nil
+        selfTestRunning = false
+        selfTest = nil
+    }
+
+    /// The Diagnostics "Test Connection" button (and ⌘R "Run All"): only while `.connected`, one at a time, cancelled by
+    /// any status change. The only network contact is `ConnectionSelfTest.probeURL` (D-5, F8).
+    func runSelfTest(_ id: UUID? = nil) async {
+        guard !selfTestRunning, let target = id ?? connectedProfileID, connectedProfileID == target,
+              let p = profiles.profile(target) else { return }
+        selfTestRunning = true
+        let generation = selfTestGeneration
+        let facts = ConnectionSelfTest.facts(profile: p, snapshot: snapshotProvider())
+        let expected = p.summary.dnsServers.map(Self.stripPort)
+        let system = self.system, net = selfTestNetworking
+        let task = Task { @MainActor [weak self] in
+            let dns: (DNSCheckResult, [DNSResolver])
+            if facts.dnsApplicable {
+                dns = await DNSVerifier.verify(system: system, expectedServers: expected, catchAll: facts.dnsCatchAll)
+            } else {
+                dns = (.ok, [])
+            }
+            let report = await ConnectionSelfTest.run(facts: facts, dns: dns, net: net)
+            guard let self, !Task.isCancelled, generation == self.selfTestGeneration else { return }
+            self.selfTest = report
+            self.selfTestRunning = false
+            self.selfTestTask = nil
+            self.log.notice("self-test finished: \(String(describing: report.overall), privacy: .public)")
+        }
+        selfTestTask = task
+        await task.value
     }
 
     private func schedule(_ id: UUID) {

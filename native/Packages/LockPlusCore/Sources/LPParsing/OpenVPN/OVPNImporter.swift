@@ -28,6 +28,9 @@ public struct OVPNEngineEvaluation: Sendable, Equatable {
         /// [7a] error, any [7b] exception, or a rejecting log category ("Unused ignored meta options", "probably
         /// specified multiple times"). `category` is openvpn3's category text, mapped to "Not supported" (§8.3).
         case rejected(category: String)
+        /// The sandboxed validator died on this file twice (`.profileCheckCrashed`): refused, reported as `.checkCrashed`
+        /// ("LockPlus couldn't check this file safely."). A slow check is never this: it throws (not checked).
+        case checkCrashed
     }
     public var verdict: Verdict
     public var autologin: Bool
@@ -132,6 +135,24 @@ public enum OVPNImporter {
         return result
     }
 
+    /// 2.0.2 (PLAN §1.5): whether `payload` is exactly what the normaliser would emit for it: the tokenizer streams of the
+    /// payload and of `importProfile(payload).canonicalText` are equal and the normaliser appended nothing (no floors, no
+    /// `remote-cert-eku`, no `auth-nocache`). This is the extension's provision-time stand-in for the [6] differential:
+    /// a payload that is a fixed point is by construction the stream the app already compared with openvpn3 at import.
+    /// Stream equality, not byte equality: harmless whitespace differences in 2.0.1-stored payloads never fail it.
+    public static func isCanonicalFixedPoint(_ payload: some Collection<UInt8>) -> Bool {
+        guard case .success(let ds) = OVPNTokenizer.parse(payload) else { return false }
+        let r = importProfile(payload)
+        guard r.verdict != .rejected, r.canonicalText != nil, let stream = r.stream,
+              OVPNCanonical.stream(of: ds) == stream else { return false }
+        return !r.report.items.contains { item in
+            switch item.reason {
+            case .remoteCertEKUAppended, .keepaliveFloorAppended, .mssfixFloorAppended, .authNocacheAppended: true
+            default: false
+            }
+        }
+    }
+
     /// Step [7] (app side, via the extension's `validateProfile`). Call after `importProfile` passed.
     public static func validateWithEngine(_ result: OVPNImportResult, validator: any OpenVPN3ProfileValidating) async -> OVPNImportResult {
         guard let text = result.canonicalText, result.verdict != .rejected else { return result }
@@ -146,6 +167,10 @@ public enum OVPNImporter {
             case .rejected(let category):
                 r.engineValidation = .failed
                 r.report.add(.notSupported, .engineValidationFailed(category: category))
+                r = withoutPayload(r)
+            case .checkCrashed:
+                r.engineValidation = .failed
+                r.report.add(.notSupported, .checkCrashed)
                 r = withoutPayload(r)
             }
         } catch {

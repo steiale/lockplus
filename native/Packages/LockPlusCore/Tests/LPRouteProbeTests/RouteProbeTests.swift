@@ -85,4 +85,32 @@ import Testing
     @Test func lookupOfALiteralNeedsNoDNS() {
         #expect(StartEndpointResolver.lookupIPs("127.0.0.1") == ["127.0.0.1"])
     }
+
+    // MARK: 2.0.2 self-test seams
+
+    @Test func interfaceForLoopbackIsLo0() {
+        #expect(RouteProbe.interface(forIP: "127.0.0.1") == "lo0")
+        #expect(RouteProbe.interface(forIP: "::1") == "lo0")
+    }
+
+    @Test func nonLiteralReturnsNil() {
+        #expect(RouteProbe.interface(forIP: "example.com") == nil)
+        #expect(RouteProbe.interface(forIP: "steiale.github.io") == nil)
+        #expect(RouteProbe.interface(forIP: "") == nil)
+        #expect(RouteProbe.interface(forIP: "999.1.1.1") == nil)
+    }
+
+    @Test func owningAddressFindsLoopbackAndIgnoresScope() {
+        #expect(RouteProbe.interface(owningAddress: "127.0.0.1") == "lo0")
+        #expect(RouteProbe.interface(owningAddress: "::1") == "lo0")
+        #expect(RouteProbe.interface(owningAddress: "::1%lo0") == "lo0")
+        #expect(RouteProbe.interface(owningAddress: "192.0.2.77") == nil)             // TEST-NET-1: nobody owns it
+        #expect(RouteProbe.interface(owningAddress: "not-an-ip") == nil)
+    }
+
+    @Test func defaultInterfaceMatchesTheRouteLookup() throws {
+        let v4 = try #require(RouteProbe.defaultInterface(ipv6: false), "no IPv4 default route on this host")
+        #expect(RouteProbe.interface(forIP: "192.0.2.1") == v4)
+        _ = RouteProbe.defaultInterface(ipv6: true)                                    // may be nil (no IPv6); must not crash
+    }
 }

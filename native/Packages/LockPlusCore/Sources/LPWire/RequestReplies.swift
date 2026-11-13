@@ -40,8 +40,9 @@ public struct ListProvisionedReply: Codable, Sendable, Equatable {
     public init(entries: [ProvisionedEntry]) { self.entries = entries }
 }
 
-/// `validateProfile`: the engine-side re-check ([7], §8.1 [7a] `eval_config` + [7b] `ClientOptions` construction) of
-/// canonical text, before provisioning and at import (`OpenVPN3ProfileValidating` in the app).
+/// The [1]–[7] check of canonical text (§8.1 [7a] `eval_config` + [7b] `ClientOptions` construction). 2.0.2: sent to
+/// the sandboxed validator service as `evaluateProfile` (`OpenVPN3ProfileValidating` in the app: import, editor,
+/// migrator, re-verify); the extension's `validateProfile` answers `.extensionBusy`.
 public struct ValidateProfileRequest: Codable, Sendable {
     public var kind: VPNProtocolKind
     /// Canonical text, ≤ 256 KiB by openvpn3 accounting.
@@ -167,6 +168,67 @@ public struct PushEndpointsReply: Codable, Sendable, Equatable {
     public init(outcome: Outcome) { self.outcome = outcome }
 }
 
+/// `armStart` (2.0.2, PLAN-2.0.2 §3): the owner's app announces its next manual start of `profileID` with `nonce`
+/// (also passed as the start option `lp.startNonce`). The extension takes the owner from the connection's uid and
+/// requires the profile in that uid's namespace. Not secret-bearing.
+public struct ArmStartRequest: Codable, Sendable, Equatable {
+    public var profileID: UUID
+    public var nonce: UUID
+    public init(profileID: UUID, nonce: UUID) { self.profileID = profileID; self.nonce = nonce }
+}
+
+/// How long an arm lives (round 1, Sonnet NIT: the one constant for the extension's `StartArms.ttl` and the app's
+/// "armed recently" window).
+public enum ArmLifetime { public static let seconds: TimeInterval = 15 }
+
+/// When the arm lapses (the extension's clock; the start must reach the provider before then).
+public struct ArmStartReply: Codable, Sendable, Equatable {
+    public var expiresAt: Date
+    public init(expiresAt: Date) { self.expiresAt = expiresAt }
+}
+
+/// `revokeUnattended` (2.0.2 round 1, Codex 4; round 2, Fable L3): the caller's profiles (its uid's namespace) whose
+/// unattended-start consent STANDS: those with an on-demand plan, and those the app sees starting, running or awaiting
+/// NE's restart. Every other unattended record of the caller is revoked. The complement keeps the request small (a
+/// handful of IDs, however many profiles there are).
+///
+/// Round 3 (Codex r3 #8): a keep set larger than `maxProfiles` is sent as `pageCount` pages of one `batch`; the extension
+/// applies the union only once every page of that batch has arrived (never one page's complement on its own, which would
+/// revoke the other pages' entries). At most `maxPages` pages.
+///
+public struct RevokeUnattendedRequest: Codable, Sendable, Equatable {
+    public static let maxProfiles = 500
+    public static let maxPages = 20
+    public var keepProfileIDs: [UUID]
+    public var batch: UUID?
+    public var page: Int
+    public var pageCount: Int
+    public init(keepProfileIDs: [UUID], batch: UUID? = nil, page: Int = 0, pageCount: Int = 1) {
+        self.keepProfileIDs = keepProfileIDs
+        self.batch = batch; self.page = page; self.pageCount = pageCount
+    }
+    private enum CodingKeys: String, CodingKey { case keepProfileIDs, batch, page, pageCount }
+    public init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        keepProfileIDs = try c.decode([UUID].self, forKey: .keepProfileIDs)
+        batch = try c.decodeIfPresent(UUID.self, forKey: .batch)
+        page = try c.decodeIfPresent(Int.self, forKey: .page) ?? 0
+        pageCount = try c.decodeIfPresent(Int.self, forKey: .pageCount) ?? 1
+    }
+
+    /// The pages of one keep set (sorted, so a retry sends the same pages).
+    public static func pages(keeping keep: Set<UUID>, batch: UUID = UUID()) -> [RevokeUnattendedRequest]? {
+        let sorted = keep.sorted { $0.uuidString < $1.uuidString }
+        let count = max(1, (sorted.count + maxProfiles - 1) / maxProfiles)
+        guard count <= maxPages else { return nil }
+        return (0..<count).map { i in
+            RevokeUnattendedRequest(keepProfileIDs: Array(sorted[min(sorted.count, i * maxProfiles)..<min(sorted.count, (i + 1) * maxProfiles)]),
+                                    batch: count > 1 ? batch : nil, page: i, pageCount: count)
+        }
+    }
+
+}
+
 /// The rules for an app-resolved endpoint map on the wire (`pushEndpoints`).
 public enum EndpointMapRules {
     public static let maxHosts = StartOptionKey.maxEndpointHosts
@@ -264,13 +326,32 @@ extension MeasureLatencyReply: LPWireValidating {
     public var isWireValid: Bool { results.count <= Self.maxEndpoints }
 }
 extension ValidateProfileReply: LPWireValidating {
-    public var isWireValid: Bool { warnings.count <= 50 && warnings.allSatisfy { $0.utf8.count <= 2048 } }
+    /// Round 1 (Fable N2): the strings the app shows or stores have their own caps (beside the 64 KiB reply cap).
+    public static let maxStaticChallenge = 1024
+    public static let maxCategory = 256
+    public static let maxDetail = 512
+    public var isWireValid: Bool {
+        warnings.count <= 50 && warnings.allSatisfy { $0.utf8.count <= 2048 }
+            && (staticChallenge?.utf8.count ?? 0) <= Self.maxStaticChallenge
+            && (rejectedCategory?.utf8.count ?? 0) <= Self.maxCategory
+            && (error?.detail?.utf8.count ?? 0) <= Self.maxDetail
+    }
 }
 extension TunnelSnapshot: LPWireValidating {
     public var isWireValid: Bool { localAddresses.count <= 64 }
 }
 extension PushEndpointsRequest: LPWireValidating {
     public var isWireValid: Bool { EndpointMapRules.isValid(endpoints) }
+}
+extension ArmStartRequest: LPWireValidating {
+    /// Two UUIDs: nothing beyond the byte cap to check; listed so every request type is `LPWireValidating`.
+    public var isWireValid: Bool { true }
+}
+extension RevokeUnattendedRequest: LPWireValidating {
+    public var isWireValid: Bool {
+        keepProfileIDs.count <= Self.maxProfiles
+            && (1...Self.maxPages).contains(pageCount) && (0..<pageCount).contains(page) && (pageCount == 1 || batch != nil)
+    }
 }
 extension TunnelEvent: LPWireValidating {
     public var isWireValid: Bool { (snapshot?.isWireValid ?? true) && (prompt?.isWireValid ?? true) }

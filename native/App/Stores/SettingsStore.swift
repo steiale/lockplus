@@ -20,6 +20,10 @@ final class SettingsStore {
     @ObservationIgnored private var seq: UInt64 = 0
     /// False until the value on disk has been read (`replaceAll`): no write may put a value over the file before then.
     @ObservationIgnored private(set) var loadedFromDisk: Bool
+    /// Round 2 (Fable M1b): called after every in-process change of the Auto-Connect choice (`enabled`, `profileID`). A
+    /// value changed in this process is the user's (or LockPlus's own) choice; only what `replaceAll` read from disk
+    /// needs its tag checked. `ProfilesStore` seals the new choice.
+    @ObservationIgnored var onAutoConnectChoiceChange: (@MainActor () -> Void)?
 
     init(value: AppSettings = AppSettings(), files: SettingsFileStore?, loadedFromDisk: Bool = true) {
         self.value = value
@@ -38,8 +42,10 @@ final class SettingsStore {
         var v = value
         change(&v)
         guard v != value else { return }
+        let choiceChanged = v.autoConnect.enabled != value.autoConnect.enabled || v.autoConnect.profileID != value.autoConnect.profileID
         value = v
         persist()
+        if choiceChanged { onAutoConnectChoiceChange?() }
     }
 
     /// Changes the value and returns once it is on disk (the pause record: a crash right after must still know).

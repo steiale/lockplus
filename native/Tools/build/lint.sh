@@ -5,7 +5,9 @@ set -euo pipefail
 ROOT="${0:A:h:h:h}"; cd "$ROOT"
 FILES=(${(f)"$(git ls-files -co --exclude-standard -- 'App/*.swift' 'App/**/*.swift' 'Tunnel/*.swift' 'Shared/*.swift' \
   'Tests/**/*.swift' 'Packages/LockPlusCore/Sources/**/*.swift' 'Packages/LockPlusCore/Tests/**/*.swift' \
-  'Packages/TunnelEngine/Sources/**/*.swift' 'Packages/TunnelEngine/Tests/**/*.swift' | grep -v '\.generated\.swift$')"})
+  'Packages/TunnelEngine/Sources/**/*.swift' 'Packages/TunnelEngine/Tests/**/*.swift' \
+  'Packages/ProfileValidator/Sources/**/*.swift' 'Packages/ProfileValidator/Tests/**/*.swift' 'Validator/*.swift' \
+  | grep -v '\.generated\.swift$')"})
 fails=0
 rule() {   # name, perl regex (matched per line, comments stripped), message, [file filter ERE], [file exclude ERE]
   local name=$1 re=$2 msg=$3 filt=${4:-.} excl=${5:-}
@@ -39,10 +41,35 @@ rule lp_no_provider_dns '\bgetaddrinfo\s*\(|\bgethostbyname|DNSServiceGetAddrInf
   '^(Tunnel/|Packages/TunnelEngine/Sources/TunnelEngine/)' 'Adapters/WireGuard/WireGuardBackend\.swift$'
 # Draft 9.1 (ZIPFoundation review): every zip read goes through ZipStructure.validate first, so only ProfileZip.swift
 # imports ZIPFoundation, and nothing is ever extracted to disk.
-rule lp_zip_through_validator '^\s*(@\S+\s+)*import\s+ZIPFoundation\b' 'Only App/Services/ProfileZip.swift imports ZIPFoundation (review 2026-10-27)' \
-  '.' '^App/Services/ProfileZip\.swift$'
+# 2.0.2: the read side moved into the validator service (ArchiveReader.swift); the app keeps the writer (ProfileZip.swift);
+# the service package's tests build archives with it.
+rule lp_zip_through_validator '^\s*(@\S+\s+)*import\s+ZIPFoundation\b' \
+  'Only ProfileZip.swift (writer) and the validator service package (ArchiveReader.swift, its tests) import ZIPFoundation (review 2026-10-27)' \
+  '.' '^(App/Services/ProfileZip\.swift|Packages/ProfileValidator/Sources/LPValidatorService/ArchiveReader\.swift|Packages/ProfileValidator/Tests/LPValidatorServiceTests/[A-Za-z]+\.swift)$'
+# 2.0.2 (PLAN-2.0.2 §1.5): openvpn3's eval_config / ClientOptions construction ([7]) runs only in the validator package (and the
+# shim's own package and the session's connect). Tunnel/ and the app must not call it again.
+rule lp_evaluate_bytes_only_in_validator '\bevaluateBytes\b' 'LPOpenVPN3Profile.evaluateBytes only under Packages/ProfileValidator/ and Packages/OpenVPN3Shim/ (PLAN-2.0.2 §1.5)' \
+  '^(App|Tunnel|Shared|Tests)/|^Packages/(LockPlusCore|TunnelEngine)/'
+# Round 1 (Fable N5): the extension and the app link no part of LPEngineCheck (its `evaluate` is [7]); the extension's [6]
+# parser and report rules come from LPOptionsParser.
+rule lp_no_engine_check_outside_validator '^\s*(@\S+\s+)*import\s+LPEngineCheck\b' 'Only the validator service package imports LPEngineCheck (round 1, Fable N5)' \
+  '^(App|Tunnel|Shared|Tests)/|^Packages/(LockPlusCore|TunnelEngine)/'
 rule lp_no_unzip_to_disk '\bunzipItem\b|\bzipItem\b|\.extract\([^)]*\bto:' 'Zip entries are read in memory only; never extract to disk (§3.5)'
 rule lp_no_sync_xpc_proxy 'synchronousRemoteObjectProxyWithErrorHandler|remoteObjectProxy\b(?!WithErrorHandler)' 'No synchronous XPC proxy (§5.4)'
+# 2.0.2 (200026 E2E release blocker): `setConnectionCodeSigningRequirement` works only on anonymous and Mach-service
+# listeners (SDK header); on `NSXPCListener.service()` it crashed the validator at every launch. The service applies its
+# peer requirement per connection (ValidatorListenerDelegate); only the extension's Mach-service listener (and its
+# anonymous test seam) uses the listener-level call.
+rule lp_listener_requirement 'setConnectionCodeSigningRequirement' \
+  'Listener-level requirement only in TunnelServiceListener (Mach service); an XPC service sets it per connection (200026)' \
+  '.' '^Packages/TunnelEngine/Sources/TunnelEngine/XPC/TunnelServiceListener\.swift$'
+# 2.0.2 (200026 E2E release blocker): under `dispatchMain()` the main queue runs on a worker thread, so NE's
+# `NEVPNStatusDidChange` post to a `queue: .main` observer waits on itself forever. The headless agent runs the main
+# thread's run loop (HeadlessRunner); the extension (Tunnel/, no main-queue observers) keeps dispatchMain.
+rule lp_no_dispatch_main_in_app '\bdispatchMain\s*\(' 'No dispatchMain() in the app: run the main run loop (HeadlessRunner, 200026 S9)' '^App/'
+# 2.0.2 RC review (Fable L4): the headless agent ends with `_exit` only, so no atexit handler or static destructor can keep
+# a finished (or timed-out) run alive past its deadline and stop launchd from starting the next one.
+rule lp_headless_underscore_exit '\bexit\s*\(' 'The headless agent ends with _exit(), never exit() (Fable L4)' '^App/Headless/'
 
 # SAFETY markers (shipped code; test fakes are exempt): every unsafe escape carries a `SAFETY:` comment within the 10 lines above it or on its line.
 safety=$(for f in $FILES; do [[ "$f" =~ '(^Tests/|/Tests/|TestSupport/)' ]] && continue; perl -ne '

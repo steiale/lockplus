@@ -18,10 +18,16 @@ actor ProfileRepository {
 
     private let dir: URL
     private let keys: any SecretItemStore
-    private var payloadKey: SymmetricKey?
-    private var macKey: SymmetricKey?
+    private var cachedKeys: Keys?
     /// One key load at a time: actor reentrancy could otherwise create two master keys (review L2).
-    private var keyLoad: Task<Result<(SymmetricKey, SymmetricKey), LPError>, Never>?
+    private var keyLoad: Task<Result<Keys, LPError>, Never>?
+
+    /// Every key is HKDF-derived from the master key with its own info string (key separation, round 2 N3).
+    struct Keys: Sendable {
+        var payload: SymmetricKey
+        var mac: SymmetricKey
+        var records: [SettingsRecord: SymmetricKey]
+    }
 
     /// §6.8: sealed files or metadata exist but the master key is missing (a restore to another Mac, a deleted
     /// item). Never "fixed" by creating a new key: the profiles stay locked until the user removes them.
@@ -36,14 +42,13 @@ actor ProfileRepository {
 
     // MARK: Keys
 
-    private func loadKeys() async throws(LPError) -> (payload: SymmetricKey, mac: SymmetricKey) {
-        if let payloadKey, let macKey { return (payloadKey, macKey) }
+    private func loadKeys() async throws(LPError) -> Keys {
+        if let cachedKeys { return cachedKeys }
         let task = keyLoad ?? Task { await self.loadKeysOnce() }
         keyLoad = task
         switch await task.value {
         case .success(let k):
-            payloadKey = k.0
-            macKey = k.1
+            cachedKeys = k
             return k
         case .failure(let e):
             keyLoad = nil                       // a later call may succeed (e.g. after "Remove locked profiles")
@@ -51,7 +56,7 @@ actor ProfileRepository {
         }
     }
 
-    private func loadKeysOnce() async -> Result<(SymmetricKey, SymmetricKey), LPError> {
+    private func loadKeysOnce() async -> Result<Keys, LPError> {
         let master: SecretBytes
         do throws(KeychainError) {
             if let m = try await keys.load(service: KeychainServices.payloadKey, account: "v1") {
@@ -71,7 +76,11 @@ actor ProfileRepository {
         let ikm = master.withUnsafeBytes { SymmetricKey(data: $0) }
         let p = HKDF<SHA256>.deriveKey(inputKeyMaterial: ikm, info: Data("lockplus.payload-seal.v1".utf8), outputByteCount: 32)
         let m = HKDF<SHA256>.deriveKey(inputKeyMaterial: ikm, info: Data("lockplus.metadata-mac.v1".utf8), outputByteCount: 32)
-        return .success((p, m))
+        var records: [SettingsRecord: SymmetricKey] = [:]
+        for r in SettingsRecord.allCases {
+            records[r] = HKDF<SHA256>.deriveKey(inputKeyMaterial: ikm, info: Data("lockplus.record-mac.\(r.rawValue).v1".utf8), outputByteCount: 32)
+        }
+        return .success(Keys(payload: p, mac: m, records: records))
     }
 
     private func hasProfileFiles() -> Bool {
@@ -106,16 +115,14 @@ actor ProfileRepository {
         } catch {
             throw LPError(.profileInvalid, detail: "move aside: \(error.localizedDescription)")
         }
-        payloadKey = nil
-        macKey = nil
+        cachedKeys = nil
         keyLoad = nil
         return dest
     }
 
     /// Drops the in-memory keys, as a relaunch does (tests; and the next `list()` re-reads the keychain).
     func resetKeyCache() {
-        payloadKey = nil
-        macKey = nil
+        cachedKeys = nil
         keyLoad = nil
     }
 
@@ -123,8 +130,7 @@ actor ProfileRepository {
     func removeAllFiles() {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
         for n in names where !n.hasPrefix(".") { try? FileManager.default.removeItem(at: dir.appending(path: n)) }
-        payloadKey = nil
-        macKey = nil
+        cachedKeys = nil
         keyLoad = nil
     }
 
@@ -196,7 +202,78 @@ actor ProfileRepository {
             }
             out.profiles.append(p)
         }
+        // Round 3 (Fable L3): a quarantine is durable. A profile moved aside (`<id>.json.tampered.<stamp>`) with no
+        // `<id>.json` beside it is still reported, at every load: until the user deletes it, it keeps its extension copy
+        // (payload, credentials, a running session's start authorisation) and its VPN configuration.
+        for n in names where !n.hasPrefix(".") && n.count > 36 && n.dropFirst(36).hasPrefix(".json.tampered.") {
+            guard let id = UUID(uuidString: String(n.prefix(36))), id.uuidString == String(n.prefix(36)),
+                  !names.contains("\(id.uuidString).json"), !out.tampered.contains(id) else { continue }
+            out.tampered.append(id)
+        }
         return out
+    }
+
+    // MARK: Authenticated settings records (round 1 Codex 3; round 2 M1, L5, N3)
+
+    /// settings.json is writable by any process of this user. A record in it that makes LockPlus start a profile, or
+    /// give one unattended-start consent, carries a tag: HMAC-SHA256 with the record kind's own key (HKDF from the
+    /// keychain-held master key) over a one-time value and the record's message. The one-time value is a keychain item
+    /// of this app's access group, replaced at every seal: an older record of the kind (a copy kept by other code) stops
+    /// verifying, and `consumeRecord` deletes it once the record was acted on (one shot). Same-user code can neither
+    /// forge nor replay a record; it can only remove one (which makes LockPlus do less, never more).
+    func sealRecord(_ kind: SettingsRecord, _ message: Data) async throws(LPError) -> String {
+        let k = try await loadKeys()
+        let nonce = SecretBytes(count: 32) { b in _ = SecRandomCopyBytes(kSecRandomDefault, 32, b.baseAddress!) }
+        do throws(KeychainError) {
+            try await keys.save(service: KeychainServices.recordNonce, account: kind.rawValue, nonce)
+        } catch {
+            throw error.lpError
+        }
+        return Self.recordTag(k.records[kind]!, nonce: nonce, message: message).hex
+    }
+
+    /// `.unavailable`: the key or the one-time value couldn't be read now (retry later; never "changed outside").
+    /// `.neverSealed`: no record of this kind was ever sealed here (a value written by a build before 2.0.2).
+    func checkRecord(_ kind: SettingsRecord, tag: String?, _ message: Data) async -> RecordCheck {
+        let k: Keys
+        do throws(LPError) { k = try await loadKeys() } catch {
+            return Self.isLocked(error) ? .invalid : .unavailable
+        }
+        let nonce: SecretBytes?
+        do throws(KeychainError) { nonce = try await keys.load(service: KeychainServices.recordNonce, account: kind.rawValue) } catch {
+            return .unavailable
+        }
+        guard let nonce else { return .neverSealed }
+        guard let tag, let mac = Data(hex: tag), mac.count == SHA256.byteCount else { return .invalid }
+        let expected = Self.recordTag(k.records[kind]!, nonce: nonce, message: message)
+        return Self.constantTimeEqual(expected, mac) ? .valid : .invalid
+    }
+
+    /// The record was acted on: its one-time value goes, so no copy of it verifies again. False: not deleted (logged;
+    /// the next seal of the kind replaces it).
+    @discardableResult
+    func consumeRecord(_ kind: SettingsRecord) async -> Bool {
+        do throws(KeychainError) {
+            try await keys.delete(service: KeychainServices.recordNonce, account: kind.rawValue)
+            return true
+        } catch {
+            log.error("one-time value of the \(kind.rawValue, privacy: .public) record not deleted: \(String(describing: error), privacy: .public)")
+            return false
+        }
+    }
+
+    private static func recordTag(_ key: SymmetricKey, nonce: SecretBytes, message: Data) -> Data {
+        var h = HMAC<SHA256>(key: key)
+        nonce.withUnsafeBytes { h.update(data: $0) }
+        h.update(data: message)
+        return Data(h.finalize())
+    }
+
+    private static func constantTimeEqual(_ a: Data, _ b: Data) -> Bool {
+        guard a.count == b.count else { return false }
+        var d: UInt8 = 0
+        for (x, y) in zip(a, b) { d |= x ^ y }
+        return d == 0
     }
 
     /// Writes the metadata (HMAC recomputed).
@@ -245,6 +322,9 @@ actor ProfileRepository {
     func delete(_ id: UUID) {
         unlink(metaURL(id).path)
         for u in sealedFiles(id) { unlink(u.path) }
+        // Round 3 (Fable L3): the quarantined copies go with the profile (else `list()` would report it again).
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
+        for n in names where n.hasPrefix(id.uuidString + ".json.tampered.") { unlink(dir.appending(path: n).path) }
     }
 
     /// Replay (§3.4 N6): moves a profile aside like an HMAC mismatch.

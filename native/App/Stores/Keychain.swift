@@ -46,6 +46,8 @@ enum KeychainServices {
     static let accessGroup = "M53GHX9FAY.io.github.steiale.lockplus.mac"
     static let payloadKey = "io.github.steiale.lockplus.mac.payload-key"
     static let credentials = "io.github.steiale.lockplus.mac.credentials"
+    /// 2.0.2 round 2: the one-time value of each authenticated settings record (account = `SettingsRecord.rawValue`).
+    static let recordNonce = "io.github.steiale.lockplus.mac.record-nonce"
 }
 
 /// The real store (§6.2). `kSecUseDataProtectionKeychain`, our access group, not synchronizable,
@@ -107,6 +109,10 @@ final class InMemoryKeychain: SecretItemStore {
     private let items = Mutex<[String: [UInt8]]>([:])
     /// Tests: make every call fail with this status.
     let failure = Mutex<OSStatus?>(nil)
+    /// Tests: make every `delete` fail with this status (a delete that fails right after a successful read).
+    let deleteFailure = Mutex<OSStatus?>(nil)
+    /// Tests (round 7): awaited at the start of every `delete` (a delete that takes a while).
+    let beforeDelete = Mutex<(@Sendable () async -> Void)?>(nil)
 
     init() {}
 
@@ -125,7 +131,9 @@ final class InMemoryKeychain: SecretItemStore {
     }
 
     func delete(service: String, account: String) async throws(KeychainError) {
+        if let wait = beforeDelete.withLock({ $0 }) { await wait() }
         try check()
+        if let f = deleteFailure.withLock({ $0 }) { throw KeychainError(f) }
         _ = items.withLock { $0.removeValue(forKey: key(service, account)) }
     }
 

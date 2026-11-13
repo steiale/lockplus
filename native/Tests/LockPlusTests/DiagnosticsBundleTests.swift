@@ -156,7 +156,7 @@ struct DiagnosticsBundleTests {
         try await DiagnosticsArchive.write([.init(name: "system.json", data: Data("{}".utf8)), .init(name: "crash/a.ips", data: Data("x".utf8))], to: url)
         let data = try Data(contentsOf: url)
         #expect(data.prefix(2) == Data("PK".utf8))
-        let names = try ZipStructure.validate(data, caps: ZipCaps(maxProfileEntries: .max)).map(\.name)
+        let names = try ProfileZipWriter.entryNames(data)
         #expect(names == ["LockPlus Diagnostics/system.json", "LockPlus Diagnostics/crash/a.ips"])
         let perms = try FileManager.default.attributesOfItem(atPath: url.path)[.posixPermissions] as? Int
         #expect(perms == 0o600)

@@ -1,36 +1,83 @@
 # Changelog
 
-All notable changes to WireGuide will be documented in this file.
+All notable changes to LockPlus will be documented in this file. LockPlus 1.x (and WireGuide+ before it) is documented
+in its GitHub releases; the entries below 2.0.0 are from the original WireGuide project this app started from.
 
-## [1.2.0] "Farewell" - unreleased
+## [2.0.2] - Unreleased
 
-The last release of LockPlus 1 (Go). It hands users over to LockPlus 2, the
-native macOS rewrite. See docs/FAREWELL-1.2.0.md.
+### Changed
+- Starting a profile from System Settings › VPN or with `scutil --nc start` now only works for profiles with Auto-Connect turned on. Any other profile is refused with "Connect it from LockPlus", and Diagnostics notes the attempt. A profile picked for Auto-Connect counts only while Auto-Connect is turned on. Connect those profiles from LockPlus (the main window or the menu bar). This also stops other users on the same Mac from connecting your profiles with your saved credentials.
+- Profile checks and zip reading now run in a separate sandboxed helper (LockPlusValidator, inside the app) with no network access and no access to your files. The tunnel component, which runs as root, no longer parses untrusted profiles with the OpenVPN engine. Profiles that were "Not yet verified" are checked again automatically, even before the tunnel component is approved.
+- Zip import limits are now 1 MB per profile and 64 MB unpacked (were 10 MB and 100 MB). A file that crashes the checker twice is refused with "LockPlus couldn't check this file safely."; a check that takes too long is retried and, if it still can't finish, the profile is saved as "Not yet verified" and checked again later. Profiles saved by 2.0.1 that the stricter tunnel component would refuse (for example ones with `link-mtu`) are updated and checked once.
 
 ### Added
-- "LockPlus 2 is here" screen on launch: what LockPlus 2 copies (profiles,
-  kill switch / DNS settings, Wi-Fi rules, history, saved OpenVPN usernames),
-  that 1.x gets no further updates, and a choice between "Move to LockPlus 2
-  now" and "Later". The helper isn't started or upgraded until the user
-  chooses, so moving costs one administrator prompt.
-- "Move to LockPlus 2 now": disconnects every tunnel, removes the privileged
-  helper as root (LaunchDaemon, helper and openvpn binaries, socket, helper
-  log, pf anchors, pf enable state, orphaned routes, DNS overrides, helper
-  state) with a root-side verification, removes the 1.0.x LaunchAgent and the
-  1.1.0 login item, then downloads LockPlus 2 and opens it only after checking
-  the Developer ID team, bundle ID and notarization. Idempotent; a cancelled
-  prompt or a failed cleanup leaves LockPlus 1 working.
-- "Later" keeps LockPlus 1 fully working, with a banner to move any time.
-  After a move, "Keep using LockPlus 1" reinstalls the helper.
-- Helper `--cleanup-only` mode (the uninstall's recovery pass).
+- Open `.ovpn`, `.conf` and `.zip` files from Finder (double-click or Open With) or by dropping them on the Dock icon. LockPlus shows the usual import preview, and nothing is saved until you confirm. LockPlus is offered as the default app for `.ovpn` (another VPN app may already be the default) and under Open With for `.conf` and `.zip`. A file opened this way waits its turn behind an open import sheet, the sheet says where it came from, and Import enables after a moment and has no Return shortcut. You can open up to 20 files at a time.
+- Test Connection (Diagnostics, ⌘R Run All, or the link in the protection panel while connected) checks that IPv4, IPv6 and DNS use the tunnel. It contacts only LockPlus's own test page, and only when you start it. A result says "through the tunnel" or "blocked" only when the test proved it; anything else is shown as not verified. Copy Results hashes addresses. It doesn't check the address websites see, because that would need a third-party service. The last result is included in the diagnostics export with addresses hashed.
+
+### Security
+- The tunnel component accepts only LockPlus builds at least as new as itself, so older LockPlus copies can no longer talk to it.
+- The end of a pause, the end of a tunnel component update and the Auto-Connect setting are acted on only when LockPlus wrote them itself: each is sealed with a key in your keychain and used once. A record changed by another program reconnects nothing, and a changed Auto-Connect setting is turned off and noted in Diagnostics. If LockPlus can't read its keychain at the end of a pause, it tries again instead of giving up; a pause that can't be secured isn't started.
+- Turning Auto-Connect off withdraws the profile's permission to be started without LockPlus. A session macOS may still restart by itself (a kill-switch session after a crash or a lost network) keeps that permission until you disconnect it while it runs, delete the profile or restart the Mac. Cancelling it while it is down (for example while it waits for a network) stops macOS's restart but doesn't withdraw the permission.
+- The Auto-Connect setting is sealed whether it is on or off, so an older copy of it written back by another program is refused after you turned Auto-Connect off. A recorded "reconnects when a network is available" state is sealed too, and one written by another program is ignored.
+- While an older tunnel component is still running during an update, LockPlus doesn't start kill-switch profiles.
 
 ### Removed
-- The Ko-fi banner.
+- The "Import QR Code Image…" menu items and the onboarding QR button. QR import never worked, and dropped images now say "Images aren't supported."
 
-### Unchanged on purpose
-- `~/Library/Application Support/lockplus` and the OpenVPN keychain items stay
-  for LockPlus 2's importer; `auto_start` in config.json is kept so LockPlus 2
-  can offer "Launch at login".
+### Fixed
+- An automatic retry never changes a profile's VPN configuration while another profile is starting.
+- A second failed profile edit no longer marks the profile as tampered: the pending rollback is now tied to the VPN configuration's revision.
+- After "Save Only" on a connected kill-switch profile, a restart of the session by macOS is no longer refused.
+- A duplicate VPN configuration started outside LockPlus is noted in Diagnostics when it starts, and at launch the profile's row follows the configuration that is actually connected.
+- A start from System Settings refused shortly after LockPlus launched now says why.
+- "Save Only" of a connected profile whose new version isn't verified yet keeps the installed version, so macOS can still restart the session.
+- A file opened from Finder never replaces an import you started yourself; at most 5 opened files wait, and a file that can't be read within 10 seconds is refused.
+- A profile whose file check keeps timing out no longer slows down every launch: after three launches it waits for "Check Again" on the profile.
+- Test Connection: a connection that reached the network outside the tunnel and then stalled is no longer shown as "blocked"; IPv6 "blocked" is checked against the address actually tried; split DNS says that only the profile's DNS servers were checked. A connection attempt that started and then timed out is shown as not verified, never as "blocked" or "no IPv6", and "no IPv6" needs the routes to prove it.
+- A profile edit verified and installed in the background no longer interrupts a kill-switch connection macOS is restarting at that moment.
+- A profile whose settings file was found changed outside LockPlus keeps its installed copy (and a running session keeps working) until you delete it, and LockPlus never removes the installed copy of a profile while it is connected or connecting.
+- Files on a stalled network volume no longer slow LockPlus down: an unreadable file stops its import, and a burst of opened files can't start more than one import at a time.
+- With more than 500 profiles, LockPlus still withdraws the permissions of profiles that no longer have Auto-Connect.
+- A profile edit installed in the background no longer stops a kill-switch connection that macOS is restarting while the previous session is still shutting down.
+- The end of a pause is used once even when the pause record was changed to name no profile, so an older copy written back reconnects nothing.
+- Pausing while macOS is about to restart a kill-switch session after a crash or a lost network, or while that restart is still connecting, now stops it and reconnects the profile when the pause ends, if LockPlus started that session or saw it connected. A start from elsewhere that was refused, also one still connecting when you paused, is stopped by the pause and not reconnected.
+- A pause record that another program changed to show nothing paused is used up, so writing the original back later reconnects nothing.
+- An answer to a server prompt is never sent to the server of a newer version of the profile installed meanwhile, and saving it never overwrites the newer version's saved credentials.
+- If LockPlus can't use up a pause's one-time value because the keychain is unavailable, it keeps trying (also after a quit, and the resume helper stays registered for it) and uses it up before it acts on a pause record again. This record of the debt is kept in the settings file, so a program that writes back a whole earlier copy of that file can undo it (a known limit, see DESIGN §20 risk 31).
+- Turning Auto-Connect off while the keychain is unavailable is secured once it is available again, also after LockPlus was quit in between.
+- Start permissions of kill-switch sessions survive a tunnel component state file of another version, and are the last to go when the permission table is full.
+- The end of a pause reconnects the profile also while LockPlus isn't open. The helper that does it could hang on the first VPN status change it saw, so the profile stayed disconnected until LockPlus was opened. It now ends within 5 seconds. A run that runs out of time (for example right after the Mac wakes) leaves the pause in place, and the next minute's run tries again; a run cut off at any point is completed by the next one without starting the profile twice. Only a profile that can't be read, or whose kill switch can't be applied, ends the pause without reconnecting.
+- The profile checker (LockPlusValidator) no longer crashes every time it starts (release candidate 200026), which left new OpenVPN profiles "Not yet verified" and refused every zip import. It still accepts requests only from this LockPlus build.
+
+## [2.0.1] - 2026-11-11
+
+### Fixed
+- A second LockPlus VPN configuration started while one is connected (a duplicate, a start from System Settings or `scutil`, or another user's) is refused instead of taking over the running tunnel, which could leave the Mac without a working connection while it still showed Connected. A kill-switch profile still takes over from a profile without a kill switch, and a duplicate of the running kill-switch profile waits for it to end.
+- A refused start no longer takes over the main window's status; Diagnostics says why it was refused.
+- Onboarding step 3 moves on with one click when there is nothing to allow yet.
+
+### Added
+- SECURITY.md: how to report a vulnerability privately, response times and supported versions.
+
+## [2.0.0] - 2026-11-10
+
+LockPlus rebuilt as a native macOS app (macOS 26, Apple silicon). See `docs/release/RELEASE-NOTES-2.0.md`.
+
+### Added
+- Native SwiftUI/AppKit app with a menu bar; the tunnel runs in a Network Extension system extension (no root helper, no firewall rules).
+- Kill switch enforced by macOS (`includeAllNetworks`), route protection for split tunnels, "Disconnect and Restore Internet".
+- WireGuard and OpenVPN (OpenVPN 3) in one app, with password, static and dynamic challenge sign-in.
+- Auto-Connect on untrusted Wi-Fi and/or Ethernet with trusted networks, through macOS on-demand rules.
+- Pause Protection, DNS verification, live rates in the menu bar, one-click switching.
+- Import with a report (`.conf`, `.ovpn`, zip, the WireGuard app's export) and a built-in editor with checks.
+- Diagnostics with an export that removes secrets; English and German; a new adaptive app icon.
+- Import of LockPlus 1.x profiles, settings, history and (with your permission) saved passwords.
+
+### Changed
+- One tunnel at a time (LockPlus 1 could run several WireGuard tunnels).
+
+### Removed
+- The LockPlus 1.x background helper and its firewall rules.
 
 ## [0.1.8] - 2026-04-13
 

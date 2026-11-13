@@ -170,6 +170,34 @@ enum AtomicFile {
     static func saveJSON<T: Encodable>(_ value: T, to url: URL) throws {
         try write(try encoder().encode(value), to: url)
     }
+
+    /// 2.0.2 RC review (Fable N5): `write`'s temp files (`.<name>.<UUID>.tmp`) that a process ended mid-write left behind
+    /// (the headless agent's hard deadline `_exit`s at any instruction). Same content class as the file they were for,
+    /// so they go. Only regular files of exactly that shape, older than `minimumAge` (a write in flight in this process
+    /// is never touched). Returns how many were removed.
+    @discardableResult
+    static func sweepOrphanTempFiles(in dir: URL, minimumAge: TimeInterval = 60, now: Date = Date()) -> Int {
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { return 0 }
+        var removed = 0
+        for name in names where isTempFileName(name) {
+            let path = dir.appending(path: name).path
+            var st = stat()
+            guard lstat(path, &st) == 0, (st.st_mode & S_IFMT) == S_IFREG else { continue }
+            let modified = Date(timeIntervalSince1970: TimeInterval(st.st_mtimespec.tv_sec))
+            guard now.timeIntervalSince(modified) >= minimumAge else { continue }
+            if unlink(path) == 0 { removed += 1 }
+        }
+        if removed > 0 { log.notice("removed \(removed, privacy: .public) leftover temporary file(s) in \(dir.lastPathComponent, privacy: .public)") }
+        return removed
+    }
+
+    /// `.<name>.<UUID>.tmp`, as `write` and `writeUserFile` name them.
+    static func isTempFileName(_ name: String) -> Bool {
+        guard name.hasPrefix("."), name.hasSuffix(".tmp") else { return false }
+        let parts = name.dropFirst().dropLast(4).split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count >= 2, let last = parts.last, !parts.dropLast().joined(separator: ".").isEmpty else { return false }
+        return UUID(uuidString: String(last)) != nil
+    }
 }
 
 /// settings.json, history.json and migration.json, off the main actor (§3.4: all I/O is off the main actor).
@@ -182,6 +210,13 @@ actor SettingsFileStore {
     private let lastWritten = Mutex<UInt64>(0)
 
     init(dir: AppDataDirectory) { self.dir = dir }
+
+    /// Fable N5: at GUI launch, under the instance lock (no headless run is writing), the temp files a process ended
+    /// mid-write left in the data directory and its profiles directory.
+    func sweepOrphanTempFiles() {
+        AtomicFile.sweepOrphanTempFiles(in: dir.root)
+        AtomicFile.sweepOrphanTempFiles(in: dir.profiles)
+    }
 
     /// What `loadSettingsChecked` found (E2E-4). `movedAside`: the file existed but couldn't be read or decoded; it was
     /// renamed (kept, never overwritten) and defaults are used. Diagnostics says so.

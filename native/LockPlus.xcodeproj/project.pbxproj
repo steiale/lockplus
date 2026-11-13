@@ -21,10 +21,17 @@
 		7CBF3E6E5CE6D6984D7ACEF3 /* io.github.steiale.lockplus.mac.tunnel.systemextension in Embed System Extensions */ = {isa = PBXBuildFile; fileRef = B67DAE5E76C3D088BCC0C64B /* io.github.steiale.lockplus.mac.tunnel.systemextension */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		9F723ED75FB71332BFAC533C /* LPWire in Frameworks */ = {isa = PBXBuildFile; productRef = 88946D4BD4A218AE4372B086 /* LPWire */; };
 		CD216513D40651D73B5B2CEC /* LPModel in Frameworks */ = {isa = PBXBuildFile; productRef = 714F412B74D59F8EC850AB70 /* LPModel */; };
-		D3809C1F504D70D0D872F921 /* OpenVPN3Options in Frameworks */ = {isa = PBXBuildFile; productRef = 4187340E10E2A992DF107CD3 /* OpenVPN3Options */; };
 		F2AD78F51918CA750154D4A8 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 794DF2971E49413ADA7101D8 /* Sparkle */; };
 		5A1F0C3E9B7D24E68C0A1B2D /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 7C2E4A9F1D3B58C60E1F2A3B /* ZIPFoundation */; };
 		D974F1DA2EDFDC5CE9F8F1D9 /* LPParsing in Frameworks */ = {isa = PBXBuildFile; productRef = 1BF9666B08EBDC2E9E8246CA /* LPParsing */; };
+		D3F608C4E9B57BAC2A3F4E5D /* LPOptionsParser in Frameworks */ = {isa = PBXBuildFile; productRef = C2E5F7B3D8A46A9B1F2E3D4C /* LPOptionsParser */; };
+		976D0E66A710B7EB67D0F778 /* LPValidatorService in Frameworks */ = {isa = PBXBuildFile; productRef = 43F8117EAE4C024150CE56F7 /* LPValidatorService */; };
+		30894F1237178B122DF63422 /* LPEngineCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 0141A9DA1262CE7210EB5AC6 /* LPEngineCheck */; };
+		8E257B559B6941B4CDC8BBD8 /* LPWire in Frameworks */ = {isa = PBXBuildFile; productRef = C7A07842BE8DD0113650CB52 /* LPWire */; };
+		932FDEA7EDE4712AF7CF7771 /* LPModel in Frameworks */ = {isa = PBXBuildFile; productRef = 8F455FF08032A82379E383F0 /* LPModel */; };
+		A78EF68CA413A3C05942BB62 /* LPParsing in Frameworks */ = {isa = PBXBuildFile; productRef = D4C46606CBCF433C247E0146 /* LPParsing */; };
+		1F977B930A3FB7AB80172650 /* OpenVPN3Shim in Frameworks */ = {isa = PBXBuildFile; productRef = DC93066D512323092922BF58 /* OpenVPN3Shim */; };
+		C263248AB72896B7FEE72089 /* LockPlusValidator.xpc in Embed XPC Services */ = {isa = PBXBuildFile; fileRef = 082CFE87EBAFEDCC32850966 /* LockPlusValidator.xpc */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -48,6 +55,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 8E33AFEEDC60F0CCE3F9FABA;
 			remoteInfo = WireGuardGoBridgemacOS;
+		};
+		605DE239995BEB6306F28B2B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B59A4904CAE129D83D10B5AD;
+			remoteInfo = LockPlusValidator;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -73,6 +87,17 @@
 			dstPath = Contents/Library/LaunchAgents;
 			dstSubfolderSpec = 1;
 			name = "Embed Launch Agents";
+		};
+		08DCA61C676FCCCAA1F0B8DC /* Embed XPC Services */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C263248AB72896B7FEE72089 /* LockPlusValidator.xpc in Embed XPC Services */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/XPCServices";
+			dstSubfolderSpec = 16;
+			name = "Embed XPC Services";
 		};
 /* End PBXCopyFilesBuildPhase section */
 
@@ -104,6 +129,11 @@
 		F1CCF738BF015C7F973561D5 /* LockPlusTunnel.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LockPlusTunnel.entitlements; sourceTree = "<group>"; };
 		F2ABCA5B0F838C562D14FCF9 /* LockPlusTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LockPlusTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F5C66A5AD977544C61C6783C /* AppTests.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = AppTests.xcconfig; sourceTree = "<group>"; };
+		082CFE87EBAFEDCC32850966 /* LockPlusValidator.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = LockPlusValidator.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
+		8D7FBEA83C9924A6BCBE1E59 /* Validator.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Validator.xcconfig; sourceTree = "<group>"; };
+		0CA33FC274B57E8267F2B423 /* LockPlusValidator-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "LockPlusValidator-Info.plist"; sourceTree = "<group>"; };
+		09DBDF0C8E4569573C5954BA /* LockPlusValidator.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LockPlusValidator.entitlements; sourceTree = "<group>"; };
+		A71B3A836C57E5B997857C94 /* LockPlusValidator.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LockPlusValidator.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -146,6 +176,11 @@
 			path = App;
 			sourceTree = "<group>";
 		};
+		80C6FAF825141234719A07DD /* Validator */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Validator;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -168,6 +203,7 @@
 				5E4A9537A84A9EE699E2B36B /* TunnelEngine in Frameworks */,
 				22B521A25C20D11C5ED5F5C0 /* WireGuardKitGo in Frameworks */,
 				3B70A6209A14FD57FC856A2A /* OpenVPN3Shim in Frameworks */,
+				D3F608C4E9B57BAC2A3F4E5D /* LPOptionsParser in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -180,7 +216,6 @@
 				01D8F1FB0D2196E993C9F0DB /* LPXPCClient in Frameworks */,
 				D974F1DA2EDFDC5CE9F8F1D9 /* LPParsing in Frameworks */,
 				2C36062F81C8253A47EF3BE1 /* LPRouteProbe in Frameworks */,
-				D3809C1F504D70D0D872F921 /* OpenVPN3Options in Frameworks */,
 				F2AD78F51918CA750154D4A8 /* Sparkle in Frameworks */,
 				5A1F0C3E9B7D24E68C0A1B2D /* ZIPFoundation in Frameworks */,
 			);
@@ -193,6 +228,19 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		09E9C1AF11917148CE78C740 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				976D0E66A710B7EB67D0F778 /* LPValidatorService in Frameworks */,
+				30894F1237178B122DF63422 /* LPEngineCheck in Frameworks */,
+				8E257B559B6941B4CDC8BBD8 /* LPWire in Frameworks */,
+				932FDEA7EDE4712AF7CF7771 /* LPModel in Frameworks */,
+				A78EF68CA413A3C05942BB62 /* LPParsing in Frameworks */,
+				1F977B930A3FB7AB80172650 /* OpenVPN3Shim in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -201,6 +249,7 @@
 			children = (
 				1BC9081441B005E8821F9925 /* LockPlus.entitlements */,
 				F1CCF738BF015C7F973561D5 /* LockPlusTunnel.entitlements */,
+				A71B3A836C57E5B997857C94 /* LockPlusValidator.entitlements */,
 			);
 			path = Release;
 			sourceTree = "<group>";
@@ -210,6 +259,7 @@
 			children = (
 				DAEAD0DE40671110B3E80FAD /* LockPlus.entitlements */,
 				D1736A0A09ACC331E026E533 /* LockPlusTunnel.entitlements */,
+				09DBDF0C8E4569573C5954BA /* LockPlusValidator.entitlements */,
 				032F8C223C9EF8C070C56858 /* Release */,
 			);
 			path = Entitlements;
@@ -227,6 +277,7 @@
 			children = (
 				D6E8B0E52327809E834C9746 /* LockPlus.app */,
 				B67DAE5E76C3D088BCC0C64B /* io.github.steiale.lockplus.mac.tunnel.systemextension */,
+				082CFE87EBAFEDCC32850966 /* LockPlusValidator.xpc */,
 				D0E49A879EEA4822BED8C486 /* RequirementTests.xctest */,
 				F2ABCA5B0F838C562D14FCF9 /* LockPlusTests.xctest */,
 			);
@@ -244,6 +295,7 @@
 				9A3869C32439914C492B1DAD /* FaultInjection.xcconfig */,
 				3ECED78C860171441C17DC11 /* App.xcconfig */,
 				B4769B11E8E610620B1D6498 /* Tunnel.xcconfig */,
+				8D7FBEA83C9924A6BCBE1E59 /* Validator.xcconfig */,
 				1D6E1FBF528A214257C7F427 /* GoBridge.xcconfig */,
 				7D59C34589ED4F7A807D0BD1 /* Tests.xcconfig */,
 				F5C66A5AD977544C61C6783C /* AppTests.xcconfig */,
@@ -262,6 +314,7 @@
 			children = (
 				E268454ACB097AD37F7C31A6 /* App */,
 				2C129E13B1B631014442280B /* Tunnel */,
+				80C6FAF825141234719A07DD /* Validator */,
 				9DCD2023BB7F15FB2D257518 /* Shared */,
 				3DD3D9707DC56671F8AA223F /* RequirementTests */,
 				A66F538515F72C93472CE5C5 /* LockPlusTests */,
@@ -286,6 +339,7 @@
 			children = (
 				8E48004E954702739A78B863 /* LockPlus-Info.plist */,
 				7F6C13191173FB3123EE4E6A /* LockPlusTunnel-Info.plist */,
+				0CA33FC274B57E8267F2B423 /* LockPlusValidator-Info.plist */,
 			);
 			path = Info;
 			sourceTree = "<group>";
@@ -310,6 +364,35 @@
 /* End PBXLegacyTarget section */
 
 /* Begin PBXNativeTarget section */
+		B59A4904CAE129D83D10B5AD /* LockPlusValidator */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C616059CF6F4D5DE22E5F03C /* Build configuration list for PBXNativeTarget "LockPlusValidator" */;
+			buildPhases = (
+				966E0BEE55BF3E539A22F63D /* Sources */,
+				09E9C1AF11917148CE78C740 /* Frameworks */,
+				2B2A0718AE89B77602634779 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				80C6FAF825141234719A07DD /* Validator */,
+				9DCD2023BB7F15FB2D257518 /* Shared */,
+			);
+			name = LockPlusValidator;
+			packageProductDependencies = (
+				43F8117EAE4C024150CE56F7 /* LPValidatorService */,
+				0141A9DA1262CE7210EB5AC6 /* LPEngineCheck */,
+				C7A07842BE8DD0113650CB52 /* LPWire */,
+				8F455FF08032A82379E383F0 /* LPModel */,
+				D4C46606CBCF433C247E0146 /* LPParsing */,
+				DC93066D512323092922BF58 /* OpenVPN3Shim */,
+			);
+			productName = LockPlusValidator;
+			productReference = 082CFE87EBAFEDCC32850966 /* LockPlusValidator.xpc */;
+			productType = "com.apple.product-type.xpc-service";
+		};
 		42CF1D48B3D5920BBEBC6BE7 /* LockPlusTunnel */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 5C77A4E4F2E6220734121E31 /* Build configuration list for PBXNativeTarget "LockPlusTunnel" */;
@@ -336,6 +419,7 @@
 				F381B82E18B806FBA45AB1C6 /* TunnelEngine */,
 				8197727F33A5D6448A86F858 /* WireGuardKitGo */,
 				490EFD7DD502EB56A4AD592E /* OpenVPN3Shim */,
+				C2E5F7B3D8A46A9B1F2E3D4C /* LPOptionsParser */,
 			);
 			productName = LockPlusTunnel;
 			productReference = B67DAE5E76C3D088BCC0C64B /* io.github.steiale.lockplus.mac.tunnel.systemextension */;
@@ -396,12 +480,14 @@
 				A59F63B36F5F6CA97177E2CF /* Frameworks */,
 				859142A61571419411C9B51A /* Resources */,
 				B4E80B2D79E9A79177A02D88 /* Embed System Extensions */,
+				08DCA61C676FCCCAA1F0B8DC /* Embed XPC Services */,
 				E7790508B86B9EFE4E8D14E1 /* Embed Launch Agents */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				26DF976A92853F372A7E1CA5 /* PBXTargetDependency */,
+				B3092C987177F4ECC83B0822 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				E268454ACB097AD37F7C31A6 /* App */,
@@ -414,7 +500,6 @@
 				C0379D5664FCE71CDBB06050 /* LPXPCClient */,
 				1BF9666B08EBDC2E9E8246CA /* LPParsing */,
 				315CDFA8E34730EF52FF5F8F /* LPRouteProbe */,
-				4187340E10E2A992DF107CD3 /* OpenVPN3Options */,
 				794DF2971E49413ADA7101D8 /* Sparkle */,
 				7C2E4A9F1D3B58C60E1F2A3B /* ZIPFoundation */,
 			);
@@ -436,6 +521,9 @@
 						CreatedOnToolsVersion = 27.1;
 					};
 					42CF1D48B3D5920BBEBC6BE7 = {
+						CreatedOnToolsVersion = 27.1;
+					};
+					B59A4904CAE129D83D10B5AD = {
 						CreatedOnToolsVersion = 27.1;
 					};
 					D8098181093CF994BE47C9FE = {
@@ -464,6 +552,7 @@
 				A584B9D43C10328E4FFF4CF9 /* XCLocalSwiftPackageReference "Packages/LockPlusCore" */,
 				7F77F101A71D6C1813BD1886 /* XCLocalSwiftPackageReference "Packages/TunnelEngine" */,
 				8BBDEA75531BE35665E73D94 /* XCLocalSwiftPackageReference "Packages/OpenVPN3Shim" */,
+				B1D4E6A2C7F3589A0E1D2C3B /* XCLocalSwiftPackageReference "Packages/ProfileValidator" */,
 				F8BD9FF7FA1B0BD57E4CF043 /* XCLocalSwiftPackageReference "Vendor/wireguard-apple" */,
 				DC0AF781F62B40CB88CECA21 /* XCRemoteSwiftPackageReference "Sparkle" */,
 				9E3D5B7A2C4F61D80A2B3C4D /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
@@ -475,6 +564,7 @@
 			targets = (
 				E4CF091925A4B165B1026291 /* LockPlus */,
 				42CF1D48B3D5920BBEBC6BE7 /* LockPlusTunnel */,
+				B59A4904CAE129D83D10B5AD /* LockPlusValidator */,
 				8E33AFEEDC60F0CCE3F9FABA /* WireGuardGoBridgemacOS */,
 				D8098181093CF994BE47C9FE /* RequirementTests */,
 				5C1260FC45126791D9B39A44 /* LockPlusTests */,
@@ -505,6 +595,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		F967C3707711DFD0F3366D9A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2B2A0718AE89B77602634779 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -542,6 +639,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		966E0BEE55BF3E539A22F63D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -559,6 +663,11 @@
 			isa = PBXTargetDependency;
 			target = E4CF091925A4B165B1026291 /* LockPlus */;
 			targetProxy = B82450C662723C4B84C896D8 /* PBXContainerItemProxy */;
+		};
+		B3092C987177F4ECC83B0822 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B59A4904CAE129D83D10B5AD /* LockPlusValidator */;
+			targetProxy = 605DE239995BEB6306F28B2B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -689,6 +798,27 @@
 			};
 			name = Debug;
 		};
+		A1184E794F556D59D51CFD9A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 8D7FBEA83C9924A6BCBE1E59 /* Validator.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		9F18900B32B21AFEC1B7218E /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 8D7FBEA83C9924A6BCBE1E59 /* Validator.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		8BCF043E7D1BE4C7A1E2A67E /* FaultInjection */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 8D7FBEA83C9924A6BCBE1E59 /* Validator.xcconfig */;
+			buildSettings = {
+			};
+			name = FaultInjection;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -752,6 +882,16 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		C616059CF6F4D5DE22E5F03C /* Build configuration list for PBXNativeTarget "LockPlusValidator" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1184E794F556D59D51CFD9A /* Debug */,
+				9F18900B32B21AFEC1B7218E /* Release */,
+				8BCF043E7D1BE4C7A1E2A67E /* FaultInjection */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -770,6 +910,10 @@
 		F8BD9FF7FA1B0BD57E4CF043 /* XCLocalSwiftPackageReference "Vendor/wireguard-apple" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "Vendor/wireguard-apple";
+		};
+		B1D4E6A2C7F3589A0E1D2C3B /* XCLocalSwiftPackageReference "Packages/ProfileValidator" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/ProfileValidator;
 		};
 /* End XCLocalSwiftPackageReference section */
 
@@ -817,11 +961,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A584B9D43C10328E4FFF4CF9 /* XCLocalSwiftPackageReference "Packages/LockPlusCore" */;
 			productName = LPRouteProbe;
-		};
-		4187340E10E2A992DF107CD3 /* OpenVPN3Options */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 8BBDEA75531BE35665E73D94 /* XCLocalSwiftPackageReference "Packages/OpenVPN3Shim" */;
-			productName = OpenVPN3Options;
 		};
 		490EFD7DD502EB56A4AD592E /* OpenVPN3Shim */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -872,6 +1011,41 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 9E3D5B7A2C4F61D80A2B3C4D /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
 			productName = ZIPFoundation;
+		};
+		C2E5F7B3D8A46A9B1F2E3D4C /* LPOptionsParser */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B1D4E6A2C7F3589A0E1D2C3B /* XCLocalSwiftPackageReference "Packages/ProfileValidator" */;
+			productName = LPOptionsParser;
+		};
+		43F8117EAE4C024150CE56F7 /* LPValidatorService */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B1D4E6A2C7F3589A0E1D2C3B /* XCLocalSwiftPackageReference "Packages/ProfileValidator" */;
+			productName = LPValidatorService;
+		};
+		0141A9DA1262CE7210EB5AC6 /* LPEngineCheck */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B1D4E6A2C7F3589A0E1D2C3B /* XCLocalSwiftPackageReference "Packages/ProfileValidator" */;
+			productName = LPEngineCheck;
+		};
+		C7A07842BE8DD0113650CB52 /* LPWire */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A584B9D43C10328E4FFF4CF9 /* XCLocalSwiftPackageReference "Packages/LockPlusCore" */;
+			productName = LPWire;
+		};
+		8F455FF08032A82379E383F0 /* LPModel */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A584B9D43C10328E4FFF4CF9 /* XCLocalSwiftPackageReference "Packages/LockPlusCore" */;
+			productName = LPModel;
+		};
+		D4C46606CBCF433C247E0146 /* LPParsing */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A584B9D43C10328E4FFF4CF9 /* XCLocalSwiftPackageReference "Packages/LockPlusCore" */;
+			productName = LPParsing;
+		};
+		DC93066D512323092922BF58 /* OpenVPN3Shim */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8BBDEA75531BE35665E73D94 /* XCLocalSwiftPackageReference "Packages/OpenVPN3Shim" */;
+			productName = OpenVPN3Shim;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

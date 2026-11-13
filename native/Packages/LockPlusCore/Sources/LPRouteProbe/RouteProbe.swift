@@ -71,6 +71,84 @@ public struct RouteProbe: EndpointRouteProbing {
         firstNonPrimary(ips.flatMap { resolve(host: $0, port: "0", numericOnly: true) })
     }
 
+    /// 2.0.2 self-test: the interface (BSD name) the kernel would use to reach one IP literal, via `RTM_GET`. Literals
+    /// only (no DNS, never blocks on the network); nil for a hostname, an unparsable string or an unroutable address.
+    /// A scope suffix ("fe80::1%en0") is accepted.
+    /// Round 2 (Codex r2 #6): a route lookup's answer, telling "the kernel has no route" (`ESRCH`) apart from a lookup
+    /// that failed (socket, write or read errors, a timeout). Only `.noRoute` is evidence of a local refusal.
+    public enum RouteLookup: Sendable, Equatable {
+        case via(String)
+        case noRoute
+        case failed
+    }
+
+    /// `RTM_GET` for an IP literal (not a hostname: `.failed`).
+    public static func routeLookup(forIP ip: String) -> RouteLookup {
+        guard !ip.isEmpty, let addr = resolve(host: ip, port: "0", numericOnly: true).first else { return .failed }
+        switch interfaceLookup(to: addr) {
+        case .index(let i): return .via(interfaceName(i))
+        case .noRoute: return .noRoute
+        case .failed: return .failed
+        }
+    }
+
+    public static func interface(forIP ip: String) -> String? {
+        guard !ip.isEmpty, let addr = resolve(host: ip, port: "0", numericOnly: true).first, let index = interfaceIndex(to: addr) else { return nil }
+        return interfaceName(index)
+    }
+
+    /// 2.0.2 self-test: the interface the default route of the family (`RTM_GET` for 0.0.0.0 / ::) leaves by, or nil
+    /// when the host has none.
+    public static func defaultInterface(ipv6: Bool) -> String? {
+        defaultInterfaceIndex(family: ipv6 ? AF_INET6 : AF_INET).map(interfaceName)
+    }
+
+    /// 2.0.2 round 3 (Codex r3 #6): the default route's lookup, telling "no default route" apart from a failed lookup.
+    public static func defaultRouteLookup(ipv6: Bool) -> RouteLookup {
+        switch interfaceLookup(to: defaultDestination(family: ipv6 ? AF_INET6 : AF_INET)) {
+        case .index(let i): return .via(interfaceName(i))
+        case .noRoute: return .noRoute
+        case .failed: return .failed
+        }
+    }
+
+    /// 2.0.2 self-test: the interface that carries `address` as one of its own addresses (`getifaddrs`), e.g. the utun
+    /// whose address a connection's local endpoint reports. A scope suffix is ignored; nil when no interface owns it.
+    public static func interface(owningAddress address: String) -> String? { interfaces(owningAddress: address).first }
+
+    /// Every interface that carries `address` (round 1, Fable M3: a LAN can hand out the tunnel's inner address, and
+    /// then en0 and the utun both own it; the caller must see that), in `getifaddrs` order, each name once.
+    public static func interfaces(owningAddress address: String) -> [String] {
+        let literal = String(address.split(separator: "%", maxSplits: 1).first ?? "").lowercased()
+        guard !literal.isEmpty, let want = resolve(host: literal, port: "0", numericOnly: true).first else { return [] }
+        let wantBytes = rawAddress(want)
+        var list: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&list) == 0, let first = list else { return [] }
+        defer { freeifaddrs(first) }
+        var out: [String] = []
+        for p in sequence(first: first, next: { $0.pointee.ifa_next }) {
+            guard let sa = p.pointee.ifa_addr, sa.pointee.sa_family == want.ss_family else { continue }
+            var ss = sockaddr_storage()
+            withUnsafeMutableBytes(of: &ss) { $0.copyMemory(from: UnsafeRawBufferPointer(start: sa, count: Int(sa.pointee.sa_len))) }
+            let name = String(cString: p.pointee.ifa_name)
+            if rawAddress(ss) == wantBytes, !out.contains(name) { out.append(name) }
+        }
+        return out
+    }
+
+    /// The address bytes of a v4/v6 sockaddr (no port, no scope); empty for other families.
+    private static func rawAddress(_ ss: sockaddr_storage) -> [UInt8] {
+        var ss = ss
+        let family = Int32(ss.ss_family)
+        return withUnsafeBytes(of: &ss) { b -> [UInt8] in
+            switch family {
+            case AF_INET: return Array(b[4..<8])                      // sockaddr_in: len, family, port(2), addr(4)
+            case AF_INET6: return Array(b[8..<24])                    // sockaddr_in6: len, family, port(2), flow(4), addr(16)
+            default: return []
+            }
+        }
+    }
+
     /// Synchronous core. nil = primary, or unknown (unresolvable, no default route): the topology may differ later.
     static func probe(host: String, port: String) -> String? {
         firstNonPrimary(resolve(host: host, port: port))
@@ -114,6 +192,11 @@ public struct RouteProbe: EndpointRouteProbing {
     // MARK: PF_ROUTE
 
     static func defaultInterfaceIndex(family: Int32) -> UInt16? {
+        interfaceIndex(to: defaultDestination(family: family))
+    }
+
+    /// The all-zero address of `family` (0.0.0.0 / ::), the destination whose route is the default route.
+    static func defaultDestination(family: Int32) -> sockaddr_storage {
         var ss = sockaddr_storage()
         if family == AF_INET {
             withUnsafeMutableBytes(of: &ss) { b in
@@ -126,20 +209,27 @@ public struct RouteProbe: EndpointRouteProbing {
                 b.storeBytes(of: UInt8(AF_INET6), toByteOffset: 1, as: UInt8.self)
             }
         }
-        return interfaceIndex(to: ss)
+        return ss
     }
 
     /// `RTM_GET` for one destination; returns the outgoing interface index of the matched route.
     static func interfaceIndex(to dst: sockaddr_storage) -> UInt16? {
+        if case .index(let i) = interfaceLookup(to: dst) { return i }
+        return nil
+    }
+
+    enum IndexLookup: Equatable { case index(UInt16), noRoute, failed }
+
+    static func interfaceLookup(to dst: sockaddr_storage) -> IndexLookup {
         let fd = socket(PF_ROUTE, SOCK_RAW, AF_UNSPEC)
-        guard fd >= 0 else { return nil }
+        guard fd >= 0 else { return .failed }
         defer { close(fd) }
         var tv = timeval(tv_sec: 1, tv_usec: 0)
         setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
 
         var dstCopy = dst
         let saLen = Int(withUnsafeBytes(of: &dstCopy) { $0[0] })
-        guard saLen > 0 else { return nil }
+        guard saLen > 0 else { return .failed }
         let padded = (saLen + 3) & ~3                       // ROUNDUP to 4 bytes (32-bit long alignment in route msgs)
         let hdr = MemoryLayout<rt_msghdr>.size
         var buf = [UInt8](repeating: 0, count: 2048)
@@ -160,21 +250,22 @@ public struct RouteProbe: EndpointRouteProbing {
             }
         }
         let msgLen = hdr + padded
-        guard write(fd, buf, msgLen) == msgLen else { return nil }
+        guard write(fd, buf, msgLen) == msgLen else { return errno == ESRCH ? .noRoute : .failed }
         for _ in 0..<16 {
             let n = buf.withUnsafeMutableBytes { read(fd, $0.baseAddress, $0.count) }
-            guard n >= hdr else { return nil }
+            guard n >= hdr else { return .failed }
             let r = buf.withUnsafeBytes { $0.load(as: rt_msghdr.self) }
             guard r.rtm_seq == seq, r.rtm_pid == pid, r.rtm_type == UInt8(RTM_GET) else { continue }
-            guard r.rtm_errno == 0 else { return nil }
-            return r.rtm_index == 0 ? nil : r.rtm_index
+            guard r.rtm_errno == 0 else { return r.rtm_errno == ESRCH ? .noRoute : .failed }
+            return r.rtm_index == 0 ? .failed : .index(r.rtm_index)
         }
-        return nil
+        return .failed
     }
 
     static func interfaceName(_ index: UInt16) -> String {
         var name = [CChar](repeating: 0, count: Int(IF_NAMESIZE))
         guard if_indextoname(UInt32(index), &name) != nil else { return "if\(index)" }
-        return String(cString: name)
+        let bytes = name.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
+        return String(decoding: bytes, as: UTF8.self)
     }
 }

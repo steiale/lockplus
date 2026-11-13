@@ -5,6 +5,8 @@ import os
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     let env: AppEnvironment
     private var menuBar: MenuBarController?
+    /// Item 4: documents opened from Finder / Open With / the Dock (queued until the environment is ready).
+    let openDocuments = OpenDocumentRouter()
     private var windowCloseObserver: NSObjectProtocol?
     private var wakeObserver: NSObjectProtocol?
 
@@ -56,7 +58,14 @@ import os
             if env.launchedNewBuild || env.settings.value.iconMayBeHidden || env.settings.value.openWindowAtLogin {
                 env.ui.actions.openMainWindow()
             }
+            openDocuments.environmentReady(env)
         }
+    }
+
+    /// Finder double-click, Open With, Dock drop, `open -a LockPlus f`. Opening never imports silently: the importer shows
+    /// its preview sheet (item 4). A cold launch delivers this before `env.start()` returns; the router queues until then.
+    func application(_ sender: NSApplication, open urls: [URL]) {
+        openDocuments.enqueue(urls)
     }
 
     /// The live delegate (SwiftUI wraps it, so `NSApp.delegate` isn't this object). Tests read the host's state here.

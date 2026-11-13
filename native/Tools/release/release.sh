@@ -7,6 +7,8 @@
 # Env:   LP_NOTARY_PROFILE (required: the notarytool keychain profile; set it in the environment or in the gitignored
 #        Tools/lib/local.zsh); LP_NOTARY_WAIT_MIN (default 30): how long to wait for the
 #        notary keychain item (readable only while the owner's Mac is unlocked). Never sets LP_ALLOW_SPARKLE_PLACEHOLDERS.
+#        LP_PREV_APP (required, round 1 Fable N4): the previous notarized LockPlus.app; `verify.sh pre` checks that it
+#        fails this build's APP_REQ (build floor).
 # Output: $LP_OUT/out/{LockPlus.app, LockPlus-<ver>.zip, LockPlus-<ver>.dmg, SHA256SUMS.txt, notary-*.json}
 set -euo pipefail
 source "${0:A:h}/common.sh"
@@ -16,6 +18,8 @@ OUT="${LP_OUT:-$LP_BUILD_ROOT/release}"; OUT="${OUT:A}"
 FINAL="$OUT/out"; STAGE="$OUT/stage"; NOTE="$OUT/notary"
 NOTARY="${LP_NOTARY_PROFILE:-}"
 [[ -n "$NOTARY" ]] || fail "set LP_NOTARY_PROFILE (the notarytool keychain profile), e.g. in Tools/lib/local.zsh (gitignored)"
+[[ -n "${LP_PREV_APP:-}" && -d "${LP_PREV_APP:-}" ]] || fail "set LP_PREV_APP to the previous notarized LockPlus.app (the build-floor check)"
+export LP_RELEASE_RUN=1
 SKIP_BUILD=0
 for a in "$@"; do case $a in --skip-build) SKIP_BUILD=1;; *) fail "unknown option $a";; esac; done
 unset LP_ALLOW_SPARKLE_PLACEHOLDERS

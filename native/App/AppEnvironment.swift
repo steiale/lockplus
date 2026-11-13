@@ -42,6 +42,8 @@ enum AppMode: Sendable, Equatable {
     /// The editor windows' backend (§11.4); created lazily because it holds the environment weakly.
     private(set) lazy var editorBackend: AppEditorBackend = AppEditorBackend(env: self)
     let importer: ImportCoordinator
+    /// The profile validator [6]/[7] (live: the sandboxed validator service).
+    let validator: any OpenVPN3ProfileValidating
     let migrator: GoAppMigrator
     let extensionStore: any ExtensionControlling
     let managers: any VPNManaging
@@ -114,6 +116,13 @@ enum AppMode: Sendable, Equatable {
         /// E2E-4: settings.json is written only after `start()` has read it (a quit before that wrote defaults over the
         /// file). Tests that drive the stores without `start()` opt out.
         var settingsWritableBeforeLoad = false
+        /// 2.0.2 (PLAN-2.0.2 §1.4): [6]/[7] and the zip read in the sandboxed validator service. nil: the preview
+        /// stand-ins (DEBUG: `PreviewProfileValidator`, which accepts what passed [1]-[5], and an archive reader that reads nothing).
+        var validator: (any OpenVPN3ProfileValidating)?
+        var zipReader: (any ZipArchiveReading)?
+        /// 2.0.2 (PLAN-2.0.2 §5): the connection self-test's sockets and route lookups (nil: the live `NWConnection`
+        /// prober; hosted tests substitute one that never touches the network).
+        var selfTestNetworking: (any SelfTestNetworking)?
     }
 
     static func liveBackends(bundle: Bundle = .main) -> Backends {
@@ -128,7 +137,10 @@ enum AppMode: Sendable, Equatable {
         } else {
             service = UnavailableTunnelService()
         }
-        return Backends(mode: .live, dataDirectory: .standard(), keychain: DataProtectionKeychain(),
+        let validatorClient = ValidatorClient(
+            serviceName: "io.github.steiale.lockplus.mac.validator", peerRequirement: VALIDATOR_REQ,
+            expectedBuild: bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?")
+        var live = Backends(mode: .live, dataDirectory: .standard(), keychain: DataProtectionKeychain(),
                         managers: NEManagerStore(providerBundleIdentifier: manager.extensionIdentifier), service: service,
                         extensionStore: ExtensionStore(manager: manager, service: service), systemExtensions: manager,
                         hooks: LiveSystemHooks(), goSource: GoAppMigrator.liveSource, probe: RouteProbe(), persistFiles: true,
@@ -137,6 +149,9 @@ enum AppMode: Sendable, Equatable {
                         dnsSystem: LiveDNSSystem(), logSources: LiveLogSources(), host: LiveHostDiagnostics(),
                         legacyKeychain: LoginKeychainReader(), legacySystem: LiveLegacySystem(), legacyAgentHome: NSHomeDirectory(), legacyHelperRunner: InProcessAppleScriptRunner(),
                         makeWiFi: { LiveWiFiLocator() }, makeNetworkWatcher: { LiveNetworkWatcher() })
+        live.validator = ServiceProfileValidator(client: validatorClient)
+        live.zipReader = ServiceZipArchiveReader(client: validatorClient)
+        return live
     }
 
     #if DEBUG
@@ -159,7 +174,9 @@ enum AppMode: Sendable, Equatable {
     }
     #endif
 
-    convenience init(mode: AppMode = .detect()) {
+    /// Round 7 (Fable r7 N5): no default mode, so nothing builds the live backends (the real keychains and data
+    /// directory) by leaving the argument out; `AppDelegate` passes `.preview` under XCTest.
+    convenience init(mode: AppMode) {
         #if DEBUG
         self.init(backends: mode == .preview ? Self.previewBackends() : Self.liveBackends())
         #else
@@ -183,17 +200,28 @@ enum AppMode: Sendable, Equatable {
         profiles = ProfilesStore(repository: repo, credentialStore: CredentialStore(items: b.keychain), managers: managers,
                                  service: b.service, settings: settings,
                                  factsFile: b.persistFiles ? b.dataDirectory.credentialFacts : nil)
+        #if DEBUG
+        let validator: any OpenVPN3ProfileValidating = b.validator ?? PreviewProfileValidator()
+        let zipReader: any ZipArchiveReading = b.zipReader ?? PreviewZipArchiveReader()
+        #else
+        guard let validator = b.validator, let zipReader = b.zipReader else { preconditionFailure("live backends carry the validator") }
+        #endif
+        self.validator = validator
+        profiles.validator = validator
         connection = ConnectionStore(managers: managers, service: b.service, profiles: profiles, settings: settings)
         connection.resumeAgent = b.resumeAgent
         connection.resolveEndpoints = b.resolveEndpoints
         profiles.onDemandHeldBack = { [weak connection] id in connection?.holdsBackOnDemand(of: id) ?? false }   // E2E-3
         profiles.mutationBlocked = { [weak connection] id in connection?.mutationBlocked(id) ?? false }           // review F5, R3
         profiles.otherStartPending = { [weak connection] id in connection?.foreignStartPending(except: id) ?? false }   // round 7
+        profiles.revocationHeld = { [weak connection] in connection?.revocationHeld() ?? [] }                     // round 2 (L1)
         profiles.stopSessionBeforeRemoval = { [weak connection] id in                                              // review e321e10
             guard let connection else { return }
             _ = await connection.stopAndWait(id, timeout: connection.removalStopTimeout)
         }
-        diagnostics = DiagnosticsStore(system: b.dnsSystem, profiles: profiles)
+        diagnostics = DiagnosticsStore(system: b.dnsSystem, profiles: profiles,
+                                       selfTest: b.selfTestNetworking ?? LiveSelfTestNetworking())
+        diagnostics.snapshotProvider = { [weak connection] in connection?.snapshot }          // 2.0.2 self-test facts
         dnsSystem = b.dnsSystem
         logSources = b.logSources
         host = b.host
@@ -221,9 +249,10 @@ enum AppMode: Sendable, Equatable {
         let connection = self.connection
         stats = StatsStore(service: b.service, model: ui.stats, profileID: { connection.currentID },
                            isActive: { connection.currentStatus.isActive })
-        importer = ImportCoordinator(model: ui.importer, profiles: profiles, service: b.service, settings: settings, probe: b.probe)
+        importer = ImportCoordinator(model: ui.importer, profiles: profiles, validator: validator, zipReader: zipReader,
+                                     settings: settings, probe: b.probe)
         importer.resolveEndpoints = b.resolveEndpoints
-        migrator = GoAppMigrator(source: b.goSource, profiles: profiles, settings: settings, files: files, service: b.service,
+        migrator = GoAppMigrator(source: b.goSource, profiles: profiles, settings: settings, files: files, validator: validator,
                                  probe: b.probe, keychain: b.legacyKeychain)
         // Migration matrix: only the live app looks for upstream WireGuide's directory (preview and tests never do).
         if b.mode == .live { migrator.upstreamWireGuide = GoAppMigrator.liveUpstreamWireGuide }
@@ -281,6 +310,7 @@ enum AppMode: Sendable, Equatable {
         // Preview mode starts from a clean, separate directory every launch (its keychain is in memory).
         if mode == .preview, let files { try? FileManager.default.removeItem(at: files.dir.root) }
         await acquireInstanceLock()
+        if instanceLock != nil { await files?.sweepOrphanTempFiles() }      // 2.0.2 RC review (Fable N5)
         let settingsProblem = await loadSettingsAtLaunch()
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
         settings.update { s in
@@ -293,6 +323,9 @@ enum AppMode: Sendable, Equatable {
         if mode == .preview { await seedPreviewProfiles() }
         #endif
         await profiles.load()
+        // 2.0.2: the validator service doesn't need the tunnel component. Round 2 (Fable L8): not awaited, so a file that
+        // keeps the check busy never holds the launch.
+        Task { [profiles] in await profiles.verifyPending() }
         noteSettingsProblem(settingsProblem)
         retireGoLaunchAgent()
         connection.start()
@@ -402,14 +435,28 @@ enum AppMode: Sendable, Equatable {
         try? FileManager.default.removeItem(at: dataDirectory.root)
     }
 
-    func helloAndReconcile() {
+    /// Round 4 (Fable L2a): a failed hello is retried this many times, these delays apart (reconcile runs after it, and the
+    /// capabilities gate the revoke).
+    static let helloRetryDelays: [Duration] = [.seconds(10), .seconds(30), .seconds(60), .seconds(120), .seconds(300)]
+    var helloRetrySleep: @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0) }
+
+    func helloAndReconcile(attempt: Int = 0) {
         let service = self.service
         Task { @MainActor in
             do throws(LPError) {
                 let h = try await service.hello()
                 log.notice("hello OK ext \(h.extVersion, privacy: .public) (\(h.extBuild, privacy: .public))")
+                profiles.extensionCapabilities = h.capabilities
             } catch {
                 log.error("hello failed: \(error.code.rawValue, privacy: .public)")
+                if attempt < Self.helloRetryDelays.count, profiles.extensionCapabilities == nil {
+                    let sleep = helloRetrySleep, delay = Self.helloRetryDelays[attempt]
+                    Task { @MainActor [weak self] in
+                        await sleep(delay)
+                        guard let self, self.profiles.extensionCapabilities == nil else { return }
+                        self.helloAndReconcile(attempt: attempt + 1)
+                    }
+                }
                 return
             }
             await profiles.reconcile()
@@ -434,10 +481,13 @@ enum AppMode: Sendable, Equatable {
 
     // MARK: Diagnostics (§10.2, UI-CONCEPT §6.11)
 
-    /// "Run All" (⌘R): the DNS verifier on demand plus the check rows.
+    /// "Run All" (⌘R) and the hero's "Run Diagnostics": the DNS verifier on demand plus the check rows, and (2.0.2,
+    /// PLAN-2.0.2 §5.3) the connection self-test while connected. Only ever a user's button press: the self-test
+    /// contacts the probe host, so nothing calls this on its own.
     func runDiagnostics() async {
         ui.diagnostics.isRunning = true
         defer { ui.diagnostics.isRunning = false }
+        async let selfTest: Void = diagnostics.runSelfTest()        // returns at once unless connected (and not already running)
         let id = connection.currentID
         let connected = connection.currentStatus == .connected
         if connected, let id { await diagnostics.verify(id) }
@@ -451,6 +501,7 @@ enum AppMode: Sendable, Equatable {
         await legacy.refresh()
         checks.append(legacy.check)
         ui.diagnostics.checks = checks
+        await selfTest
     }
 
     /// Other utun interfaces with a default route: one is ours while connected (UI-CONCEPT §6.11).
@@ -591,7 +642,7 @@ enum AppMode: Sendable, Equatable {
     private func seedPreviewProfiles() async {
         guard profiles.profiles.isEmpty else { return }
         for (name, text) in PreviewSeed.files {
-            let a = await ImportCoordinator.analyse(fileName: name, bytes: Array(text.utf8), service: service, probe: NoRouteProbe())
+            let a = await ImportCoordinator.analyse(fileName: name, bytes: Array(text.utf8), validator: validator, probe: NoRouteProbe())
             guard let d = importer.draft(a, name: a.displayName, killSwitch: a.summary.isFullTunnel, allowLAN: false) else {
                 log.error("preview seed \(name, privacy: .public) was rejected")
                 continue

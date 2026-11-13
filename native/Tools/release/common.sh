@@ -4,6 +4,7 @@ source "$NATIVE_ROOT/Tools/lib/paths.sh"   # LP_BUILD_ROOT (default ~/Code/lockp
 TEAM=M53GHX9FAY
 APP_ID=io.github.steiale.lockplus.mac
 EXT_ID=$APP_ID.tunnel
+VAL_ID=$APP_ID.validator            # 2.0.2: the sandboxed validator XPC service (Contents/XPCServices)
 APP_GROUP=$TEAM.$APP_ID
 APP_NAME=LockPlus
 IDENTITY="${LP_IDENTITY:-Developer ID Application: Alexander Steiner (M53GHX9FAY)}"
@@ -15,14 +16,20 @@ EXT_PROFILE="$PROFILES/LockPlus_Tunnel_Developer_ID.provisionprofile"
 
 # DESIGN §5.3 Release requirement strings; identical to the literals in Tests/RequirementTests/RequirementTests.swift
 # (verify.sh static checks that). The dev clause never appears here.
+# 2.0.2 (PLAN-2.0.2 §2): the app requirement carries the build floor. MIN_APP_BUILD == SigningRequirements.minimumAppBuild
+# == LP_BUILD_NUMBER (version-check.sh); bumped with Config/Version.xcconfig in the one version commit.
+MIN_APP_BUILD=200027
 SIGNER='(certificate 1[field.1.2.840.113635.100.6.2.6] and certificate leaf[field.1.2.840.113635.100.6.1.13])'
-APP_REQ="anchor apple generic and identifier \"$APP_ID\" and $SIGNER and certificate leaf[subject.OU] = \"$TEAM\""
+FLOOR="info [CFBundleVersion] >= \"$MIN_APP_BUILD\""
+APP_REQ="anchor apple generic and identifier \"$APP_ID\" and $SIGNER and $FLOOR and certificate leaf[subject.OU] = \"$TEAM\""
 EXT_REQ="anchor apple generic and identifier \"$EXT_ID\" and $SIGNER and certificate leaf[subject.OU] = \"$TEAM\""
+VALIDATOR_REQ="anchor apple generic and identifier \"$VAL_ID\" and $SIGNER and certificate leaf[subject.OU] = \"$TEAM\""
 DEV_OID='113635.100.6.2.1'
 # Debug/FaultInjection (LP_DEV_SIGNING) strings, for signed dev builds only (Tools/dev/build.sh).
 DEV_SIGNER='((certificate 1[field.1.2.840.113635.100.6.2.6] and certificate leaf[field.1.2.840.113635.100.6.1.13]) or (certificate 1[field.1.2.840.113635.100.6.2.1] and certificate leaf[field.1.2.840.113635.100.6.1.12]))'
-DEV_APP_REQ="anchor apple generic and identifier \"$APP_ID\" and $DEV_SIGNER and certificate leaf[subject.OU] = \"$TEAM\""
+DEV_APP_REQ="anchor apple generic and identifier \"$APP_ID\" and $DEV_SIGNER and $FLOOR and certificate leaf[subject.OU] = \"$TEAM\""
 DEV_EXT_REQ="anchor apple generic and identifier \"$EXT_ID\" and $DEV_SIGNER and certificate leaf[subject.OU] = \"$TEAM\""
+DEV_VALIDATOR_REQ="anchor apple generic and identifier \"$VAL_ID\" and $DEV_SIGNER and certificate leaf[subject.OU] = \"$TEAM\""
 
 step() { print -P "%F{cyan}==> $*%f"; }
 ok()   { print -P "  %F{green}ok%f $*"; }
@@ -36,6 +43,9 @@ resolve_app() {   # $1 → prints the .app path
   else print -r -- "$p/$APP_NAME.app"; fi
 }
 ext_of() { print -r -- "$1/Contents/Library/SystemExtensions/$EXT_ID.systemextension"; }
+# 2.0.2: the validator XPC service (Contents/XPCServices/LockPlusValidator.xpc, bundle ID $VAL_ID).
+val_of() { print -r -- "$1/Contents/XPCServices/LockPlusValidator.xpc"; }
+val_bin_of() { print -r -- "$(val_of "$1")/Contents/MacOS/LockPlusValidator"; }
 ext_bin_of() { print -r -- "$(ext_of "$1")/Contents/MacOS/$EXT_ID"; }
 # DESIGN §2.1, Conflicts bd (PENDING-FOLD 27): folder-level membershipExceptions are ignored by xcodebuild 27.1, so a
 # non-target folder under App/ is compiled (or copied) into the app. These two must never exist again.

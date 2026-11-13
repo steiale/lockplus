@@ -42,6 +42,16 @@ public typealias LPReply2 = @Sendable (Data?, Data?) -> Void
     /// PushEndpointsRequest → PushEndpointsReply (PENDING-FOLD 50, §20 risk 25): fresh endpoint IPs the app resolved,
     /// for the caller's own start that is held before Connected on a resolution or reachability failure. No secret.
     func pushEndpoints(_ req: Data, reply: @escaping LPReply2)
+    /// ArmStartRequest → ArmStartReply (2.0.2, PLAN-2.0.2 §3): the caller's next manual start of its own profile carries
+    /// this nonce. Ordinary hello gate; no secret.
+    func armStart(_ req: Data, reply: @escaping LPReply2)
+    /// RevokeUnattendedRequest → error only (2.0.2 round 1, Codex 4; round 2, L1/L3): the caller's profiles whose
+    /// unattended-start consent stands; every other recorded unattended admission of the caller whose session NE never
+    /// restarts (no kill switch) goes, except the running session's and one whose start waits in the guard. A kill-switch
+    /// session's record is never revoked (NE's own restart stays honoured: Fable H1b, Codex r2 #2). Round 3: a keep set
+    /// above one request goes as the pages of one batch (applied once complete, Codex r3 #8), and the request names the
+    /// profiles the user stopped in LockPlus, whose whole record ends unless their session runs here (Fable L1). No secret.
+    func revokeUnattended(_ req: Data, reply: @escaping LPReply1)
 }
 
 /// Exported by the app on the same connection. One event in flight per connection: the extension sends the next only

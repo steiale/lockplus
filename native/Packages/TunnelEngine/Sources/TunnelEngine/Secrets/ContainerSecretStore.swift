@@ -228,22 +228,33 @@ public actor ContainerSecretStore: ExtensionSecretStore {
     }
 
     public func get(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t) throws(LPError) -> SecretBytes? {
+        try load(kind, id, ownerUID: ownerUID)?.bytes
+    }
+
+    public func entry(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t) throws(LPError) -> ProvisionIndexEntry? {
+        try files.ensureDirectory()
+        return try readFile(kind, id, ownerUID)?.meta.entry
+    }
+
+    public func load(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t) throws(LPError) -> (entry: ProvisionIndexEntry, bytes: SecretBytes)? {
         let k = try fileKey()
         guard let f = try readFile(kind, id, ownerUID) else { return nil }
         do {
             var plain = try AES.GCM.open(AES.GCM.SealedBox(combined: f.sealed), using: k,
                                          authenticating: Self.aad(kind, id, ownerUID, f.meta.revision))
             defer { plain.resetBytes(in: 0..<plain.count) }
-            return SecretBytes(copying: plain)
+            return (f.meta.entry, SecretBytes(copying: plain))
         } catch {
             engineLog.fault("sealed secret failed authentication")
             throw LPError(.secretStoreUnavailable, detail: "auth")
         }
     }
 
-    public func entry(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t) throws(LPError) -> ProvisionIndexEntry? {
-        try files.ensureDirectory()
-        return try readFile(kind, id, ownerUID)?.meta.entry
+    /// Synchronous inside the actor: no other store call runs between the payload read and the write.
+    public func putCredential(_ id: UUID, ownerUID: uid_t, ifPayloadRevision revision: UInt64, _ bytes: SecretBytes) throws(LPError) -> Bool {
+        guard try entry(.payload, id, ownerUID: ownerUID)?.revision == revision else { return false }
+        try put(.credential, id, ownerUID: ownerUID, revision: revision, bytes)
+        return true
     }
 
     public func delete(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t) throws(LPError) {

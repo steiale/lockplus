@@ -11,7 +11,8 @@ enum TunnelSecretStore {
     static let servicePrefix = SystemKeychainSecretStore.releasePrefix
     #endif
 
-    static func make(backend: any GenericPasswordBackend = SecItemBackend()) -> SystemKeychainSecretStore {
+    /// `backend`: `SecItemBackend()` in production, a fake in tests (no default, round 6 Fable r6 N3).
+    static func make(backend: any GenericPasswordBackend) -> SystemKeychainSecretStore {
         SystemKeychainSecretStore(backend: backend, servicePrefix: servicePrefix)
     }
 }

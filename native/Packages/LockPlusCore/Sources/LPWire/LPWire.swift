@@ -50,7 +50,9 @@ public enum LPWire {
 public enum LPMethod: String, Sendable, CaseIterable {
     case hello, provisionProfile, updateCredentials, removeProfile, listProvisioned, wipeAllSecrets, validateProfile,
          tunnelSnapshot, statistics, pendingAuthPrompt, prepareStartAuth, answerAuth, cancelAuth,
-         sessionSummaries, measureLatency, pushEndpoints
+         sessionSummaries, measureLatency, pushEndpoints,
+         armStart,           // 2.0.2 (PLAN-2.0.2 §3): owner-authorised starts
+         revokeUnattended    // 2.0.2 round 1 (Codex 4): the owner withdrew unattended-start consent
     // recentLogs/setLogLevel were removed in v2.0 (review M1): not uid-scoped. Logs go to the owner's diagnostics bundle.
 
     /// Request size cap, checked before decoding.
@@ -59,6 +61,7 @@ public enum LPMethod: String, Sendable, CaseIterable {
         case .hello: 4 * LPWire.KiB
         case .provisionProfile, .validateProfile: 300 * LPWire.KiB
         case .answerAuth: 8 * LPWire.KiB
+        case .revokeUnattended: 32 * LPWire.KiB           // round 2 (L3), round 3: ≤ 500 UUIDs and the page fields, or ≤ 16 user stops (test-asserted)
         default: 16 * LPWire.KiB
         }
     }
@@ -77,7 +80,8 @@ public enum LPMethod: String, Sendable, CaseIterable {
     public var timeout: Duration {
         switch self {
         case .hello: .seconds(3)
-        case .tunnelSnapshot, .statistics, .pendingAuthPrompt, .prepareStartAuth, .cancelAuth, .pushEndpoints: .seconds(2)
+        case .tunnelSnapshot, .statistics, .pendingAuthPrompt, .prepareStartAuth, .cancelAuth, .pushEndpoints, .armStart,
+             .revokeUnattended: .seconds(2)
         case .provisionProfile, .updateCredentials, .removeProfile, .wipeAllSecrets, .listProvisioned: .seconds(10)
         case .validateProfile, .answerAuth: .seconds(5)
         case .sessionSummaries: .seconds(3)
@@ -99,7 +103,7 @@ public enum LPMethod: String, Sendable, CaseIterable {
     /// True for the `LPReply1` shape (error only).
     public var repliesErrorOnly: Bool {
         switch self {
-        case .provisionProfile, .updateCredentials, .removeProfile, .wipeAllSecrets, .answerAuth, .cancelAuth: true
+        case .provisionProfile, .updateCredentials, .removeProfile, .wipeAllSecrets, .answerAuth, .cancelAuth, .revokeUnattended: true
         default: false
         }
     }
@@ -124,6 +128,8 @@ public enum LPMethod: String, Sendable, CaseIterable {
         case .sessionSummaries: proxy.sessionSummaries(req, reply: reply)
         case .measureLatency: proxy.measureLatency(req, reply: reply)
         case .pushEndpoints: proxy.pushEndpoints(req, reply: reply)
+        case .armStart: proxy.armStart(req, reply: reply)
+        case .revokeUnattended: proxy.revokeUnattended(req, reply: one)
         }
     }
 }

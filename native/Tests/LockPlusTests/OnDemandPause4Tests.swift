@@ -56,7 +56,7 @@ struct OnDemandPause4Tests {
         try await h.env.managers.loadAll()
         await h.env.settings.updateDurably { $0.onDemandPausedByStart = [auto.id] }
         let connection = h.env.connection, workID = work.id
-        fake.onFirstSleep { await MainActor.run { connection.connect(workID) } }
+        fake.onFirstSleep { _ = await MainActor.run { connection.connect(workID) } }
         h.managers.log = []
         h.env.connection.connect(auto.id)
         #expect(await eventually { h.managers.starts.count == 1 })
@@ -270,14 +270,20 @@ struct OnDemandPause4Tests {
         let work = try await h.add("Work.conf", Harness.wgConf, killSwitch: true)
         let auto = try await h.add("Home NAS.conf", Harness.splitConf)
         var s = AppSettings()
-        s.autoConnect.pausedUntil = Date().addingTimeInterval(-5)
-        s.pausedState = PausedState(profileID: work.id, onDemandEnabledIDs: [work.id, auto.id], agentBuild: "1")
+        s.autoConnect.pausedUntil = ResumeIntent.wholeSeconds(Date().addingTimeInterval(-5))
+        s.pausedState = PausedState(profileID: work.id, onDemandEnabledIDs: [work.id, auto.id], agentBuild: "1",
+                                   intent: await resumeIntent(work.id, until: s.autoConnect.pausedUntil!, keychain: h.keychain, dir: h.dir.data))
         s.onDemandPausedByStart = [auto.id]                            // the first run's early write
         try AtomicFile.saveJSON(s, to: h.dir.data.settings)
         h.managers.entries[work.id]?.onDemand = true                   // the first run turned it on, then started it
         h.managers.entries[work.id]?.cfg.flags.includeAllNetworks = false   // and nehelper rewrote it since
+        // RC review 2 (L2): still coming up is looked at again by the next run, with nothing saved or started.
         h.managers.entries[work.id]?.status = .connecting
         h.managers.log = []
+        #expect(await HeadlessResume.perform(dir: h.dir.data, managers: h.managers, agent: ProbeResumeAgent(), keychain: h.keychain)
+                == .targetInTransition(.connecting))
+        #expect(h.managers.starts.isEmpty && h.managers.log.filter { $0.hasPrefix("begin save") }.isEmpty)
+        h.managers.entries[work.id]?.status = .connected
         let r = await HeadlessResume.perform(dir: h.dir.data, managers: h.managers, agent: ProbeResumeAgent(), keychain: h.keychain)
         #expect(r == .resumed(restarted: work.id, onDemand: [work.id]))
         #expect(h.managers.starts.isEmpty)
@@ -304,7 +310,7 @@ struct OnDemandPause4Tests {
         h.managers.log = []
         let travel = try await h.add("Travel.conf", Harness.wgConf, killSwitch: true)
         try await h.env.profiles.updatePolicy(auto.id) { $0.excludeAPNs.toggle() }
-        let a = await ImportCoordinator.analyse(fileName: "Home NAS.conf", bytes: Array(Harness.splitConf.utf8), service: h.service, probe: NullProbe())
+        let a = await ImportCoordinator.analyse(fileName: "Home NAS.conf", bytes: Array(Harness.splitConf.utf8), validator: h.validator, probe: NullProbe())
         let d = try #require(h.env.importer.draft(a, name: auto.name, killSwitch: false, allowLAN: false))
         try await h.env.profiles.replacePayload(auto.id, with: d)
         h.env.ui.actions.allowVPNConfiguration()

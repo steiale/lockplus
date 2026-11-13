@@ -42,3 +42,8 @@ SPK="$APP/Contents/Frameworks/Sparkle.framework"
 rm -rf "$SPK/Versions/B/XPCServices" "$SPK/XPCServices"
 [[ ! -e "$SPK/Versions/B/XPCServices" ]] || fail "Sparkle XPCServices still present"
 ok "$APP (Sparkle XPCServices stripped)"
+# 2.0.2 (PLAN-2.0.2 §1.6): the app's own XPCServices folder holds exactly the validator service.
+XS=("$APP"/Contents/XPCServices/*(N))
+[[ ${#XS} -eq 1 && "${XS[1]:t}" == LockPlusValidator.xpc ]] || fail "Contents/XPCServices must contain exactly LockPlusValidator.xpc (found: ${(j: :)${XS:t}:-nothing})"
+[[ -x "$(val_bin_of "$APP")" ]] || fail "the validator service has no executable"
+ok "XPCServices: LockPlusValidator.xpc only"

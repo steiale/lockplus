@@ -203,6 +203,27 @@ struct Harness {
         #expect(h.backend.calls.withLock { $0.isEmpty })
     }
 
+    /// 2.0.2: `armStart` goes through the same gate: refused before hello, reaches the backend with the caller's uid after it.
+    @Test func armStartIsHelloGated() async throws {
+        let h = Harness()
+        let c = NSXPCConnection(listenerEndpoint: h.listener.endpoint)
+        c.remoteObjectInterface = .lpTunnelService
+        c.setCodeSigningRequirement(selfReq)
+        c.activate()
+        defer { c.invalidate() }
+        let err: Data? = await withCheckedContinuation { k in
+            let gate = OneShot<Data?>()
+            gate.attach(k, ifCancelled: nil)
+            let p = c.remoteObjectProxyWithErrorHandler { @Sendable _ in gate.resume(nil) } as! any LPTunnelServiceXPC
+            p.armStart(Data()) { @Sendable _, e in gate.resume(e) }
+        }
+        #expect(LPWire.decodeError(err) == LPError(.malformedRequest, detail: "hello required"))
+        #expect(h.backend.calls.withLock { $0.isEmpty })
+        _ = try await h.client.hello()
+        _ = try? await h.client.call(.armStart, ArmStartRequest(profileID: UUID(), nonce: UUID()), as: ArmStartReply.self)   // (the recording backend answers a snapshot)
+        #expect(h.backend.calls.withLock { $0.map(\.0) == [.armStart] })
+    }
+
     /// M3: the connection is invalidated between the hello gate and a secret-bearing call. The client re-validates a
     /// new connection with hello before sending (the server-side gate would refuse anything else), never sends on an
     /// unvalidated object.

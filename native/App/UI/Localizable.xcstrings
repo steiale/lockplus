@@ -18,6 +18,23 @@
         }
       }
     },
+    "%@ The old LockPlus used: %@. Auto-Connect uses one profile for every untrusted network." : {
+      "comment" : "Migration report: the per-network map that isn't migrated (E2E-5 F6); the second argument lists network → profile",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ Das alte LockPlus verwendete: %2$@. Auto-Connect verwendet ein Profil für alle nicht vertrauenswürdigen Netzwerke."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ The old LockPlus used: %2$@. Auto-Connect uses one profile for every untrusted network."
+          }
+        }
+      }
+    },
     "%@ can't be read." : {
       "comment" : "Import error",
       "localizations" : {
@@ -25,6 +42,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ kann nicht gelesen werden."
+          }
+        }
+      }
+    },
+    "%@ connects when a network is available." : {
+      "comment" : "Help on a disabled Connect while macOS starts the profile once a network returns (E2E-4 200011)\nRow 12a (E2E-4 200011): macOS refused the start for want of a network and starts the profile by itself when one returns. The argument is a profile name",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ verbindet sich, sobald ein Netzwerk verfügbar ist."
           }
         }
       }
@@ -53,6 +81,45 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@ contains “%2$@” twice and can't be imported."
+          }
+        }
+      }
+    },
+    "%@ couldn't be checked safely and wasn't imported. Try again." : {
+      "comment" : "Zip import error (2.0.2: LockPlus's sandboxed file checker was unavailable or stopped on this archive)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ konnte nicht sicher geprüft werden und wurde nicht importiert. Versuche es erneut."
+          }
+        }
+      }
+    },
+    "%@ couldn't connect because another LockPlus profile is connected. Its kill switch isn't active." : {
+      "comment" : "Notification body (2.0.1 review H1); profile name",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ konnte keine Verbindung herstellen, weil ein anderes LockPlus-Profil verbunden ist. Sein Kill Switch ist nicht aktiv."
+          }
+        }
+      }
+    },
+    "%@ couldn't connect: %@." : {
+      "comment" : "Problem: a start made elsewhere (System Settings) was refused while another profile is current (E2E-4 200012)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ konnte keine Verbindung herstellen: %2$@."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ couldn't connect: %2$@."
           }
         }
       }
@@ -173,6 +240,17 @@
         }
       }
     },
+    "%@ isn't responding" : {
+      "comment" : "Menu header, row 4a, link unavailable; the argument is a profile name",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ antwortet nicht"
+          }
+        }
+      }
+    },
     "%@ lost its connection. No traffic leaves this Mac until LockPlus reconnects." : {
       "comment" : "Row 10",
       "localizations" : {
@@ -217,6 +295,34 @@
         }
       }
     },
+    "%@ stopped unexpectedly. Not protected meanwhile." : {
+      "comment" : "Row 12a, a restart may follow; the argument is a profile name",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ wurde unerwartet beendet. Währenddessen nicht geschützt."
+          }
+        }
+      }
+    },
+    "%@ stopped: %@." : {
+      "comment" : "Problem (2.0.1 review H1): a profile was ended for another profile's kill-switch start",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ wurde beendet: %2$@."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ stopped: %2$@."
+          }
+        }
+      }
+    },
     "%@ stopped: %@. No traffic leaves this Mac." : {
       "comment" : "Row 7. No retry text.",
       "localizations" : {
@@ -234,13 +340,13 @@
         }
       }
     },
-    "%@ unpacks to more than 100 MB and can't be imported." : {
+    "%@ unpacks to more than 64 MB and can't be imported." : {
       "comment" : "Zip import error (cap)",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ ist entpackt größer als 100 MB und kann nicht importiert werden."
+            "value" : "Der Inhalt von %@ ist größer als 64 MB und kann nicht importiert werden."
           }
         }
       }
@@ -267,19 +373,13 @@
         }
       }
     },
-    "%@ wasn't reconnected: %@ was starting at the time. Connect %@ again if you need it." : {
-      "comment" : "Problem: the end of a pause or an update couldn't reconnect a profile because another start was in flight (review 5)",
+    "%@ was started outside LockPlus and refused. Connect it from LockPlus." : {
+      "comment" : "Problem (2.0.2, D-1): a start of a profile that LockPlus didn't make (System Settings toggle, scutil) was refused with error 225",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@ wurde nicht wieder verbunden: %2$@ wurde gerade gestartet. Verbinde %3$@ erneut, wenn du es brauchst."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ wasn't reconnected: %2$@ was starting at the time. Connect %3$@ again if you need it."
+            "value" : "%@ wurde außerhalb von LockPlus gestartet und abgelehnt. Verbinde es über LockPlus."
           }
         }
       }
@@ -308,6 +408,67 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ wurde noch nicht wieder verbunden: macOS verbindet es, sobald ein Netzwerk verfügbar ist."
+          }
+        }
+      }
+    },
+    "%@ wasn't reconnected: %@ was starting at the time. Connect %@ again if you need it." : {
+      "comment" : "Problem: the end of a pause or an update couldn't reconnect a profile because another start was in flight (review 5)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ wurde nicht wieder verbunden: %2$@ wurde gerade gestartet. Verbinde %3$@ erneut, wenn du es brauchst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ wasn't reconnected: %2$@ was starting at the time. Connect %3$@ again if you need it."
+          }
+        }
+      }
+    },
+    "%@ wasn't reconnected: LockPlus couldn't read its keychain to check the pause. Connect it yourself." : {
+      "comment" : "Problems line (2.0.2 round 2): the keychain stayed unavailable at the end of a pause",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ wurde nicht wieder verbunden: LockPlus konnte seinen Schlüsselbund nicht lesen, um die Pause zu prüfen. Verbinde es selbst."
+          }
+        }
+      }
+    },
+    "%@ wasn't reconnected: the pause ended more than 7 days ago. Connect it yourself." : {
+      "comment" : "Problems line (2.0.2 round 2): a pause record older than 7 days isn't resumed",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ wurde nicht wieder verbunden: Die Pause ist seit mehr als 7 Tagen vorbei. Verbinde es selbst."
+          }
+        }
+      }
+    },
+    "%@ wasn't reconnected: the pause was started by an earlier version of LockPlus. Connect it yourself." : {
+      "comment" : "Problems line (2.0.2 round 2): a pause record written before 2.0.2 restores on-demand only",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ wurde nicht wieder verbunden: Die Pause wurde von einer früheren Version von LockPlus gestartet. Verbinde es selbst."
+          }
+        }
+      }
+    },
+    "%@ won't reconnect when the pause ends: LockPlus couldn't secure the pause in its keychain. Connect it yourself then." : {
+      "comment" : "Problems line (2.0.2 round 2): a session that began during the pause's write can't be resumed because the intent couldn't be written",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ wird am Ende der Pause nicht wieder verbunden: LockPlus konnte die Pause nicht in seinem Schlüsselbund sichern. Verbinde es dann selbst."
           }
         }
       }
@@ -368,6 +529,23 @@
         }
       }
     },
+    "%@. %@" : {
+      "comment" : "§4.5 strip: a title, then its message",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@. %2$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@. %2$@"
+          }
+        }
+      }
+    },
     "%@/s" : {
       "comment" : "Data rate, e.g. '1.2 MB/s'; the argument is a byte count",
       "localizations" : {
@@ -380,7 +558,7 @@
       }
     },
     "%@: %@" : {
-      "comment" : "Import report item with directive",
+      "comment" : "Import report item with directive\nMigration report, information: profile name and a migration note (E2E-5 F6)\nMigration report, needs attention: not yet verified (E2E-5 F6)\nMigration report, needs attention: profile name and reason (E2E-5 F6)",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -392,6 +570,62 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$@: %2$@"
+          }
+        }
+      }
+    },
+    "%@: %@ (and %lld more in the profile's import report)" : {
+      "comment" : "Migration report, needs attention: profile name, the first reason, the number of further reasons (E2E-5 F6)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@: %2$@ (weitere im Importbericht des Profils: %3$lld)"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@ (and %3$lld more in the profile's import report)"
+          }
+        }
+      }
+    },
+    "%@: %@ ignored; LockPlus doesn't need these lines." : {
+      "comment" : "Migration report, information: harmless ignored directives (E2E-5 F6)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@: %2$@ ignoriert; LockPlus braucht diese Zeilen nicht."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@: %2$@ ignored; LockPlus doesn't need these lines."
+          }
+        }
+      }
+    },
+    "%@: the old LockPlus kept this password in the System keychain, which LockPlus can't read. Enter it again on first connect." : {
+      "comment" : "Migration report: a System keychain item of LockPlus 1.0.65 and older (migration matrix)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: Das alte LockPlus hat dieses Passwort im System-Schlüsselbund gesichert, den LockPlus nicht lesen kann. Gib es bei der ersten Verbindung erneut ein."
+          }
+        }
+      }
+    },
+    "%@: the saved username was imported; the old LockPlus kept no password, so LockPlus asks for it on connect." : {
+      "comment" : "Migration report: a Go item with the username only (E2E-5 F7)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: Der gesicherte Benutzername wurde importiert. Das alte LockPlus hat kein Passwort gesichert, deshalb fragt LockPlus beim Verbinden danach."
           }
         }
       }
@@ -424,6 +658,17 @@
         }
       }
     },
+    "%lld more entries were skipped." : {
+      "comment" : "Zip import: the list of skipped entries was capped at 500; the argument is how many more",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld weitere Einträge wurden übersprungen."
+          }
+        }
+      }
+    },
     "(server)" : {
       "comment" : "Marks server-provided text",
       "localizations" : {
@@ -446,51 +691,6 @@
         }
       }
     },
-    "^[%lld directive](inflect: true) not needed" : {
-      "comment" : "Import report summary; harmless directives LockPlus doesn't need",
-      "localizations" : {
-        "de" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Direktive nicht nötig"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Direktiven nicht nötig"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "A second configuration of %@ was started outside LockPlus and is waiting. Stop it in System Settings › VPN." : {
-      "comment" : "Diagnostics note (2.0.1 round 5): a duplicate VPN configuration of an active profile, started elsewhere, waits in the extension and keeps LockPlus from changing configurations",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eine zweite Konfiguration von %@ wurde außerhalb von LockPlus gestartet und wartet. Stoppe sie in den Systemeinstellungen › VPN."
-          }
-        }
-      }
-    },
-    "a server option; not needed by a client" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Server-Option; ein Client braucht sie nicht"
-          }
-        }
-      }
-    },
     "A VPN configuration LockPlus can't address is active. LockPlus makes no VPN configuration changes, auto-connect included, until it ends." : {
       "comment" : "Auto-connect status and Diagnostics note: a configuration without a usable profile ID is active (E2E-4 review L1)",
       "localizations" : {
@@ -498,6 +698,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Eine VPN-Konfiguration, die LockPlus nicht ansprechen kann, ist aktiv. LockPlus ändert keine VPN-Konfigurationen, auch nicht für Automatisches Verbinden, bis sie endet."
+          }
+        }
+      }
+    },
+    "A file of the old LockPlus helper is still installed. LockPlus can remove it; macOS asks for an administrator password." : {
+      "comment" : "§4.5 banner: only the helper's binary is left (Fable pre-release A-4)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine Datei des Hilfsprogramms des alten LockPlus ist noch installiert. LockPlus kann sie entfernen; macOS fragt dafür nach einem Administratorpasswort."
           }
         }
       }
@@ -524,6 +735,28 @@
         }
       }
     },
+    "A profile wasn't reconnected after the update: LockPlus couldn't read its keychain. Connect it yourself." : {
+      "comment" : "Problems line (2.0.2 round 2): the extension update's resume record couldn't be checked",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Profil wurde nach dem Update nicht wieder verbunden: LockPlus konnte seinen Schlüsselbund nicht lesen. Verbinde es selbst."
+          }
+        }
+      }
+    },
+    "A profile wasn't reconnected after the update: its resume record was changed outside LockPlus. Connect it yourself." : {
+      "comment" : "Problems line (2.0.2 round 2): the extension update's resume record failed its authentication check",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Profil wurde nach dem Update nicht wieder verbunden: Seine Angaben zum Fortsetzen wurden außerhalb von LockPlus geändert. Verbinde es selbst."
+          }
+        }
+      }
+    },
     "A redacted report for support. You see everything inside before you save it." : {
       "comment" : "Diagnostics export footer",
       "localizations" : {
@@ -531,6 +764,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ein geschwärzter Bericht für den Support. Vor dem Sichern siehst du den gesamten Inhalt."
+          }
+        }
+      }
+    },
+    "A saved password from an older version can't be imported; enter it again on first connect." : {
+      "comment" : "Migration report note (§6.7)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein gesichertes Passwort aus einer älteren Version kann nicht importiert werden. Gib es beim ersten Verbinden erneut ein."
+          }
+        }
+      }
+    },
+    "A second configuration of %@ was started outside LockPlus and is waiting. Stop it in System Settings › VPN." : {
+      "comment" : "Diagnostics note (2.0.1 round 5): a duplicate VPN configuration of an active profile, started elsewhere, waits in the extension and keeps LockPlus from changing configurations",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine zweite Konfiguration von %@ wurde außerhalb von LockPlus gestartet und wartet. Stoppe sie in den Systemeinstellungen › VPN."
           }
         }
       }
@@ -874,6 +1129,17 @@
         }
       }
     },
+    "An earlier import didn't finish. LockPlus adds what's missing: the remaining profiles, settings, Wi-Fi rules, history and saved logins." : {
+      "comment" : "Migration offer when an earlier import didn't finish (E2E-5 F4)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein früherer Import wurde nicht abgeschlossen. LockPlus ergänzt, was fehlt: die übrigen Profile, Einstellungen, WLAN-Regeln, den Verlauf und gesicherte Anmeldedaten."
+          }
+        }
+      }
+    },
     "An optional extra symmetric key for post-quantum resistance. Secret." : {
       "comment" : "WG reference",
       "localizations" : {
@@ -885,13 +1151,35 @@
         }
       }
     },
-    "another LockPlus start interrupted its connection" : {
-      "comment" : "Error reason fragment",
+    "Another LockPlus connection is active: another user's on this Mac, or one LockPlus can't show. It has to end first." : {
+      "comment" : "Error message (2.0.1 review L2: a start refused beside a LockPlus session this user can't see)",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ein anderer LockPlus-Start hat die Verbindung unterbrochen"
+            "value" : "Eine andere LockPlus-Verbindung ist aktiv: die eines anderen Benutzers dieses Macs oder eine, die LockPlus nicht anzeigen kann. Sie muss zuerst beendet werden."
+          }
+        }
+      }
+    },
+    "Another LockPlus profile is connected. Disconnect it first." : {
+      "comment" : "Error message (2.0.1: a start, e.g. from System Settings, refused while another LockPlus profile is connected)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein anderes LockPlus-Profil ist verbunden. Trenne es zuerst."
+          }
+        }
+      }
+    },
+    "Another LockPlus profile with the kill switch took over, so this one was disconnected." : {
+      "comment" : "Error message (2.0.1 review H1: a profile without the kill switch was ended for a kill-switch profile's start)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein anderes LockPlus-Profil mit Kill Switch hat übernommen, deshalb wurde dieses getrennt."
           }
         }
       }
@@ -920,39 +1208,6 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Another VPN (%1$@) is active. Connecting %2$@ will disconnect it."
-          }
-        }
-      }
-    },
-    "Another LockPlus profile is connected. Disconnect it first." : {
-      "comment" : "Error message (2.0.1: a start, e.g. from System Settings, refused while another LockPlus profile is connected)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ein anderes LockPlus-Profil ist verbunden. Trenne es zuerst."
-          }
-        }
-      }
-    },
-    "Another LockPlus connection is active: another user's on this Mac, or one LockPlus can't show. It has to end first." : {
-      "comment" : "Error message (2.0.1 review L2: a start refused beside a LockPlus session this user can't see)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eine andere LockPlus-Verbindung ist aktiv: die eines anderen Benutzers dieses Macs oder eine, die LockPlus nicht anzeigen kann. Sie muss zuerst beendet werden."
-          }
-        }
-      }
-    },
-    "Another LockPlus profile with the kill switch took over, so this one was disconnected." : {
-      "comment" : "Error message (2.0.1 review H1: a profile without the kill switch was ended for a kill-switch profile's start)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ein anderes LockPlus-Profil mit Kill Switch hat übernommen, deshalb wurde dieses getrennt."
           }
         }
       }
@@ -1254,6 +1509,17 @@
         }
       }
     },
+    "Auto-connect paused for %@" : {
+      "comment" : "Menu header, rows 3b, 8, 13a; the error sentence follows below",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatisches Verbinden für %@ pausiert"
+          }
+        }
+      }
+    },
     "Auto-connect resumes when you disconnect %@." : {
       "comment" : "Auto-connect status (§10.4)",
       "localizations" : {
@@ -1265,6 +1531,17 @@
         }
       }
     },
+    "Auto-reconnect is now built in." : {
+      "comment" : "Migration report note per profile (§13.1 step 4)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatisches Wiederverbinden ist jetzt eingebaut."
+          }
+        }
+      }
+    },
     "Background failures appear here instead of alerts." : {
       "comment" : "Problems caption",
       "localizations" : {
@@ -1272,24 +1549,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fehler im Hintergrund erscheinen hier statt als Hinweise."
-          }
-        }
-      }
-    },
-    "because.sessionInterrupted" : {
-      "comment" : "Error cause, used after \"because\" in a VoiceOver announcement",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ein anderer LockPlus-Start die Verbindung unterbrochen hat"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "another LockPlus start interrupted its connection"
           }
         }
       }
@@ -1323,6 +1582,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Blockiert — %@ wird neu verbunden"
+          }
+        }
+      }
+    },
+    "Blocked, nothing goes around the tunnel" : {
+      "comment" : "Self-test IPv6 row: IPv6 is blocked under a full tunnel (a local refusal was proven)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blockiert, nichts geht am Tunnel vorbei"
           }
         }
       }
@@ -1390,6 +1660,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Profile mitbringen"
+          }
+        }
+      }
+    },
+    "Bypasses the VPN (%@)" : {
+      "comment" : "Self-test IPv6 row: the request left outside the tunnel",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Umgeht das VPN (%@)"
           }
         }
       }
@@ -1471,6 +1752,17 @@
         }
       }
     },
+    "Check Again" : {
+      "comment" : "Button: run the file check of a not-yet-verified profile again (2.0.2 round 2)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erneut prüfen"
+          }
+        }
+      }
+    },
     "Check for Updates…" : {
       "comment" : "App menu command (§12.1)\nButton",
       "localizations" : {
@@ -1478,6 +1770,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nach Updates suchen…"
+          }
+        }
+      }
+    },
+    "Checking %@…" : {
+      "comment" : "Menu header, row 12a: macOS may restart the profile after an unexpected stop\nMenu header, row 12a: macOS may still start the profile after the start ended early",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ wird geprüft…"
+          }
+        }
+      }
+    },
+    "Checking whether %@ restarts…" : {
+      "comment" : "Row 12a: a kill-switch profile stopped with an error that may be a tunnel-process crash; macOS may restart it (≤ 10 s). The argument is a profile name",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus prüft, ob %@ neu startet…"
+          }
+        }
+      }
+    },
+    "Checking whether %@ starts…" : {
+      "comment" : "Row 12a: LockPlus's own start ended before any status; macOS may still start the profile (≤ 10 s). The argument is a profile name",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus prüft, ob %@ startet…"
           }
         }
       }
@@ -1493,13 +1818,24 @@
         }
       }
     },
-    "Choose a profile in the sidebar to see its details." : {
-      "comment" : "Detail placeholder description (§6.15)",
+    "Checks that IPv4, IPv6 and DNS use the tunnel." : {
+      "comment" : "Tooltip",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wähle in der Seitenleiste ein Profil aus, um die Details zu sehen."
+            "value" : "Prüft, ob IPv4, IPv6 und DNS den Tunnel nutzen."
+          }
+        }
+      }
+    },
+    "Checks that IPv4, IPv6 and DNS use the tunnel. LockPlus contacts its own test page (steiale.github.io) only when you press the button, and nothing else." : {
+      "comment" : "Self-test placeholder",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prüft, ob IPv4, IPv6 und DNS den Tunnel nutzen. LockPlus ruft seine eigene Testseite (steiale.github.io) nur auf, wenn du den Knopf drückst, und sonst nichts."
           }
         }
       }
@@ -1515,6 +1851,17 @@
         }
       }
     },
+    "Choose a profile in the sidebar to see its details." : {
+      "comment" : "Detail placeholder description (§6.15)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wähle in der Seitenleiste ein Profil aus, um die Details zu sehen."
+          }
+        }
+      }
+    },
     "Cipher" : {
       "comment" : "Detail row",
       "localizations" : {
@@ -1522,17 +1869,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cipher"
-          }
-        }
-      }
-    },
-    "ciphers are negotiated automatically" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Verschlüsselung wird automatisch ausgehandelt"
           }
         }
       }
@@ -1767,6 +2103,28 @@
         }
       }
     },
+    "Connect first to test the connection." : {
+      "comment" : "Tooltip",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verbinde dich zuerst, um die Verbindung zu testen."
+          }
+        }
+      }
+    },
+    "Connect to a profile to test the connection." : {
+      "comment" : "Self-test placeholder, disconnected",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verbinde dich mit einem Profil, um die Verbindung zu testen."
+          }
+        }
+      }
+    },
     "Connected for %@" : {
       "comment" : "Accessibility",
       "localizations" : {
@@ -1843,6 +2201,17 @@
         }
       }
     },
+    "Connection Test" : {
+      "comment" : "Diagnostics heading",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verbindungstest"
+          }
+        }
+      }
+    },
     "Connections appear here after you disconnect." : {
       "comment" : "Empty Activity description",
       "localizations" : {
@@ -1876,6 +2245,17 @@
         }
       }
     },
+    "Copies profiles, settings and history from LockPlus 1.x. Profiles already imported are skipped." : {
+      "comment" : "Settings › Advanced footer (E2E-5 F4)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kopiert Profile, Einstellungen und Verlauf aus LockPlus 1.x. Bereits importierte Profile werden übersprungen."
+          }
+        }
+      }
+    },
     "Copy" : {
       "comment" : "Button",
       "localizations" : {
@@ -1898,6 +2278,17 @@
         }
       }
     },
+    "Copy Results" : {
+      "comment" : "Button",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ergebnisse kopieren"
+          }
+        }
+      }
+    },
     "Copy Row" : {
       "comment" : "Context menu",
       "localizations" : {
@@ -1905,17 +2296,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Zeile kopieren"
-          }
-        }
-      }
-    },
-    "Couldn't connect" : {
-      "comment" : "Notification title (2.0.1: a kill-switch profile's start was refused)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keine Verbindung"
           }
         }
       }
@@ -1931,8 +2311,30 @@
         }
       }
     },
+    "Couldn't connect" : {
+      "comment" : "Notification title (2.0.1: a kill-switch profile's start was refused)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Verbindung"
+          }
+        }
+      }
+    },
+    "Couldn't reach the test host" : {
+      "comment" : "Self-test row (never shown as safe)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Testserver konnte nicht erreicht werden"
+          }
+        }
+      }
+    },
     "Couldn't verify DNS" : {
-      "comment" : "DNS line\nDiagnostics DNS row (never shown as safe)\nRow 5",
+      "comment" : "DNS line\nDiagnostics DNS row (never shown as safe)\nRow 5\nSelf-test DNS row (never shown as safe)",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -1963,19 +2365,8 @@
         }
       }
     },
-    "Dark" : {
-      "comment" : "Appearance",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dunkel"
-          }
-        }
-      }
-    },
     "DNS" : {
-      "comment" : "Detail row\nDiagnostics check",
+      "comment" : "Detail row\nDiagnostics check\nSelf-test row",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -1992,6 +2383,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "DNS verwaltet LockPlus"
+          }
+        }
+      }
+    },
+    "DNS now always goes through the tunnel; the old app's DNS protection setting isn't needed." : {
+      "comment" : "Migration report note (§13.1 step 4)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DNS läuft jetzt immer durch den Tunnel; die DNS-Schutz-Einstellung der alten App wird nicht mehr gebraucht."
           }
         }
       }
@@ -2025,6 +2427,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "DNS über den Tunnel (überprüft)"
+          }
+        }
+      }
+    },
+    "Dark" : {
+      "comment" : "Appearance",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dunkel"
           }
         }
       }
@@ -2360,13 +2773,13 @@
         }
       }
     },
-    "Drop .conf, .ovpn, .zip or a QR code image" : {
+    "Drop .conf, .ovpn or .zip" : {
       "comment" : "Drop overlay (§6.3)",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : ".conf, .ovpn, .zip oder ein QR-Code-Bild hier ablegen"
+            "value" : ".conf, .ovpn oder .zip hier ablegen"
           }
         }
       }
@@ -2535,6 +2948,28 @@
         }
       }
     },
+    "Everything this profile sends through the VPN uses the tunnel" : {
+      "comment" : "Self-test result headline: passed, but not every row is 'through the tunnel' (split profile, IPv6 blocked or absent, no DNS settings)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alles, was dieses Profil über das VPN leitet, nutzt den Tunnel"
+          }
+        }
+      }
+    },
+    "Exit address" : {
+      "comment" : "Self-test row",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ausgangsadresse"
+          }
+        }
+      }
+    },
     "Export All…" : {
       "comment" : "Button, behind Touch ID\nMenu command\nMenu item",
       "localizations" : {
@@ -2603,6 +3038,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Filter"
+          }
+        }
+      }
+    },
+    "Finish Import" : {
+      "comment" : "Button: finish an earlier migration with no profiles left to copy (E2E-5 F4)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import abschließen"
+          }
+        }
+      }
+    },
+    "Finish Import…" : {
+      "comment" : "Button, banner (E2E-5 F4)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import abschließen…"
+          }
+        }
+      }
+    },
+    "Finish importing from LockPlus 1.x" : {
+      "comment" : "Migration offer title when an earlier import didn't finish (E2E-5 F4)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import aus LockPlus 1.x abschließen"
           }
         }
       }
@@ -2706,6 +3174,17 @@
         }
       }
     },
+    "Good to know" : {
+      "comment" : "Migration report: information, nothing to do (E2E-5 F6)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gut zu wissen"
+          }
+        }
+      }
+    },
     "HMAC digest for the control channel, e.g. SHA256." : {
       "comment" : "OVPN reference",
       "localizations" : {
@@ -2761,8 +3240,30 @@
         }
       }
     },
+    "IPv4" : {
+      "comment" : "Self-test row",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "IPv4"
+          }
+        }
+      }
+    },
+    "IPv4, IPv6 and DNS use the tunnel" : {
+      "comment" : "Self-test result headline",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "IPv4, IPv6 und DNS nutzen den Tunnel"
+          }
+        }
+      }
+    },
     "IPv6" : {
-      "comment" : "Diagnostics check",
+      "comment" : "Diagnostics check\nSelf-test row",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -2801,6 +3302,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Darstellung des macOS-Hinweises, der um Erlaubnis zum Hinzufügen von VPN-Konfigurationen bittet, mit dem Button „Erlauben“"
+          }
+        }
+      }
+    },
+    "Images aren't supported." : {
+      "comment" : "Import error: dropped image",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bilder werden nicht unterstützt."
           }
         }
       }
@@ -2849,17 +3361,6 @@
         }
       }
     },
-    "Import QR Code Image…" : {
-      "comment" : "Menu command\nMenu item",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "QR-Code-Bild importieren…"
-          }
-        }
-      }
-    },
     "Import Report" : {
       "localizations" : {
         "de" : {
@@ -2903,13 +3404,35 @@
         }
       }
     },
+    "Import from Old LockPlus" : {
+      "comment" : "Migration sheet title (E2E-5 F4)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aus altem LockPlus importieren"
+          }
+        }
+      }
+    },
     "Import from Old LockPlus…" : {
-      "comment" : "Button, locked profiles, shown when LockPlus 1.x data exists (§6.8, §13.1)",
+      "comment" : "Button, Settings › Advanced (§13.1)\nButton, locked profiles, shown when LockPlus 1.x data exists (§6.8, §13.1)",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aus altem LockPlus importieren…"
+          }
+        }
+      }
+    },
+    "Import saved OpenVPN logins" : {
+      "comment" : "Onboarding migration opt-in (§6.7, E2E-5 F7)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gesicherte OpenVPN-Anmeldedaten importieren"
           }
         }
       }
@@ -2932,6 +3455,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Importiert"
+          }
+        }
+      }
+    },
+    "Importing from LockPlus 1.x didn't finish." : {
+      "comment" : "Banner (E2E-5 F4)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Import aus LockPlus 1.x wurde nicht abgeschlossen."
           }
         }
       }
@@ -2965,6 +3499,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Info"
+          }
+        }
+      }
+    },
+    "Information" : {
+      "comment" : "Accessibility",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Information"
           }
         }
       }
@@ -3340,17 +3885,6 @@
         }
       }
     },
-    "local port binding isn't used" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "lokales Port-Binding wird nicht verwendet"
-          }
-        }
-      }
-    },
     "Local UDP port. Usually not needed on a client." : {
       "comment" : "WG reference",
       "localizations" : {
@@ -3376,17 +3910,6 @@
     "LockPlus" : {
       "shouldTranslate" : false
     },
-    "LockPlus can't import this profile as it is. Remove or replace these lines in the profile file, then import it again." : {
-      "comment" : "Import sheet: what to do about unsupported directives",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LockPlus kann dieses Profil so nicht importieren. Entferne oder ersetze diese Zeilen in der Profildatei und importiere sie dann erneut."
-          }
-        }
-      }
-    },
     "LockPlus Couldn't Read Your Profiles" : {
       "comment" : "Profile files unreadable (E2E-4)",
       "localizations" : {
@@ -3398,39 +3921,6 @@
         }
       }
     },
-    "LockPlus decides compression itself" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LockPlus entscheidet selbst über die Kompression"
-          }
-        }
-      }
-    },
-    "LockPlus didn't retry %@ automatically: another connection is active." : {
-      "comment" : "Diagnostics note (2.0.1 round 7): the automatic retry after re-installing a profile was skipped because another VPN connection became active",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LockPlus hat %@ nicht automatisch erneut verbunden: Eine andere Verbindung ist aktiv."
-          }
-        }
-      }
-    },
-    "LockPlus handles reconnecting" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LockPlus kümmert sich um das Wiederverbinden"
-          }
-        }
-      }
-    },
     "LockPlus Profiles" : {
       "comment" : "Export All zip file name",
       "localizations" : {
@@ -3438,6 +3928,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "LockPlus-Profile"
+          }
+        }
+      }
+    },
+    "LockPlus accepts compressed data from the server (asym); “no” isn't enforced" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus akzeptiert komprimierte Daten vom Server (asym); „no“ wird nicht erzwungen"
           }
         }
       }
@@ -3514,6 +4015,72 @@
         }
       }
     },
+    "LockPlus can't import this profile as it is. Remove or replace these lines in the profile file, then import it again." : {
+      "comment" : "Import sheet: what to do about unsupported directives",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus kann dieses Profil so nicht importieren. Entferne oder ersetze diese Zeilen in der Profildatei und importiere sie dann erneut."
+          }
+        }
+      }
+    },
+    "LockPlus connects %@ when a network is available." : {
+      "comment" : "Help on a disabled Connect while a start waits for a network (E2E-4 200011)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus verbindet %@, sobald ein Netzwerk verfügbar ist."
+          }
+        }
+      }
+    },
+    "LockPlus copies them. The old LockPlus's files stay as they are." : {
+      "comment" : "Onboarding migration (E2E-5 F7: after a Finder Replace the old app is gone, so it can't \"keep working\")",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus kopiert sie. Die Dateien des alten LockPlus bleiben unverändert."
+          }
+        }
+      }
+    },
+    "LockPlus couldn't check %@ safely." : {
+      "comment" : "Problems line: the sandboxed OpenVPN check died on a saved profile twice; %@ profile name",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus konnte %@ nicht sicher prüfen."
+          }
+        }
+      }
+    },
+    "LockPlus couldn't check the profile safely" : {
+      "comment" : "Error reason fragment",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus konnte das Profil nicht sicher prüfen"
+          }
+        }
+      }
+    },
+    "LockPlus couldn't check this profile safely." : {
+      "comment" : "Error message (2.0.2: LockPlus's sandboxed file checker stopped twice on this profile)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus konnte dieses Profil nicht sicher prüfen."
+          }
+        }
+      }
+    },
     "LockPlus couldn't read its settings (%@) and started with default settings." : {
       "comment" : "Problem: settings.json was unreadable and couldn't be moved aside (E2E-4)",
       "localizations" : {
@@ -3547,6 +4114,17 @@
         }
       }
     },
+    "LockPlus couldn't secure the Auto-Connect setting (%lld). It works now, but is turned off at the next launch unless you set it again." : {
+      "comment" : "Problems line (2.0.2 round 2): the Auto-Connect choice couldn't be sealed in the keychain",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus konnte die Einstellung für automatisches Verbinden nicht sichern (%lld). Sie gilt jetzt, wird beim nächsten Start aber ausgeschaltet, wenn du sie nicht erneut festlegst."
+          }
+        }
+      }
+    },
     "LockPlus couldn't update its tunnel component, so %@ can't connect yet. Profiles set up before the update still connect." : {
       "comment" : "Problem: a profile was imported while the tunnel component update had failed (E2E-4 review L5)",
       "localizations" : {
@@ -3569,13 +4147,46 @@
         }
       }
     },
-    "LockPlus hasn't checked this profile with its OpenVPN engine yet. It's checked as soon as the tunnel component is running; until then it can't connect." : {
+    "LockPlus decides compression itself" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus entscheidet selbst über die Kompression"
+          }
+        }
+      }
+    },
+    "LockPlus didn't retry %@ automatically: another connection is active." : {
+      "comment" : "Diagnostics note (2.0.1 round 7): the automatic retry after re-installing a profile was skipped because another VPN connection became active",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus hat %@ nicht automatisch erneut verbunden: Eine andere Verbindung ist aktiv."
+          }
+        }
+      }
+    },
+    "LockPlus handles reconnecting" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus kümmert sich um das Wiederverbinden"
+          }
+        }
+      }
+    },
+    "LockPlus hasn't checked this profile with its OpenVPN engine yet. It tries again automatically; until then the profile can't connect." : {
       "comment" : "Not yet verified explanation (§8.1)",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "LockPlus hat dieses Profil noch nicht mit seiner OpenVPN-Engine geprüft. Die Prüfung erfolgt, sobald die Tunnelkomponente läuft; bis dahin ist keine Verbindung möglich."
+            "value" : "LockPlus hat dieses Profil noch nicht mit seiner OpenVPN-Engine geprüft. LockPlus versucht es automatisch erneut; bis dahin kann sich das Profil nicht verbinden."
           }
         }
       }
@@ -3587,6 +4198,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "LockPlus wird bereits ausgeführt"
+          }
+        }
+      }
+    },
+    "LockPlus is checking whether %@'s tunnel process restarts." : {
+      "comment" : "Help on a disabled Connect while a restart by macOS may follow an unexpected stop (review e321e10)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus prüft, ob der Tunnelprozess von %@ neu startet."
+          }
+        }
+      }
+    },
+    "LockPlus is checking whether %@'s tunnel process starts." : {
+      "comment" : "Help on a disabled Connect while the start ended early and macOS may still start it (L-3 copy)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus prüft, ob der Tunnelprozess von %@ startet."
           }
         }
       }
@@ -3620,6 +4253,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "LockPlus bereitet die Verbindung mit %@ vor."
+          }
+        }
+      }
+    },
+    "LockPlus is quitting." : {
+      "comment" : "Editor error: the app is quitting (pre-release review)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus wird beendet."
           }
         }
       }
@@ -3707,6 +4351,28 @@
         }
       }
     },
+    "LockPlus replaces it. You can put it back from the Trash." : {
+      "comment" : "Confirmation message (migration matrix)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus ersetzt es. Du kannst es aus dem Papierkorb zurücklegen."
+          }
+        }
+      }
+    },
+    "LockPlus routes via the tunnel gateway" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus routet über das Gateway des Tunnels"
+          }
+        }
+      }
+    },
     "LockPlus runs its VPN engine as a macOS system extension. macOS will ask you to allow it once." : {
       "comment" : "Onboarding step 2",
       "localizations" : {
@@ -3718,6 +4384,23 @@
         }
       }
     },
+    "LockPlus stopped waiting for a network to connect %@. Connect %@ again if you need it." : {
+      "comment" : "Problem: the user's Cancel or Disconnect also ended another profile's Connect that waited for a network (review f0c8c57)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus wartet nicht mehr auf ein Netzwerk, um %1$@ zu verbinden. Verbinde %2$@ erneut, wenn du es brauchst."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "LockPlus stopped waiting for a network to connect %1$@. Connect %2$@ again if you need it."
+          }
+        }
+      }
+    },
     "LockPlus tells you when protection stops unexpectedly." : {
       "comment" : "Notification permission explanation (§6.13)",
       "localizations" : {
@@ -3725,6 +4408,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "LockPlus informiert dich, wenn der Schutz unerwartet endet."
+          }
+        }
+      }
+    },
+    "LockPlus wants to remove the helper of the old LockPlus (1.x)." : {
+      "comment" : "Administrator dialog prompt (E2E-5 F1)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus möchte das Hilfsprogramm des alten LockPlus (1.x) entfernen."
           }
         }
       }
@@ -3758,6 +4452,45 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Das Hintergrundobjekt von LockPlus ist noch nicht erlaubt. Wenn du LockPlus beendest, wird der Schutz daher erst beim nächsten Öffnen statt pünktlich fortgesetzt. Erlaube LockPlus in den Systemeinstellungen › Allgemein › Anmeldeobjekte & Erweiterungen."
+          }
+        }
+      }
+    },
+    "LockPlus's file check didn't finish for %@ after several tries. It isn't retried automatically any more; choose Check Again on the profile to try once more." : {
+      "comment" : "Problems line (2.0.2 round 2): a profile's file check timed out in several launches",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Dateiprüfung von LockPlus wurde für %@ auch nach mehreren Versuchen nicht fertig. Sie wird nicht mehr automatisch wiederholt; wähle beim Profil „Erneut prüfen“, um es noch einmal zu versuchen."
+          }
+        }
+      }
+    },
+    "LockPlus's file check didn't finish for this profile in several tries, so it isn't retried automatically any more. Until it passes, the profile can't connect." : {
+      "comment" : "Not yet verified, check stalled (2.0.2 round 2): shown with a Check Again button",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Dateiprüfung von LockPlus wurde für dieses Profil auch nach mehreren Versuchen nicht fertig und wird deshalb nicht mehr automatisch wiederholt. Bis sie bestanden ist, kann sich das Profil nicht verbinden."
+          }
+        }
+      }
+    },
+    "LockPlus's file check refused %@: %@" : {
+      "comment" : "Problems line: the sandboxed OpenVPN check refused a saved profile; %1$@ profile name, %2$@ openvpn3's reason",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Dateiprüfung von LockPlus hat %1$@ abgelehnt: %2$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "LockPlus's file check refused %1$@: %2$@"
           }
         }
       }
@@ -3982,17 +4715,6 @@
         }
       }
     },
-    "logging is managed by LockPlus" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Protokollierung übernimmt LockPlus"
-          }
-        }
-      }
-    },
     "Logs" : {
       "comment" : "Section title\nSidebar section\nView menu",
       "localizations" : {
@@ -4015,13 +4737,13 @@
         }
       }
     },
-    "macOS asks for this when LockPlus adds your first profile, in the next step. Choose “Allow” then." : {
-      "comment" : "Onboarding step 3 when there is no profile yet: the system alert comes with the first import",
+    "Looking for LockPlus 1.x…" : {
+      "comment" : "Migration sheet progress (E2E-5 F4)",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Im nächsten Schritt fragt macOS dazu, sobald LockPlus dein erstes Profil hinzufügt. Wähle dann „Erlauben“."
+            "value" : "Suche nach LockPlus 1.x…"
           }
         }
       }
@@ -4055,6 +4777,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Meldung"
+          }
+        }
+      }
+    },
+    "Mismatch: another resolver or route handles DNS" : {
+      "comment" : "Self-test DNS row",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abweichung: Ein anderer Resolver oder eine andere Route verarbeitet DNS"
           }
         }
       }
@@ -4103,6 +4836,17 @@
         }
       }
     },
+    "Move WireGuide+ to the Trash?" : {
+      "comment" : "Confirmation: the old WireGuide+ app (migration matrix)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "WireGuide+ in den Papierkorb legen?"
+          }
+        }
+      }
+    },
     "Move the caret to a key to see what it does." : {
       "comment" : "Editor reference placeholder",
       "localizations" : {
@@ -4110,6 +4854,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Setze den Cursor auf einen Schlüssel, um dessen Funktion zu sehen."
+          }
+        }
+      }
+    },
+    "Move to Trash" : {
+      "comment" : "Button, confirmation (migration matrix)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In den Papierkorb legen"
+          }
+        }
+      }
+    },
+    "Move to Trash…" : {
+      "comment" : "Button, banner: the old WireGuide+ app (migration matrix)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In den Papierkorb legen…"
           }
         }
       }
@@ -4191,6 +4957,17 @@
         }
       }
     },
+    "New code needed for %@" : {
+      "comment" : "Menu header, row 9; the argument is a profile name",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neuer Code für %@ nötig"
+          }
+        }
+      }
+    },
     "Next, macOS asks whether LockPlus may add VPN configurations. Choose “Allow”." : {
       "comment" : "Onboarding step 3",
       "localizations" : {
@@ -4198,6 +4975,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Als Nächstes fragt macOS, ob LockPlus VPN-Konfigurationen hinzufügen darf. Wähle „Erlauben“."
+          }
+        }
+      }
+    },
+    "No IPv6 on this network" : {
+      "comment" : "Self-test IPv6 row",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kein IPv6 in diesem Netzwerk"
           }
         }
       }
@@ -4301,17 +5089,6 @@
         }
       }
     },
-    "not needed; LockPlus keeps the tunnel up itself" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "nicht nötig; LockPlus hält den Tunnel selbst aufrecht"
-          }
-        }
-      }
-    },
     "Not Now" : {
       "comment" : "Button",
       "localizations" : {
@@ -4323,13 +5100,13 @@
         }
       }
     },
-    "The profile sets no DNS server: DNS stays as it is" : {
-      "comment" : "Diagnostics DNS row (2.0.1: WireGuard split tunnel without DNS)",
+    "Not applied" : {
+      "comment" : "Copy Report heading: ignored directives whose behaviour isn't applied",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Das Profil legt keinen DNS-Server fest: DNS bleibt unverändert"
+            "value" : "Nicht angewendet"
           }
         }
       }
@@ -4356,6 +5133,17 @@
         }
       }
     },
+    "Not every profile could be imported, so settings, Wi-Fi rules and history weren't imported yet. Choose Finish Import to try again." : {
+      "comment" : "Migration report: a profile failed; the global steps wait for the retry (pre-release review M2)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht jedes Profil konnte importiert werden, deshalb wurden Einstellungen, WLAN-Regeln und Verlauf noch nicht importiert. Wähle „Import abschließen“, um es erneut zu versuchen."
+          }
+        }
+      }
+    },
     "Not installed" : {
       "comment" : "Diagnostics old-helper row",
       "localizations" : {
@@ -4378,6 +5166,28 @@
         }
       }
     },
+    "Not needed" : {
+      "comment" : "Copy Report heading: harmless ignored directives",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht nötig"
+          }
+        }
+      }
+    },
+    "Not part of this tunnel" : {
+      "comment" : "Self-test IPv6 row, split profile (the test is skipped)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht Teil dieses Tunnels"
+          }
+        }
+      }
+    },
     "Not protected" : {
       "comment" : "Notification title\nState word",
       "localizations" : {
@@ -4389,6 +5199,17 @@
         }
       }
     },
+    "Not protected for a moment." : {
+      "comment" : "Menu header, profile switch",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für einen Moment nicht geschützt."
+          }
+        }
+      }
+    },
     "Not protected until %@ is back." : {
       "comment" : "Row 12a, awaiting a restart; the argument is a profile name",
       "localizations" : {
@@ -4396,6 +5217,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nicht geschützt, bis %@ wieder läuft."
+          }
+        }
+      }
+    },
+    "Not protected until a network is available." : {
+      "comment" : "Row 12a, waiting for a network",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht geschützt, bis ein Netzwerk verfügbar ist."
           }
         }
       }
@@ -4466,17 +5298,6 @@
         }
       }
     },
-    "not used by LockPlus's OpenVPN engine" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wird von der OpenVPN-Engine von LockPlus nicht verwendet"
-          }
-        }
-      }
-    },
     "Not used for auto-connect." : {
       "comment" : "Detail, auto-connect",
       "localizations" : {
@@ -4484,17 +5305,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Nicht für automatisches Verbinden verwendet."
-          }
-        }
-      }
-    },
-    "not used on macOS" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "wird unter macOS nicht verwendet"
           }
         }
       }
@@ -4653,17 +5463,6 @@
         }
       }
     },
-    "only matters for point-to-point setups" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "nur bei Punkt-zu-Punkt-Setups relevant"
-          }
-        }
-      }
-    },
     "Only problems" : {
       "comment" : "Notification mode",
       "localizations" : {
@@ -4682,6 +5481,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "LockPlus öffnen"
+          }
+        }
+      }
+    },
+    "Open LockPlus at login" : {
+      "comment" : "Migration report offer (E2E-5 F5)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus bei der Anmeldung öffnen"
           }
         }
       }
@@ -4730,6 +5540,28 @@
         }
       }
     },
+    "Open at Login" : {
+      "comment" : "Button, banner (E2E-5 F5)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bei Anmeldung öffnen"
+          }
+        }
+      }
+    },
+    "Open at most 20 files at a time." : {
+      "comment" : "Open documents: more than 20 files in one open",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öffne höchstens 20 Dateien auf einmal."
+          }
+        }
+      }
+    },
     "Open the old LockPlus" : {
       "comment" : "Button (§4.5)",
       "localizations" : {
@@ -4763,6 +5595,17 @@
         }
       }
     },
+    "Opened from %@" : {
+      "comment" : "Import sheet: where the opened file came from; the argument is a path such as ~/Downloads/work.ovpn",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geöffnet aus %@"
+          }
+        }
+      }
+    },
     "Other VPNs" : {
       "comment" : "Diagnostics check",
       "localizations" : {
@@ -4774,13 +5617,35 @@
         }
       }
     },
-    "outdated algorithms are never enabled" : {
-      "comment" : "Import reason, ignored directive",
+    "Outside the tunnel (%@)" : {
+      "comment" : "Self-test IPv4 row: the request left outside the tunnel",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "veraltete Algorithmen werden nie aktiviert"
+            "value" : "Außerhalb des Tunnels (%@)"
+          }
+        }
+      }
+    },
+    "Outside the tunnel, as expected for this profile" : {
+      "comment" : "Self-test IPv4 row, split profile",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Außerhalb des Tunnels, wie für dieses Profil vorgesehen"
+          }
+        }
+      }
+    },
+    "Part of your traffic may bypass the VPN" : {
+      "comment" : "Self-test result headline",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Teil deines Datenverkehrs umgeht möglicherweise das VPN"
           }
         }
       }
@@ -4880,6 +5745,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pausiert — noch %@"
+          }
+        }
+      }
+    },
+    "Per-network profile choices aren't supported yet." : {
+      "comment" : "Migration report note (§13.1 step 7)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profile pro Netzwerk werden noch nicht unterstützt."
           }
         }
       }
@@ -5082,24 +5958,24 @@
         }
       }
     },
-    "QR Image…" : {
-      "comment" : "Button",
+    "Protection wasn't paused for longer: LockPlus couldn't read its keychain. Try again in a moment." : {
+      "comment" : "Problems line (2.0.2 round 2): extending a pause failed because the keychain was unavailable",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "QR-Bild…"
+            "value" : "Der Schutz wurde nicht länger pausiert: LockPlus konnte seinen Schlüsselbund nicht lesen. Versuche es gleich noch einmal."
           }
         }
       }
     },
-    "QR code images can't be imported yet." : {
-      "comment" : "Import error (QR seam)",
+    "Protection wasn't paused: LockPlus couldn't secure the pause in its keychain (%lld). Try again in a moment." : {
+      "comment" : "Problems line (2.0.2 round 2): a pause failed because its resume intent couldn't be written to the keychain",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "QR-Code-Bilder können noch nicht importiert werden."
+            "value" : "Der Schutz wurde nicht pausiert: LockPlus konnte die Pause nicht in seinem Schlüsselbund sichern (%lld). Versuche es gleich noch einmal."
           }
         }
       }
@@ -5133,6 +6009,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Beenden und pausiert lassen"
+          }
+        }
+      }
+    },
+    "Quit the old LockPlus first, then remove its helper. While it runs, it would install the helper again." : {
+      "comment" : "§4.5 removal refused while the Go app runs (review E2E-5 F1-1)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beende zuerst das alte LockPlus und entferne dann sein Hilfsprogramm. Solange es läuft, würde es das Hilfsprogramm erneut installieren."
           }
         }
       }
@@ -5259,12 +6146,12 @@
       }
     },
     "Reconnecting…" : {
-      "comment" : "Row 10 before the first retry\nState word",
+      "comment" : "Menu header, row 4a (short for 'Reconnecting to the tunnel process…')\nRow 10 before the first retry\nState word",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Neuverbindung…"
+            "value" : "Verbindung wird wiederhergestellt…"
           }
         }
       }
@@ -5275,7 +6162,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Neuverbindung… Versuch %lld"
+            "value" : "Verbindung wird wiederhergestellt… Versuch %lld"
           }
         }
       }
@@ -5286,7 +6173,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Neuverbindung… Versuch %1$lld · nächster Versuch in %2$@"
+            "value" : "Verbindung wird wiederhergestellt… Versuch %1$lld · nächster Versuch in %2$@"
           }
         },
         "en" : {
@@ -5418,6 +6305,17 @@
         }
       }
     },
+    "Remove Old Helper…" : {
+      "comment" : "Button, §4.5 banner (E2E-5 F1); macOS asks for an administrator password",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Altes Hilfsprogramm entfernen…"
+          }
+        }
+      }
+    },
     "Remove ^[%lld locked profile](inflect: true)?" : {
       "comment" : "Remove locked profiles confirmation title",
       "localizations" : {
@@ -5437,6 +6335,17 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "Removing the old LockPlus helper…" : {
+      "comment" : "§4.5 banner while the removal runs (E2E-5 F1)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Hilfsprogramm des alten LockPlus wird entfernt…"
           }
         }
       }
@@ -5518,6 +6427,17 @@
         }
       }
     },
+    "Restart needed" : {
+      "comment" : "Menu header, row 1 (short for 'Restart your Mac to finish installing the tunnel component')",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neustart nötig"
+          }
+        }
+      }
+    },
     "Restart to finish installing" : {
       "comment" : "Restart alert title",
       "localizations" : {
@@ -5558,6 +6478,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Starte deinen Mac neu, um den Vorgang abzuschließen."
+          }
+        }
+      }
+    },
+    "Restart your Mac — the old helper then restores your DNS settings — then remove it." : {
+      "comment" : "§4.5 removal refused: the journal holds the user's own DNS servers (review 650b251)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Starte deinen Mac neu – das alte Hilfsprogramm stellt dann deine DNS-Einstellungen wieder her – und entferne es danach."
           }
         }
       }
@@ -5843,17 +6774,6 @@
         }
       }
     },
-    "scripts never run in LockPlus" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Skripte laufen in LockPlus nie"
-          }
-        }
-      }
-    },
     "Scripts. LockPlus never runs them." : {
       "comment" : "OVPN reference",
       "localizations" : {
@@ -5909,6 +6829,17 @@
         }
       }
     },
+    "Security warnings" : {
+      "comment" : "Copy Report heading",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sicherheitshinweise"
+          }
+        }
+      }
+    },
     "Select a profile" : {
       "comment" : "Detail placeholder when profiles exist but none is selected (§6.15)",
       "localizations" : {
@@ -5952,17 +6883,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Serverhost, Port und optionales Protokoll. Mehrere Zeilen werden der Reihe nach versucht."
-          }
-        }
-      }
-    },
-    "set by the server" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "vom Server festgelegt"
           }
         }
       }
@@ -6168,6 +7088,17 @@
         }
       }
     },
+    "Some of your traffic doesn't use the VPN" : {
+      "comment" : "Self-test result headline",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Teil deines Datenverkehrs nutzt das VPN nicht"
+          }
+        }
+      }
+    },
     "Some saved passwords could not be removed from your keychain." : {
       "comment" : "§4.4 residual",
       "localizations" : {
@@ -6284,6 +7215,17 @@
         }
       }
     },
+    "Stopped, not protected" : {
+      "comment" : "Menu header, row 14; the error sentence follows below",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gestoppt, nicht geschützt"
+          }
+        }
+      }
+    },
     "Support LockPlus" : {
       "comment" : "Link (Ko-fi)",
       "localizations" : {
@@ -6328,8 +7270,19 @@
         }
       }
     },
+    "Switching to %@…" : {
+      "comment" : "Menu header, profile switch; the argument is a profile name",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wechsel zu %@…"
+          }
+        }
+      }
+    },
     "System" : {
-      "comment" : "Language, Appearance",
+      "comment" : "Appearance\nLanguage",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -6350,6 +7303,39 @@
         }
       }
     },
+    "System Settings › General › Login Items may still list the old LockPlus. Turn it off there; LockPlus has its own setting." : {
+      "comment" : "Migration report: Go 1.1's login item can't be removed by LockPlus (E2E-5 F5)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Systemeinstellungen › Allgemein › Anmeldeobjekte steht eventuell noch das alte LockPlus. Schalte es dort aus; LockPlus hat eine eigene Einstellung."
+          }
+        }
+      }
+    },
+    "Test Connection" : {
+      "comment" : "Button",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verbindung testen"
+          }
+        }
+      }
+    },
+    "Tested %@" : {
+      "comment" : "Self-test timestamp",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Getestet: %@"
+          }
+        }
+      }
+    },
     "That name can't be used. Choose another one." : {
       "comment" : "Rename error",
       "localizations" : {
@@ -6357,6 +7343,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dieser Name kann nicht verwendet werden. Wähle einen anderen."
+          }
+        }
+      }
+    },
+    "The Auto-Connect setting was changed outside LockPlus, so Auto-Connect was turned off. Turn it on again if you want it." : {
+      "comment" : "Problems line (2.0.2 round 2): the Auto-Connect choice in settings.json failed its authentication check",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Einstellung für automatisches Verbinden wurde außerhalb von LockPlus geändert, deshalb wurde automatisches Verbinden ausgeschaltet. Schalte es wieder ein, wenn du es möchtest."
           }
         }
       }
@@ -6405,6 +7402,28 @@
         }
       }
     },
+    "The address websites see isn't checked. Websites usually see the address of your VPN server (%@). LockPlus doesn't ask third-party services to confirm it." : {
+      "comment" : "Self-test exit-address row (D-5: no echo service)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Adresse, die Websites sehen, wird nicht geprüft. Websites sehen meist die Adresse deines VPN-Servers (%@). LockPlus lässt sie nicht von Drittanbietern bestätigen."
+          }
+        }
+      }
+    },
+    "The address websites see isn't checked. Websites usually see the address of your VPN server. LockPlus doesn't ask third-party services to confirm it." : {
+      "comment" : "Self-test exit-address row (D-5: no echo service), server address left out",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Adresse, die Websites sehen, wird nicht geprüft. Websites sehen meist die Adresse deines VPN-Servers. LockPlus lässt sie nicht von Drittanbietern bestätigen."
+          }
+        }
+      }
+    },
     "The certificate authority that signed the server's certificate." : {
       "comment" : "OVPN reference",
       "localizations" : {
@@ -6449,6 +7468,17 @@
         }
       }
     },
+    "The connection couldn't be fully verified" : {
+      "comment" : "Self-test result headline (never shown as safe)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Verbindung konnte nicht vollständig geprüft werden"
+          }
+        }
+      }
+    },
     "The connection was cancelled." : {
       "comment" : "Error message",
       "localizations" : {
@@ -6467,6 +7497,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Die Diagnosedatei konnte nicht gesichert werden."
+          }
+        }
+      }
+    },
+    "The earlier import was finished: settings, Wi-Fi rules and history are now in LockPlus too." : {
+      "comment" : "Migration report: a resumed migration (E2E-5 F4)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der frühere Import wurde abgeschlossen: Einstellungen, WLAN-Regeln und Verlauf sind jetzt auch in LockPlus."
+          }
+        }
+      }
+    },
+    "The installed helper doesn't match the old LockPlus helper, so LockPlus didn't change anything." : {
+      "comment" : "§4.5 removal refused: unexpected files (E2E-5 F1)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das installierte Hilfsprogramm passt nicht zum Hilfsprogramm des alten LockPlus, deshalb hat LockPlus nichts verändert."
           }
         }
       }
@@ -6504,6 +7556,94 @@
         }
       }
     },
+    "The old LockPlus helper is still installed. LockPlus can remove it; macOS asks for an administrator password." : {
+      "comment" : "§4.5 banner (E2E-5 F1)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Hilfsprogramm des alten LockPlus ist noch installiert. LockPlus kann es entfernen; macOS fragt dafür nach einem Administratorpasswort."
+          }
+        }
+      }
+    },
+    "The old LockPlus helper is still installed. Quit the old LockPlus first; then LockPlus can remove its helper." : {
+      "comment" : "§4.5 banner while the Go app runs (review E2E-5 F1-1)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Hilfsprogramm des alten LockPlus ist noch installiert. Beende zuerst das alte LockPlus; dann kann LockPlus sein Hilfsprogramm entfernen."
+          }
+        }
+      }
+    },
+    "The old LockPlus helper isn't running, and the DNS settings it changed may still be active. Open the old LockPlus once so its helper restores DNS, or set DNS back to Automatic in System Settings › Network and try again, or restart your Mac." : {
+      "comment" : "§4.5 removal refused: un-replayed DNS journal, the old app is installed (E2E-6 N1)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Hilfsprogramm des alten LockPlus läuft nicht, und die DNS-Einstellungen, die es geändert hat, sind vielleicht noch aktiv. Öffne das alte LockPlus einmal, damit sein Hilfsprogramm DNS wiederherstellt, oder stelle DNS in Systemeinstellungen › Netzwerk wieder auf „Automatisch“ und versuche es erneut, oder starte deinen Mac neu."
+          }
+        }
+      }
+    },
+    "The old LockPlus helper isn't running, and the DNS settings it changed may still be active. Set DNS back to Automatic in System Settings › Network and try again, or restart your Mac." : {
+      "comment" : "§4.5 removal refused: un-replayed DNS journal, no old app to open (E2E-6 N1)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Hilfsprogramm des alten LockPlus läuft nicht, und die DNS-Einstellungen, die es geändert hat, sind vielleicht noch aktiv. Stelle DNS in Systemeinstellungen › Netzwerk wieder auf „Automatisch“ und versuche es erneut, oder starte deinen Mac neu."
+          }
+        }
+      }
+    },
+    "The old LockPlus helper was removed, but it left network settings behind. If websites don't load, set DNS back to Automatic in System Settings › Network, then restart your Mac." : {
+      "comment" : "§4.5 removal result (review E2E-5 F1-2: a restart clears pf, not DNS)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Hilfsprogramm des alten LockPlus wurde entfernt, hat aber Netzwerkeinstellungen hinterlassen. Wenn Websites nicht laden, stelle DNS in Systemeinstellungen › Netzwerk wieder auf „Automatisch“ und starte deinen Mac neu."
+          }
+        }
+      }
+    },
+    "The old LockPlus helper was removed." : {
+      "comment" : "§4.5 removal result (E2E-5 F1)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Hilfsprogramm des alten LockPlus wurde entfernt."
+          }
+        }
+      }
+    },
+    "The old LockPlus helper was removed. Its last connection ended in a crash and left network routes behind: if LockPlus can't connect to a server, restart your Mac." : {
+      "comment" : "§4.5 removal result: the old helper had crashed with a tunnel up, its endpoint routes stay until a restart (E2E-7 F3)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Hilfsprogramm des alten LockPlus wurde entfernt. Seine letzte Verbindung endete mit einem Absturz und hat Netzwerkrouten hinterlassen: Wenn LockPlus keine Verbindung zu einem Server herstellen kann, starte deinen Mac neu."
+          }
+        }
+      }
+    },
+    "The old LockPlus is still connected or its kill switch is on, so its helper wasn't removed. Disconnect in the old LockPlus first, or restart your Mac, then try again. If you also use WireGuide, its kill switch counts too: turn it off for the removal." : {
+      "comment" : "§4.5 removal refused (E2E-5 F1; migration matrix: the pf anchor is shared with upstream WireGuide)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das alte LockPlus ist noch verbunden oder sein Kill Switch ist an, deshalb wurde sein Hilfsprogramm nicht entfernt. Trenne zuerst die Verbindung im alten LockPlus oder starte deinen Mac neu und versuche es dann erneut. Wenn du auch WireGuide verwendest, zählt dessen Kill Switch ebenfalls: Schalte ihn für das Entfernen aus."
+          }
+        }
+      }
+    },
     "The old LockPlus is still protecting this Mac" : {
       "comment" : "Legacy helper refuse dialog title (§4.5)",
       "localizations" : {
@@ -6515,6 +7655,17 @@
         }
       }
     },
+    "The old LockPlus left its DNS protection on. Restart your Mac to clear it, then remove the helper." : {
+      "comment" : "§4.5 removal refused: only 1.0.x's port-53 pf rules are left (E2E-6 N2)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das alte LockPlus hat seinen DNS-Schutz eingeschaltet gelassen. Starte deinen Mac neu, um ihn zu entfernen, und entferne danach das Hilfsprogramm."
+          }
+        }
+      }
+    },
     "The old LockPlus left its firewall on" : {
       "comment" : "Legacy helper warning title (§4.5)",
       "localizations" : {
@@ -6522,6 +7673,127 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Das alte LockPlus hat seine Firewall eingeschaltet gelassen"
+          }
+        }
+      }
+    },
+    "The old LockPlus left network settings behind. If websites don't load, set DNS back to Automatic in System Settings › Network, then restart your Mac." : {
+      "comment" : "§4.5 banner (review E2E-5 F1-2: a restart clears pf, not DNS)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das alte LockPlus hat Netzwerkeinstellungen hinterlassen. Wenn Websites nicht laden, stelle DNS in Systemeinstellungen › Netzwerk wieder auf „Automatisch“ und starte deinen Mac neu."
+          }
+        }
+      }
+    },
+    "The old LockPlus may have left its firewall on. If connecting fails, restart your Mac." : {
+      "comment" : "§4.5 warning (E2E-5 F7)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das alte LockPlus hat seine Firewall eventuell eingeschaltet gelassen. Wenn das Verbinden fehlschlägt, starte deinen Mac neu."
+          }
+        }
+      }
+    },
+    "The old LockPlus opened at login." : {
+      "comment" : "Migration report offer explanation (E2E-5 F5)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das alte LockPlus wurde bei der Anmeldung geöffnet."
+          }
+        }
+      }
+    },
+    "The old LockPlus opened at login. Open LockPlus at login instead?" : {
+      "comment" : "Banner (E2E-5 F5)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das alte LockPlus wurde bei der Anmeldung geöffnet. Stattdessen LockPlus bei der Anmeldung öffnen?"
+          }
+        }
+      }
+    },
+    "The old LockPlus still seems to be connected, so its helper wasn't removed. Disconnect LockPlus and try again: its connection can look like one of the old LockPlus. If that doesn't help, disconnect in the old LockPlus or restart your Mac." : {
+      "comment" : "§4.5 removal refused by root while LockPlus itself is connected (E2E-7 F3: its utun can reuse a crashed old tunnel's number)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das alte LockPlus scheint noch verbunden zu sein, deshalb wurde sein Hilfsprogramm nicht entfernt. Trenne die Verbindung in LockPlus und versuche es erneut: Seine Verbindung kann wie eine des alten LockPlus aussehen. Hilft das nicht, trenne die Verbindung im alten LockPlus oder starte deinen Mac neu."
+          }
+        }
+      }
+    },
+    "The old LockPlus's helper is still installed. If the old LockPlus offers its update to 1.2, that update removes the helper; otherwise choose “Remove Old Helper…” in the LockPlus window." : {
+      "comment" : "Migration report final note while the Go helper is installed (E2E-5 F7)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Hilfsprogramm des alten LockPlus ist noch installiert. Wenn das alte LockPlus sein Update auf 1.2 anbietet, entfernt dieses Update das Hilfsprogramm; sonst wähle „Altes Hilfsprogramm entfernen…“ im LockPlus-Fenster."
+          }
+        }
+      }
+    },
+    "The old helper couldn't be removed completely. Restart your Mac and try again." : {
+      "comment" : "§4.5 removal incomplete (E2E-5 F1)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das alte Hilfsprogramm konnte nicht vollständig entfernt werden. Starte deinen Mac neu und versuche es erneut."
+          }
+        }
+      }
+    },
+    "The old helper couldn't be removed: %@" : {
+      "comment" : "§4.5 removal failed; the argument is the system's message (E2E-5 F1)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das alte Hilfsprogramm konnte nicht entfernt werden: %@"
+          }
+        }
+      }
+    },
+    "The old helper isn't responding. Restart your Mac, then remove it." : {
+      "comment" : "§4.5 removal refused: the helper's socket doesn't answer (Fable follow-up LOW-3)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das alte Hilfsprogramm reagiert nicht. Starte deinen Mac neu und entferne es dann."
+          }
+        }
+      }
+    },
+    "The old helper wasn't removed because the administrator password was cancelled. It is still installed." : {
+      "comment" : "§4.5 removal cancelled (E2E-5 F1)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das alte Hilfsprogramm wurde nicht entfernt, weil die Eingabe des Administratorpassworts abgebrochen wurde. Es ist weiterhin installiert."
+          }
+        }
+      }
+    },
+    "The pause record was changed outside LockPlus, so %@ wasn't reconnected. Connect it yourself." : {
+      "comment" : "Problems line (2.0.2 round 2): the pause record in settings.json failed its authentication check",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Pausenangaben wurden außerhalb von LockPlus geändert, deshalb wurde %@ nicht wieder verbunden. Verbinde es selbst."
           }
         }
       }
@@ -6625,6 +7897,17 @@
         }
       }
     },
+    "The profile sets no DNS server: DNS stays as it is" : {
+      "comment" : "Diagnostics DNS row (2.0.1: WireGuard split tunnel without DNS)\nSelf-test DNS row",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das Profil legt keinen DNS-Server fest: DNS bleibt unverändert"
+          }
+        }
+      }
+    },
     "The profile uses a setting LockPlus doesn't support." : {
       "comment" : "Error message",
       "localizations" : {
@@ -6632,6 +7915,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Das Profil verwendet eine Einstellung, die LockPlus nicht unterstützt."
+          }
+        }
+      }
+    },
+    "The profile's DNS servers are reached through the tunnel (%@); other names use your network's DNS" : {
+      "comment" : "Self-test DNS row, split DNS (2.0.2 round 2)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die DNS-Server des Profils werden durch den Tunnel erreicht (%@); andere Namen nutzen das DNS deines Netzwerks"
           }
         }
       }
@@ -6808,6 +8102,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Die Anmeldeanfrage ist abgelaufen. Verbinde erneut."
+          }
+        }
+      }
+    },
+    "The start ended early. Not protected meanwhile." : {
+      "comment" : "Row 12a, the start ended early; a start by macOS may follow",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Start wurde vorzeitig beendet. Währenddessen nicht geschützt."
           }
         }
       }
@@ -7021,6 +8326,17 @@
         }
       }
     },
+    "The tunnel process doesn't answer." : {
+      "comment" : "Menu header, row 4a, link unavailable",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Tunnelprozess reagiert nicht."
+          }
+        }
+      }
+    },
     "The tunnel stays connected after quitting." : {
       "comment" : "Quit alert",
       "localizations" : {
@@ -7083,6 +8399,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Danach verbindet LockPlus %@. Bis dahin nicht geschützt."
+          }
+        }
+      }
+    },
+    "There's nothing to import: LockPlus 1.x's profiles aren't on this Mac, or they're all imported already." : {
+      "comment" : "Migration sheet: nothing found (E2E-5 F4)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es gibt nichts zu importieren: Die Profile von LockPlus 1.x sind nicht auf diesem Mac oder bereits alle importiert."
           }
         }
       }
@@ -7269,6 +8596,17 @@
         }
       }
     },
+    "This profile was started outside LockPlus (for example from System Settings) and was refused. Connect it from LockPlus." : {
+      "comment" : "Error message (2.0.2, D-1: a start of a profile that its owner's LockPlus didn't make, e.g. a System Settings toggle or scutil, was refused with error 225)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Profil wurde außerhalb von LockPlus gestartet (zum Beispiel in den Systemeinstellungen) und abgelehnt. Verbinde es über LockPlus."
+          }
+        }
+      }
+    },
     "This server is only reachable via %@, a network LockPlus's tunnel can't use. Connect the server to your main network (Wi-Fi or Ethernet)." : {
       "comment" : "Error message (§6.15). The argument is an interface name such as bridge100.",
       "localizations" : {
@@ -7309,6 +8647,45 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dieser Server verwendet eine Web-Anmeldung, die LockPlus noch nicht unterstützt."
+          }
+        }
+      }
+    },
+    "Through the tunnel" : {
+      "comment" : "Self-test DNS row",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durch den Tunnel"
+          }
+        }
+      }
+    },
+    "Through the tunnel (%@)" : {
+      "comment" : "Self-test DNS row",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durch den Tunnel (%@)"
+          }
+        }
+      }
+    },
+    "Through the tunnel (%@, from %@)" : {
+      "comment" : "Self-test row: the request left by the tunnel interface",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durch den Tunnel (%1$@, von %2$@)"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Through the tunnel (%1$@, from %2$@)"
           }
         }
       }
@@ -7407,6 +8784,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tunnelkomponente nicht aktualisiert"
+          }
+        }
+      }
+    },
+    "Tunnel component damaged" : {
+      "comment" : "Menu header, row 1 (short for 'The tunnel component is damaged')",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tunnelkomponente beschädigt"
+          }
+        }
+      }
+    },
+    "Tunnel component not allowed" : {
+      "comment" : "Menu header, row 1 (short for 'The tunnel component isn't allowed yet')",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tunnelkomponente nicht erlaubt"
+          }
+        }
+      }
+    },
+    "Tunnel component removed" : {
+      "comment" : "Menu header, row 1 (short for 'The tunnel component was removed during the update')",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tunnelkomponente entfernt"
+          }
+        }
+      }
+    },
+    "Tunnel component turned off" : {
+      "comment" : "Menu header, row 1 (short for 'The tunnel component is turned off in System Settings')",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tunnelkomponente ausgeschaltet"
           }
         }
       }
@@ -7615,6 +9036,28 @@
         }
       }
     },
+    "Waiting for a network to connect %@…" : {
+      "comment" : "Row 12a (E2E-4 200011): the Mac has no network; LockPlus starts the profile when one is available. The argument is a profile name",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Warten auf ein Netzwerk, um %@ zu verbinden…"
+          }
+        }
+      }
+    },
+    "Waiting for a network…" : {
+      "comment" : "Menu header, row 12a (E2E-4 200011): a start waits for a network",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Warten auf ein Netzwerk…"
+          }
+        }
+      }
+    },
     "Waiting for approval…" : {
       "comment" : "Onboarding step 2 state",
       "localizations" : {
@@ -7714,6 +9157,17 @@
         }
       }
     },
+    "When you're happy, you can delete the old LockPlus if it's still in Applications." : {
+      "comment" : "Migration report final note without a Go helper (E2E-5 F7)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn alles passt, kannst du das alte LockPlus löschen, falls es noch im Ordner „Programme“ liegt."
+          }
+        }
+      }
+    },
     "Wi-Fi networks you don't trust" : {
       "comment" : "Auto-connect trigger",
       "localizations" : {
@@ -7758,6 +9212,50 @@
         }
       }
     },
+    "WireGuide's profiles (the separate app) are on this Mac too. LockPlus doesn't import them on its own: choose Import Profile… and pick them in ~/Library/Application Support/wireguide/tunnels." : {
+      "comment" : "Migration report: upstream WireGuide's directory is never imported automatically (migration matrix)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf diesem Mac sind auch Profile von WireGuide (der separaten App). LockPlus importiert sie nicht von selbst: Wähle „Profil importieren…“ und wähle sie in ~/Library/Application Support/wireguide/tunnels aus."
+          }
+        }
+      }
+    },
+    "WireGuide+ couldn't be moved to the Trash. Drag it from Applications to the Trash yourself." : {
+      "comment" : "Banner: moving the old app failed (migration matrix)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "WireGuide+ konnte nicht in den Papierkorb gelegt werden. Ziehe es selbst aus „Programme“ in den Papierkorb."
+          }
+        }
+      }
+    },
+    "WireGuide+, the old version of LockPlus, is still installed. LockPlus replaces it." : {
+      "comment" : "Banner: the old WireGuide+ app is still installed (migration matrix)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "WireGuide+, die alte Version von LockPlus, ist noch installiert. LockPlus ersetzt es."
+          }
+        }
+      }
+    },
+    "WireGuide+, the old version of LockPlus, is still running. Quit it, then you can move it to the Trash." : {
+      "comment" : "Banner: the old WireGuide+ app runs (migration matrix)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "WireGuide+, die alte Version von LockPlus, läuft noch. Beende es, dann kannst du es in den Papierkorb legen."
+          }
+        }
+      }
+    },
     "Without the kill switch, a malicious Wi-Fi network can route some traffic around the VPN (TunnelVision)." : {
       "comment" : "Kill switch off footer (§6.4)",
       "localizations" : {
@@ -7780,6 +9278,17 @@
         }
       }
     },
+    "You can also import from the old LockPlus later, in Settings › Advanced." : {
+      "comment" : "Onboarding migration: skipping isn't final (E2E-5 F4)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du kannst auch später aus dem alten LockPlus importieren, unter Einstellungen › Erweitert."
+          }
+        }
+      }
+    },
     "You have unsaved changes in ^[%lld profile](inflect: true)." : {
       "comment" : "Quit with unsaved editors",
       "localizations" : {
@@ -7798,6 +9307,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dein Mac ist nicht geschützt."
+          }
+        }
+      }
+    },
+    "Your Mac isn't connected to a network." : {
+      "comment" : "Error message (E2E-4 200011: macOS ended the VPN session because there was no network)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dein Mac ist mit keinem Netzwerk verbunden."
           }
         }
       }
@@ -7857,6 +9377,52 @@
         }
       }
     },
+    "^[%lld directive](inflect: true) not applied" : {
+      "comment" : "Import report summary; directives whose behaviour LockPlus does not apply (scripts, certificate pin, web sign-in, WireGuard settings)",
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Direktive nicht angewendet"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Direktiven nicht angewendet"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "^[%lld directive](inflect: true) not needed" : {
+      "comment" : "Import report summary; harmless directives LockPlus doesn't need",
+      "localizations" : {
+        "de" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Direktive nicht nötig"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Direktiven nicht nötig"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "^[%lld directive](inflect: true) supported" : {
       "comment" : "Import summary",
       "localizations" : {
@@ -7891,6 +9457,23 @@
         }
       }
     },
+    "^[%lld profile](inflect: true) · ^[%lld saved login](inflect: true)" : {
+      "comment" : "Onboarding migration counts (E2E-5 F7)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "^[%1$lld Profil](inflect: true) · ^[%2$lld gesicherte Anmeldung](inflect: true)"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "^[%1$lld profile](inflect: true) · ^[%2$lld saved login](inflect: true)"
+          }
+        }
+      }
+    },
     "^[%lld saved password](inflect: true) from an older version can't be imported; enter it again on first connect." : {
       "comment" : "Migration report (System keychain items, §6.7 step 4)",
       "localizations" : {
@@ -7914,6 +9497,17 @@
         }
       }
     },
+    "a server option; not needed by a client" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server-Option; ein Client braucht sie nicht"
+          }
+        }
+      }
+    },
     "active" : {
       "comment" : "Session still active",
       "localizations" : {
@@ -7921,6 +9515,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "aktiv"
+          }
+        }
+      }
+    },
+    "another LockPlus connection is active (another user's, or one LockPlus can't show)" : {
+      "comment" : "Error reason fragment",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "eine andere LockPlus-Verbindung ist aktiv (die eines anderen Benutzers oder eine, die LockPlus nicht anzeigen kann)"
+          }
+        }
+      }
+    },
+    "another LockPlus profile is connected" : {
+      "comment" : "Error reason fragment",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ein anderes LockPlus-Profil ist verbunden"
+          }
+        }
+      }
+    },
+    "another LockPlus profile with the kill switch took over" : {
+      "comment" : "Error reason fragment",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ein anderes LockPlus-Profil mit Kill Switch hat übernommen"
+          }
+        }
+      }
+    },
+    "another LockPlus start interrupted its connection" : {
+      "comment" : "Error reason fragment",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ein anderer LockPlus-Start hat die Verbindung unterbrochen"
           }
         }
       }
@@ -7949,6 +9587,42 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "average %1$@, peak %2$@"
+          }
+        }
+      }
+    },
+    "because.anotherTunnelActive" : {
+      "comment" : "Error cause, used after \"because\" in a VoiceOver announcement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ein anderes LockPlus-Profil verbunden war"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "another LockPlus profile was connected"
+          }
+        }
+      }
+    },
+    "because.anotherTunnelActive.unseen" : {
+      "comment" : "Error cause, used after \"because\" in a VoiceOver announcement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "eine andere LockPlus-Verbindung aktiv war"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "another LockPlus connection was active"
           }
         }
       }
@@ -8259,78 +9933,6 @@
         }
       }
     },
-    "because.anotherTunnelActive" : {
-      "comment" : "Error cause, used after \"because\" in a VoiceOver announcement",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ein anderes LockPlus-Profil verbunden war"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "another LockPlus profile was connected"
-          }
-        }
-      }
-    },
-    "because.anotherTunnelActive.unseen" : {
-      "comment" : "Error cause, used after \"because\" in a VoiceOver announcement",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "eine andere LockPlus-Verbindung aktiv war"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "another LockPlus connection was active"
-          }
-        }
-      }
-    },
-    "because.supersededByKillSwitch" : {
-      "comment" : "Error cause, used after \"because\" in a VoiceOver announcement",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ein anderes LockPlus-Profil mit Kill Switch übernommen hat"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "another LockPlus profile with the kill switch took over"
-          }
-        }
-      }
-    },
-    "because.noNetwork" : {
-      "comment" : "Error cause, used after \"because\" in a VoiceOver announcement",
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "dein Mac mit keinem Netzwerk verbunden war"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "your Mac wasn't connected to a network"
-          }
-        }
-      }
-    },
     "because.legacyCryptoUnavailable" : {
       "comment" : "Error cause, used after \"because\" in a VoiceOver announcement",
       "extractionState" : "extracted_with_value",
@@ -8385,6 +9987,24 @@
         }
       }
     },
+    "because.noNetwork" : {
+      "comment" : "Error cause, used after \"because\" in a VoiceOver announcement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dein Mac mit keinem Netzwerk verbunden war"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "your Mac wasn't connected to a network"
+          }
+        }
+      }
+    },
     "because.notOwner" : {
       "comment" : "Error cause, used after \"because\" in a VoiceOver announcement",
       "extractionState" : "extracted_with_value",
@@ -8435,6 +10055,24 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "the server can't be reached"
+          }
+        }
+      }
+    },
+    "because.profileCheckCrashed" : {
+      "comment" : "Error cause, used after \"because\" in a VoiceOver announcement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LockPlus das Profil nicht sicher prüfen konnte"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "LockPlus couldn't check the profile safely"
           }
         }
       }
@@ -8583,6 +10221,24 @@
         }
       }
     },
+    "because.sessionInterrupted" : {
+      "comment" : "Error cause, used after \"because\" in a VoiceOver announcement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ein anderer LockPlus-Start die Verbindung unterbrochen hat"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "another LockPlus start interrupted its connection"
+          }
+        }
+      }
+    },
     "because.staleAnswer" : {
       "comment" : "Error cause, used after \"because\" in a VoiceOver announcement",
       "extractionState" : "extracted_with_value",
@@ -8615,6 +10271,42 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "the connection was cancelled"
+          }
+        }
+      }
+    },
+    "because.startNotAuthorised" : {
+      "comment" : "Error cause, used after \"because\" in a VoiceOver announcement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "es außerhalb von LockPlus gestartet wurde"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "it was started outside LockPlus"
+          }
+        }
+      }
+    },
+    "because.supersededByKillSwitch" : {
+      "comment" : "Error cause, used after \"because\" in a VoiceOver announcement",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ein anderes LockPlus-Profil mit Kill Switch übernommen hat"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "another LockPlus profile with the kill switch took over"
           }
         }
       }
@@ -8727,6 +10419,17 @@
         }
       }
     },
+    "ciphers are negotiated automatically" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verschlüsselung wird automatisch ausgehandelt"
+          }
+        }
+      }
+    },
     "download %@, upload %@" : {
       "comment" : "Combined rate accessibility label",
       "localizations" : {
@@ -8788,6 +10491,28 @@
         }
       }
     },
+    "it was started outside LockPlus" : {
+      "comment" : "Error reason fragment",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "es wurde außerhalb von LockPlus gestartet"
+          }
+        }
+      }
+    },
+    "keepalive is set, which takes precedence" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "keepalive ist gesetzt und hat Vorrang"
+          }
+        }
+      }
+    },
     "line %lld: " : {
       "comment" : "Editor error prefix",
       "localizations" : {
@@ -8799,6 +10524,39 @@
         }
       }
     },
+    "lines starting with ';' are skipped" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zeilen, die mit „;“ beginnen, werden übersprungen"
+          }
+        }
+      }
+    },
+    "local port binding isn't used" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lokales Port-Binding wird nicht verwendet"
+          }
+        }
+      }
+    },
+    "logging is managed by LockPlus" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Protokollierung übernimmt LockPlus"
+          }
+        }
+      }
+    },
     "macOS" : {
       "comment" : "Session end reason",
       "localizations" : {
@@ -8806,6 +10564,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "macOS"
+          }
+        }
+      }
+    },
+    "macOS asks for this when LockPlus adds your first profile, in the next step. Choose “Allow” then." : {
+      "comment" : "Onboarding step 3 when there is no profile yet: the system alert comes with the first import",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Im nächsten Schritt fragt macOS dazu, sobald LockPlus dein erstes Profil hinzufügt. Wähle dann „Erlauben“."
+          }
+        }
+      }
+    },
+    "macOS asks for your login keychain password, usually your Mac login password, once for each: ^[%lld prompt](inflect: true). You can also skip this and enter them on first connect." : {
+      "comment" : "Onboarding migration opt-in explanation (§6.7, E2E-5 F7: the prompt asks for the login keychain password, not just a click)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS fragt für jede einmal nach dem Passwort deines Anmeldeschlüsselbunds, meist dein Mac-Anmeldepasswort: ^[%lld Abfrage](inflect: true). Du kannst dies auch überspringen und sie beim ersten Verbinden eingeben."
           }
         }
       }
@@ -8828,6 +10608,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "macOS konnte die Tunnelschnittstelle nicht erstellen."
+          }
+        }
+      }
+    },
+    "macOS has already allowed LockPlus to add VPN configurations." : {
+      "comment" : "Onboarding step 3 with no profile but an existing VPN configuration: nothing more to allow",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS hat LockPlus bereits erlaubt, VPN-Konfigurationen hinzuzufügen."
           }
         }
       }
@@ -8898,6 +10689,50 @@
         }
       }
     },
+    "macOS will ask to add VPN configurations first: choose “Allow”. The keychain prompts follow." : {
+      "comment" : "Onboarding step 4 hint by the import button, with saved logins included",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS fragt zuerst, ob VPN-Konfigurationen hinzugefügt werden dürfen: Wähle „Erlauben“. Danach folgen die Schlüsselbund-Abfragen."
+          }
+        }
+      }
+    },
+    "macOS will ask to add VPN configurations: choose “Allow”." : {
+      "comment" : "Onboarding step 4 hint by the import button",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS fragt, ob VPN-Konfigurationen hinzugefügt werden dürfen: Wähle „Erlauben“."
+          }
+        }
+      }
+    },
+    "not applied on macOS" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unter macOS nicht angewendet"
+          }
+        }
+      }
+    },
+    "not needed; LockPlus keeps the tunnel up itself" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nicht nötig; LockPlus hält den Tunnel selbst aufrecht"
+          }
+        }
+      }
+    },
     "not protected" : {
       "comment" : "Sidebar VoiceOver state",
       "localizations" : {
@@ -8905,6 +10740,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "nicht geschützt"
+          }
+        }
+      }
+    },
+    "not supported; the certificate chain is still verified, use peer-fingerprint to pin the server" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nicht unterstützt; die Zertifikatskette wird trotzdem geprüft, mit peer-fingerprint legst du den Server fest"
           }
         }
       }
@@ -8920,6 +10766,61 @@
         }
       }
     },
+    "not used by LockPlus's OpenVPN engine" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wird von der OpenVPN-Engine von LockPlus nicht verwendet"
+          }
+        }
+      }
+    },
+    "not used on macOS" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wird unter macOS nicht verwendet"
+          }
+        }
+      }
+    },
+    "obsolete; the server decides about IPv6" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "veraltet; über IPv6 entscheidet der Server"
+          }
+        }
+      }
+    },
+    "only caps the TLS version; the engine's own limits apply" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "begrenzt nur die TLS-Version; es gelten die Grenzen der Engine"
+          }
+        }
+      }
+    },
+    "only matters for point-to-point setups" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nur bei Punkt-zu-Punkt-Setups relevant"
+          }
+        }
+      }
+    },
     "or" : {
       "comment" : "Separator",
       "localizations" : {
@@ -8931,6 +10832,28 @@
         }
       }
     },
+    "outdated algorithms are never enabled" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "veraltete Algorithmen werden nie aktiviert"
+          }
+        }
+      }
+    },
+    "packet size is managed by LockPlus" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "die Paketgröße verwaltet LockPlus"
+          }
+        }
+      }
+    },
     "reinstall the tunnel component" : {
       "comment" : "LAContext reason",
       "localizations" : {
@@ -8938,6 +10861,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "die Tunnelkomponente erneut installieren"
+          }
+        }
+      }
+    },
+    "rekey/replay tuning isn't applied; LockPlus uses the engine's defaults" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Feineinstellungen für Neuverhandlung und Replay-Schutz werden nicht angewendet; LockPlus nutzt die Standardwerte der Engine"
+          }
+        }
+      }
+    },
+    "routes are managed by LockPlus" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Routen verwaltet LockPlus"
+          }
+        }
+      }
+    },
+    "scripts never run in LockPlus" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skripte laufen in LockPlus nie"
+          }
+        }
+      }
+    },
+    "set by the server" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vom Server festgelegt"
           }
         }
       }
@@ -8960,6 +10927,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "die Anmeldung hat zu lange gedauert"
+          }
+        }
+      }
+    },
+    "the OpenVPN engine handles this itself" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "das erledigt die OpenVPN-Engine selbst"
           }
         }
       }
@@ -9382,6 +11360,50 @@
         }
       }
     },
+    "unknown key; kept for export, not applied" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unbekannter Schlüssel; für den Export behalten, nicht angewendet"
+          }
+        }
+      }
+    },
+    "web sign-in isn't supported; the setting is removed" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Web-Anmeldung wird nicht unterstützt; die Einstellung wird entfernt"
+          }
+        }
+      }
+    },
+    "your Mac isn't connected to a network" : {
+      "comment" : "Error reason fragment",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dein Mac ist mit keinem Netzwerk verbunden"
+          }
+        }
+      }
+    },
+    "your cipher list isn't applied; LockPlus's engine negotiates the cipher itself" : {
+      "comment" : "Import reason, ignored directive",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "deine Verschlüsselungsliste wird nicht angewendet; die Engine von LockPlus handelt die Verschlüsselung selbst aus"
+          }
+        }
+      }
+    },
     "“%@” couldn't be saved. Check the folder's permissions and free space." : {
       "comment" : "Export error",
       "localizations" : {
@@ -9389,6 +11411,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "„%@“ konnte nicht gesichert werden. Prüfe die Zugriffsrechte des Ordners und den freien Speicherplatz."
+          }
+        }
+      }
+    },
+    "“%@” has a name longer than 255 bytes and was skipped." : {
+      "comment" : "Zip entry error (2.0.2 round 1)",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "„%@“ hat einen Namen, der länger als 255 Byte ist, und wurde übersprungen."
           }
         }
       }
@@ -9437,13 +11470,13 @@
         }
       }
     },
-    "“%@” is larger than 10 MB and was skipped." : {
+    "“%@” is larger than 1 MB and was skipped." : {
       "comment" : "Zip entry error (cap)",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "„%@“ ist größer als 10 MB und wurde übersprungen."
+            "value" : "„%@“ ist größer als 1 MB und wurde übersprungen."
           }
         }
       }
@@ -9492,1404 +11525,13 @@
         }
       }
     },
-    "Checking whether %@ restarts…" : {
-      "comment" : "Row 12a: a kill-switch profile stopped with an error that may be a tunnel-process crash; macOS may restart it (≤ 10 s). The argument is a profile name",
+    "Too many files were opened at once. Import the rest with File › Import… once these are done." : {
+      "comment" : "Import error (2.0.2 round 2): more than 5 open events were waiting",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "LockPlus prüft, ob %@ neu startet…"
-          }
-        }
-      }
-    },
-    "%@ stopped unexpectedly. Not protected meanwhile." : {
-      "comment" : "Row 12a, a restart may follow; the argument is a profile name",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ wurde unerwartet beendet. Währenddessen nicht geschützt."
-          }
-        }
-      }
-    },
-    "Checking %@…" : {
-      "comment" : "Menu header, row 12a: macOS may restart the profile after an unexpected stop",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ wird geprüft…"
-          }
-        }
-      }
-    },
-    "LockPlus is checking whether %@'s tunnel process restarts." : {
-      "comment" : "Help on a disabled Connect while a restart by macOS may follow an unexpected stop (review e321e10)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LockPlus prüft, ob der Tunnelprozess von %@ neu startet."
-          }
-        }
-      }
-    },
-    "Checking whether %@ starts…" : {
-      "comment" : "Row 12a: LockPlus's own start ended before any status; macOS may still start the profile (≤ 10 s). The argument is a profile name",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LockPlus prüft, ob %@ startet…"
-          }
-        }
-      }
-    },
-    "The start ended early. Not protected meanwhile." : {
-      "comment" : "Row 12a, the start ended early; a start by macOS may follow",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Der Start wurde vorzeitig beendet. Währenddessen nicht geschützt."
-          }
-        }
-      }
-    },
-    "Waiting for a network to connect %@…" : {
-      "comment" : "Row 12a (E2E-4 200011): the Mac has no network; LockPlus starts the profile when one is available. The argument is a profile name",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Warten auf ein Netzwerk, um %@ zu verbinden…"
-          }
-        }
-      }
-    },
-    "Not protected until a network is available." : {
-      "comment" : "Row 12a, waiting for a network",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nicht geschützt, bis ein Netzwerk verfügbar ist."
-          }
-        }
-      }
-    },
-    "%@ connects when a network is available." : {
-      "comment" : "Row 12a (E2E-4 200011): macOS refused the start for want of a network and starts the profile by itself when one returns. The argument is a profile name",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ verbindet sich, sobald ein Netzwerk verfügbar ist."
-          }
-        }
-      }
-    },
-    "Your Mac isn't connected to a network." : {
-      "comment" : "Error message (E2E-4 200011: macOS ended the VPN session because there was no network)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dein Mac ist mit keinem Netzwerk verbunden."
-          }
-        }
-      }
-    },
-    "another LockPlus profile is connected" : {
-      "comment" : "Error reason fragment",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ein anderes LockPlus-Profil ist verbunden"
-          }
-        }
-      }
-    },
-    "another LockPlus connection is active (another user's, or one LockPlus can't show)" : {
-      "comment" : "Error reason fragment",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "eine andere LockPlus-Verbindung ist aktiv (die eines anderen Benutzers oder eine, die LockPlus nicht anzeigen kann)"
-          }
-        }
-      }
-    },
-    "another LockPlus profile with the kill switch took over" : {
-      "comment" : "Error reason fragment",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ein anderes LockPlus-Profil mit Kill Switch hat übernommen"
-          }
-        }
-      }
-    },
-    "your Mac isn't connected to a network" : {
-      "comment" : "Error reason fragment",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "dein Mac ist mit keinem Netzwerk verbunden"
-          }
-        }
-      }
-    },
-    "Waiting for a network…" : {
-      "comment" : "Menu header, row 12a (E2E-4 200011): a start waits for a network",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Warten auf ein Netzwerk…"
-          }
-        }
-      }
-    },
-    "LockPlus connects %@ when a network is available." : {
-      "comment" : "Help on a disabled Connect while a start waits for a network (E2E-4 200011)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LockPlus verbindet %@, sobald ein Netzwerk verfügbar ist."
-          }
-        }
-      }
-    },
-    "LockPlus stopped waiting for a network to connect %@. Connect %@ again if you need it." : {
-      "comment" : "Problem: the user's Cancel or Disconnect also ended another profile's Connect that waited for a network (review f0c8c57)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LockPlus wartet nicht mehr auf ein Netzwerk, um %1$@ zu verbinden. Verbinde %2$@ erneut, wenn du es brauchst."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "LockPlus stopped waiting for a network to connect %1$@. Connect %2$@ again if you need it."
-          }
-        }
-      }
-    },
-    "LockPlus is checking whether %@'s tunnel process starts." : {
-      "comment" : "Help on a disabled Connect while the start ended early and macOS may still start it (L-3 copy)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LockPlus prüft, ob der Tunnelprozess von %@ startet."
-          }
-        }
-      }
-    },
-    "Tunnel component not allowed" : {
-      "comment" : "Menu header, row 1 (short for 'The tunnel component isn't allowed yet')",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tunnelkomponente nicht erlaubt"
-          }
-        }
-      }
-    },
-    "Tunnel component turned off" : {
-      "comment" : "Menu header, row 1 (short for 'The tunnel component is turned off in System Settings')",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tunnelkomponente ausgeschaltet"
-          }
-        }
-      }
-    },
-    "Tunnel component removed" : {
-      "comment" : "Menu header, row 1 (short for 'The tunnel component was removed during the update')",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tunnelkomponente entfernt"
-          }
-        }
-      }
-    },
-    "Tunnel component damaged" : {
-      "comment" : "Menu header, row 1 (short for 'The tunnel component is damaged')",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tunnelkomponente beschädigt"
-          }
-        }
-      }
-    },
-    "Restart needed" : {
-      "comment" : "Menu header, row 1 (short for 'Restart your Mac to finish installing the tunnel component')",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Neustart nötig"
-          }
-        }
-      }
-    },
-    "Auto-connect paused for %@" : {
-      "comment" : "Menu header, rows 3b, 8, 13a; the error sentence follows below",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Automatisches Verbinden für %@ pausiert"
-          }
-        }
-      }
-    },
-    "Switching to %@…" : {
-      "comment" : "Menu header, profile switch; the argument is a profile name",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wechsel zu %@…"
-          }
-        }
-      }
-    },
-    "Not protected for a moment." : {
-      "comment" : "Menu header, profile switch",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Für einen Moment nicht geschützt."
-          }
-        }
-      }
-    },
-    "%@ isn't responding" : {
-      "comment" : "Menu header, row 4a, link unavailable; the argument is a profile name",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ antwortet nicht"
-          }
-        }
-      }
-    },
-    "The tunnel process doesn't answer." : {
-      "comment" : "Menu header, row 4a, link unavailable",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Der Tunnelprozess reagiert nicht."
-          }
-        }
-      }
-    },
-    "New code needed for %@" : {
-      "comment" : "Menu header, row 9; the argument is a profile name",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Neuer Code für %@ nötig"
-          }
-        }
-      }
-    },
-    "Stopped, not protected" : {
-      "comment" : "Menu header, row 14; the error sentence follows below",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gestoppt, nicht geschützt"
-          }
-        }
-      }
-    },
-    "%@ The old LockPlus used: %@. Auto-Connect uses one profile for every untrusted network." : {
-      "comment" : "Migration report: the per-network map that isn't migrated (E2E-5 F6); the second argument lists network → profile",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ Das alte LockPlus verwendete: %2$@. Auto-Connect verwendet ein Profil für alle nicht vertrauenswürdigen Netzwerke."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ The old LockPlus used: %2$@. Auto-Connect uses one profile for every untrusted network."
-          }
-        }
-      }
-    },
-    "%@. %@" : {
-      "comment" : "§4.5 strip: a title, then its message",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@. %2$@"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@. %2$@"
-          }
-        }
-      }
-    },
-    "%@: %@ (and %lld more in the profile's import report)" : {
-      "comment" : "Migration report, needs attention: profile name, the first reason, the number of further reasons (E2E-5 F6)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@: %2$@ (weitere im Importbericht des Profils: %3$lld)"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@: %2$@ (and %3$lld more in the profile's import report)"
-          }
-        }
-      }
-    },
-    "%@: %@ ignored; LockPlus doesn't need these lines." : {
-      "comment" : "Migration report, information: harmless ignored directives (E2E-5 F6)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@: %2$@ ignoriert; LockPlus braucht diese Zeilen nicht."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@: %2$@ ignored; LockPlus doesn't need these lines."
-          }
-        }
-      }
-    },
-    "%@: the saved username was imported; the old LockPlus kept no password, so LockPlus asks for it on connect." : {
-      "comment" : "Migration report: a Go item with the username only (E2E-5 F7)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@: Der gesicherte Benutzername wurde importiert. Das alte LockPlus hat kein Passwort gesichert, deshalb fragt LockPlus beim Verbinden danach."
-          }
-        }
-      }
-    },
-    "A saved password from an older version can't be imported; enter it again on first connect." : {
-      "comment" : "Migration report note (§6.7)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ein gesichertes Passwort aus einer älteren Version kann nicht importiert werden. Gib es beim ersten Verbinden erneut ein."
-          }
-        }
-      }
-    },
-    "Auto-reconnect is now built in." : {
-      "comment" : "Migration report note per profile (§13.1 step 4)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Automatisches Wiederverbinden ist jetzt eingebaut."
-          }
-        }
-      }
-    },
-    "Copies profiles, settings and history from LockPlus 1.x. Profiles already imported are skipped." : {
-      "comment" : "Settings › Advanced footer (E2E-5 F4)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kopiert Profile, Einstellungen und Verlauf aus LockPlus 1.x. Bereits importierte Profile werden übersprungen."
-          }
-        }
-      }
-    },
-    "DNS now always goes through the tunnel; the old app's DNS protection setting isn't needed." : {
-      "comment" : "Migration report note (§13.1 step 4)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "DNS läuft jetzt immer durch den Tunnel; die DNS-Schutz-Einstellung der alten App wird nicht mehr gebraucht."
-          }
-        }
-      }
-    },
-    "Finish Import" : {
-      "comment" : "Button: finish an earlier migration with no profiles left to copy (E2E-5 F4)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Import abschließen"
-          }
-        }
-      }
-    },
-    "Finish Import…" : {
-      "comment" : "Button, banner (E2E-5 F4)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Import abschließen…"
-          }
-        }
-      }
-    },
-    "Finish importing from LockPlus 1.x" : {
-      "comment" : "Migration offer title when an earlier import didn't finish (E2E-5 F4)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Import aus LockPlus 1.x abschließen"
-          }
-        }
-      }
-    },
-    "Good to know" : {
-      "comment" : "Migration report: information, nothing to do (E2E-5 F6)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gut zu wissen"
-          }
-        }
-      }
-    },
-    "Import from Old LockPlus" : {
-      "comment" : "Migration sheet title (E2E-5 F4)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aus altem LockPlus importieren"
-          }
-        }
-      }
-    },
-    "Importing from LockPlus 1.x didn't finish." : {
-      "comment" : "Banner (E2E-5 F4)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Der Import aus LockPlus 1.x wurde nicht abgeschlossen."
-          }
-        }
-      }
-    },
-    "Information" : {
-      "comment" : "Accessibility",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Information"
-          }
-        }
-      }
-    },
-    "LockPlus copies them. The old LockPlus's files stay as they are." : {
-      "comment" : "Onboarding migration (E2E-5 F7: after a Finder Replace the old app is gone, so it can't \"keep working\")",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LockPlus kopiert sie. Die Dateien des alten LockPlus bleiben unverändert."
-          }
-        }
-      }
-    },
-    "LockPlus wants to remove the helper of the old LockPlus (1.x)." : {
-      "comment" : "Administrator dialog prompt (E2E-5 F1)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LockPlus möchte das Hilfsprogramm des alten LockPlus (1.x) entfernen."
-          }
-        }
-      }
-    },
-    "Looking for LockPlus 1.x…" : {
-      "comment" : "Migration sheet progress (E2E-5 F4)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Suche nach LockPlus 1.x…"
-          }
-        }
-      }
-    },
-    "Open LockPlus at login" : {
-      "comment" : "Migration report offer (E2E-5 F5)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LockPlus bei der Anmeldung öffnen"
-          }
-        }
-      }
-    },
-    "Open at Login" : {
-      "comment" : "Button, banner (E2E-5 F5)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bei Anmeldung öffnen"
-          }
-        }
-      }
-    },
-    "Per-network profile choices aren't supported yet." : {
-      "comment" : "Migration report note (§13.1 step 7)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profile pro Netzwerk werden noch nicht unterstützt."
-          }
-        }
-      }
-    },
-    "Remove Old Helper…" : {
-      "comment" : "Button, §4.5 banner (E2E-5 F1); macOS asks for an administrator password",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Altes Hilfsprogramm entfernen…"
-          }
-        }
-      }
-    },
-    "Removing the old LockPlus helper…" : {
-      "comment" : "§4.5 banner while the removal runs (E2E-5 F1)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das Hilfsprogramm des alten LockPlus wird entfernt…"
-          }
-        }
-      }
-    },
-    "System Settings › General › Login Items may still list the old LockPlus. Turn it off there; LockPlus has its own setting." : {
-      "comment" : "Migration report: Go 1.1's login item can't be removed by LockPlus (E2E-5 F5)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "In Systemeinstellungen › Allgemein › Anmeldeobjekte steht eventuell noch das alte LockPlus. Schalte es dort aus; LockPlus hat eine eigene Einstellung."
-          }
-        }
-      }
-    },
-    "The earlier import was finished: settings, Wi-Fi rules and history are now in LockPlus too." : {
-      "comment" : "Migration report: a resumed migration (E2E-5 F4)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Der frühere Import wurde abgeschlossen: Einstellungen, WLAN-Regeln und Verlauf sind jetzt auch in LockPlus."
-          }
-        }
-      }
-    },
-    "The installed helper doesn't match the old LockPlus helper, so LockPlus didn't change anything." : {
-      "comment" : "§4.5 removal refused: unexpected files (E2E-5 F1)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das installierte Hilfsprogramm passt nicht zum Hilfsprogramm des alten LockPlus, deshalb hat LockPlus nichts verändert."
-          }
-        }
-      }
-    },
-    "The old LockPlus helper is still installed. LockPlus can remove it; macOS asks for an administrator password." : {
-      "comment" : "§4.5 banner (E2E-5 F1)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das Hilfsprogramm des alten LockPlus ist noch installiert. LockPlus kann es entfernen; macOS fragt dafür nach einem Administratorpasswort."
-          }
-        }
-      }
-    },
-    "The old LockPlus helper was removed." : {
-      "comment" : "§4.5 removal result (E2E-5 F1)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das Hilfsprogramm des alten LockPlus wurde entfernt."
-          }
-        }
-      }
-    },
-    "The old LockPlus helper was removed. Its last connection ended in a crash and left network routes behind: if LockPlus can't connect to a server, restart your Mac." : {
-      "comment" : "§4.5 removal result: the old helper had crashed with a tunnel up, its endpoint routes stay until a restart (E2E-7 F3)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das Hilfsprogramm des alten LockPlus wurde entfernt. Seine letzte Verbindung endete mit einem Absturz und hat Netzwerkrouten hinterlassen: Wenn LockPlus keine Verbindung zu einem Server herstellen kann, starte deinen Mac neu."
-          }
-        }
-      }
-    },
-    "The old LockPlus may have left its firewall on. If connecting fails, restart your Mac." : {
-      "comment" : "§4.5 warning (E2E-5 F7)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das alte LockPlus hat seine Firewall eventuell eingeschaltet gelassen. Wenn das Verbinden fehlschlägt, starte deinen Mac neu."
-          }
-        }
-      }
-    },
-    "The old LockPlus opened at login." : {
-      "comment" : "Migration report offer explanation (E2E-5 F5)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das alte LockPlus wurde bei der Anmeldung geöffnet."
-          }
-        }
-      }
-    },
-    "The old LockPlus opened at login. Open LockPlus at login instead?" : {
-      "comment" : "Banner (E2E-5 F5)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das alte LockPlus wurde bei der Anmeldung geöffnet. Stattdessen LockPlus bei der Anmeldung öffnen?"
-          }
-        }
-      }
-    },
-    "The old LockPlus's helper is still installed. If the old LockPlus offers its update to 1.2, that update removes the helper; otherwise choose “Remove Old Helper…” in the LockPlus window." : {
-      "comment" : "Migration report final note while the Go helper is installed (E2E-5 F7)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das Hilfsprogramm des alten LockPlus ist noch installiert. Wenn das alte LockPlus sein Update auf 1.2 anbietet, entfernt dieses Update das Hilfsprogramm; sonst wähle „Altes Hilfsprogramm entfernen…“ im LockPlus-Fenster."
-          }
-        }
-      }
-    },
-    "The old helper couldn't be removed completely. Restart your Mac and try again." : {
-      "comment" : "§4.5 removal incomplete (E2E-5 F1)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das alte Hilfsprogramm konnte nicht vollständig entfernt werden. Starte deinen Mac neu und versuche es erneut."
-          }
-        }
-      }
-    },
-    "The old helper couldn't be removed: %@" : {
-      "comment" : "§4.5 removal failed; the argument is the system's message (E2E-5 F1)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das alte Hilfsprogramm konnte nicht entfernt werden: %@"
-          }
-        }
-      }
-    },
-    "The old helper wasn't removed because the administrator password was cancelled. It is still installed." : {
-      "comment" : "§4.5 removal cancelled (E2E-5 F1)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das alte Hilfsprogramm wurde nicht entfernt, weil die Eingabe des Administratorpassworts abgebrochen wurde. Es ist weiterhin installiert."
-          }
-        }
-      }
-    },
-    "There's nothing to import: LockPlus 1.x's profiles aren't on this Mac, or they're all imported already." : {
-      "comment" : "Migration sheet: nothing found (E2E-5 F4)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Es gibt nichts zu importieren: Die Profile von LockPlus 1.x sind nicht auf diesem Mac oder bereits alle importiert."
-          }
-        }
-      }
-    },
-    "When you're happy, you can delete the old LockPlus if it's still in Applications." : {
-      "comment" : "Migration report final note without a Go helper (E2E-5 F7)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wenn alles passt, kannst du das alte LockPlus löschen, falls es noch im Ordner „Programme“ liegt."
-          }
-        }
-      }
-    },
-    "You can also import from the old LockPlus later, in Settings › Advanced." : {
-      "comment" : "Onboarding migration: skipping isn't final (E2E-5 F4)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Du kannst auch später aus dem alten LockPlus importieren, unter Einstellungen › Erweitert."
-          }
-        }
-      }
-    },
-    "macOS asks for your login keychain password, usually your Mac login password, once for each: ^[%lld prompt](inflect: true). You can also skip this and enter them on first connect." : {
-      "comment" : "Onboarding migration opt-in explanation (§6.7, E2E-5 F7: the prompt asks for the login keychain password, not just a click)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "macOS fragt für jede einmal nach dem Passwort deines Anmeldeschlüsselbunds, meist dein Mac-Anmeldepasswort: ^[%lld Abfrage](inflect: true). Du kannst dies auch überspringen und sie beim ersten Verbinden eingeben."
-          }
-        }
-      }
-    },
-    "An earlier import didn't finish. LockPlus adds what's missing: the remaining profiles, settings, Wi-Fi rules, history and saved logins." : {
-      "comment" : "Migration offer when an earlier import didn't finish (E2E-5 F4)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ein früherer Import wurde nicht abgeschlossen. LockPlus ergänzt, was fehlt: die übrigen Profile, Einstellungen, WLAN-Regeln, den Verlauf und gesicherte Anmeldedaten."
-          }
-        }
-      }
-    },
-    "Import saved OpenVPN logins" : {
-      "comment" : "Onboarding migration opt-in (§6.7, E2E-5 F7)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gesicherte OpenVPN-Anmeldedaten importieren"
-          }
-        }
-      }
-    },
-    "^[%lld profile](inflect: true) · ^[%lld saved login](inflect: true)" : {
-      "comment" : "Onboarding migration counts (E2E-5 F7)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "^[%1$lld Profil](inflect: true) · ^[%2$lld gesicherte Anmeldung](inflect: true)"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "^[%1$lld profile](inflect: true) · ^[%2$lld saved login](inflect: true)"
-          }
-        }
-      }
-    },
-    "Quit the old LockPlus first, then remove its helper. While it runs, it would install the helper again." : {
-      "comment" : "§4.5 removal refused while the Go app runs (review E2E-5 F1-1)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Beende zuerst das alte LockPlus und entferne dann sein Hilfsprogramm. Solange es läuft, würde es das Hilfsprogramm erneut installieren."
-          }
-        }
-      }
-    },
-    "The old LockPlus helper is still installed. Quit the old LockPlus first; then LockPlus can remove its helper." : {
-      "comment" : "§4.5 banner while the Go app runs (review E2E-5 F1-1)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das Hilfsprogramm des alten LockPlus ist noch installiert. Beende zuerst das alte LockPlus; dann kann LockPlus sein Hilfsprogramm entfernen."
-          }
-        }
-      }
-    },
-    "The old LockPlus helper was removed, but it left network settings behind. If websites don't load, set DNS back to Automatic in System Settings › Network, then restart your Mac." : {
-      "comment" : "§4.5 removal result (review E2E-5 F1-2: a restart clears pf, not DNS)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das Hilfsprogramm des alten LockPlus wurde entfernt, hat aber Netzwerkeinstellungen hinterlassen. Wenn Websites nicht laden, stelle DNS in Systemeinstellungen › Netzwerk wieder auf „Automatisch“ und starte deinen Mac neu."
-          }
-        }
-      }
-    },
-    "The old LockPlus left network settings behind. If websites don't load, set DNS back to Automatic in System Settings › Network, then restart your Mac." : {
-      "comment" : "§4.5 banner (review E2E-5 F1-2: a restart clears pf, not DNS)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das alte LockPlus hat Netzwerkeinstellungen hinterlassen. Wenn Websites nicht laden, stelle DNS in Systemeinstellungen › Netzwerk wieder auf „Automatisch“ und starte deinen Mac neu."
-          }
-        }
-      }
-    },
-    "%@ couldn't connect because another LockPlus profile is connected. Its kill switch isn't active." : {
-      "comment" : "Notification body (2.0.1 review H1); profile name",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ konnte keine Verbindung herstellen, weil ein anderes LockPlus-Profil verbunden ist. Sein Kill Switch ist nicht aktiv."
-          }
-        }
-      }
-    },
-    "%@ stopped: %@." : {
-      "comment" : "Problem (2.0.1 review H1): a profile was ended for another profile's kill-switch start",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ wurde beendet: %2$@."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ stopped: %2$@."
-          }
-        }
-      }
-    },
-    "%@ couldn't connect: %@." : {
-      "comment" : "Problem: a start made elsewhere (System Settings) was refused while another profile is current (E2E-4 200012)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ konnte keine Verbindung herstellen: %2$@."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ couldn't connect: %2$@."
-          }
-        }
-      }
-    },
-    "LockPlus is quitting." : {
-      "comment" : "Editor error: the app is quitting (pre-release review)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LockPlus wird beendet."
-          }
-        }
-      }
-    },
-    "Not every profile could be imported, so settings, Wi-Fi rules and history weren't imported yet. Choose Finish Import to try again." : {
-      "comment" : "Migration report: a profile failed; the global steps wait for the retry (pre-release review M2)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nicht jedes Profil konnte importiert werden, deshalb wurden Einstellungen, WLAN-Regeln und Verlauf noch nicht importiert. Wähle „Import abschließen“, um es erneut zu versuchen."
-          }
-        }
-      }
-    },
-    "A file of the old LockPlus helper is still installed. LockPlus can remove it; macOS asks for an administrator password." : {
-      "comment" : "§4.5 banner: only the helper's binary is left (Fable pre-release A-4)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Eine Datei des Hilfsprogramms des alten LockPlus ist noch installiert. LockPlus kann sie entfernen; macOS fragt dafür nach einem Administratorpasswort."
-          }
-        }
-      }
-    },
-    "The old LockPlus is still connected or its kill switch is on, so its helper wasn't removed. Disconnect in the old LockPlus first, or restart your Mac, then try again. If you also use WireGuide, its kill switch counts too: turn it off for the removal." : {
-      "comment" : "§4.5 removal refused (E2E-5 F1; migration matrix: the pf anchor is shared with upstream WireGuide)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das alte LockPlus ist noch verbunden oder sein Kill Switch ist an, deshalb wurde sein Hilfsprogramm nicht entfernt. Trenne zuerst die Verbindung im alten LockPlus oder starte deinen Mac neu und versuche es dann erneut. Wenn du auch WireGuide verwendest, zählt dessen Kill Switch ebenfalls: Schalte ihn für das Entfernen aus."
-          }
-        }
-      }
-    },
-    "%@: the old LockPlus kept this password in the System keychain, which LockPlus can't read. Enter it again on first connect." : {
-      "comment" : "Migration report: a System keychain item of LockPlus 1.0.65 and older (migration matrix)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@: Das alte LockPlus hat dieses Passwort im System-Schlüsselbund gesichert, den LockPlus nicht lesen kann. Gib es bei der ersten Verbindung erneut ein."
-          }
-        }
-      }
-    },
-    "LockPlus replaces it. You can put it back from the Trash." : {
-      "comment" : "Confirmation message (migration matrix)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LockPlus ersetzt es. Du kannst es aus dem Papierkorb zurücklegen."
-          }
-        }
-      }
-    },
-    "Move WireGuide+ to the Trash?" : {
-      "comment" : "Confirmation: the old WireGuide+ app (migration matrix)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WireGuide+ in den Papierkorb legen?"
-          }
-        }
-      }
-    },
-    "Move to Trash" : {
-      "comment" : "Button, confirmation (migration matrix)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "In den Papierkorb legen"
-          }
-        }
-      }
-    },
-    "Move to Trash…" : {
-      "comment" : "Button, banner: the old WireGuide+ app (migration matrix)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "In den Papierkorb legen…"
-          }
-        }
-      }
-    },
-    "WireGuide's profiles (the separate app) are on this Mac too. LockPlus doesn't import them on its own: choose Import Profile… and pick them in ~/Library/Application Support/wireguide/tunnels." : {
-      "comment" : "Migration report: upstream WireGuide's directory is never imported automatically (migration matrix)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Auf diesem Mac sind auch Profile von WireGuide (der separaten App). LockPlus importiert sie nicht von selbst: Wähle „Profil importieren…“ und wähle sie in ~/Library/Application Support/wireguide/tunnels aus."
-          }
-        }
-      }
-    },
-    "WireGuide+ couldn't be moved to the Trash. Drag it from Applications to the Trash yourself." : {
-      "comment" : "Banner: moving the old app failed (migration matrix)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WireGuide+ konnte nicht in den Papierkorb gelegt werden. Ziehe es selbst aus „Programme“ in den Papierkorb."
-          }
-        }
-      }
-    },
-    "WireGuide+, the old version of LockPlus, is still installed. LockPlus replaces it." : {
-      "comment" : "Banner: the old WireGuide+ app is still installed (migration matrix)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WireGuide+, die alte Version von LockPlus, ist noch installiert. LockPlus ersetzt es."
-          }
-        }
-      }
-    },
-    "WireGuide+, the old version of LockPlus, is still running. Quit it, then you can move it to the Trash." : {
-      "comment" : "Banner: the old WireGuide+ app runs (migration matrix)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WireGuide+, die alte Version von LockPlus, läuft noch. Beende es, dann kannst du es in den Papierkorb legen."
-          }
-        }
-      }
-    },
-    "The old LockPlus helper isn't running, and the DNS settings it changed may still be active. Open the old LockPlus once so its helper restores DNS, or set DNS back to Automatic in System Settings › Network and try again, or restart your Mac." : {
-      "comment" : "§4.5 removal refused: un-replayed DNS journal, the old app is installed (E2E-6 N1)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das Hilfsprogramm des alten LockPlus läuft nicht, und die DNS-Einstellungen, die es geändert hat, sind vielleicht noch aktiv. Öffne das alte LockPlus einmal, damit sein Hilfsprogramm DNS wiederherstellt, oder stelle DNS in Systemeinstellungen › Netzwerk wieder auf „Automatisch“ und versuche es erneut, oder starte deinen Mac neu."
-          }
-        }
-      }
-    },
-    "The old LockPlus helper isn't running, and the DNS settings it changed may still be active. Set DNS back to Automatic in System Settings › Network and try again, or restart your Mac." : {
-      "comment" : "§4.5 removal refused: un-replayed DNS journal, no old app to open (E2E-6 N1)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das Hilfsprogramm des alten LockPlus läuft nicht, und die DNS-Einstellungen, die es geändert hat, sind vielleicht noch aktiv. Stelle DNS in Systemeinstellungen › Netzwerk wieder auf „Automatisch“ und versuche es erneut, oder starte deinen Mac neu."
-          }
-        }
-      }
-    },
-    "The old LockPlus left its DNS protection on. Restart your Mac to clear it, then remove the helper." : {
-      "comment" : "§4.5 removal refused: only 1.0.x's port-53 pf rules are left (E2E-6 N2)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das alte LockPlus hat seinen DNS-Schutz eingeschaltet gelassen. Starte deinen Mac neu, um ihn zu entfernen, und entferne danach das Hilfsprogramm."
-          }
-        }
-      }
-    },
-    "The old LockPlus still seems to be connected, so its helper wasn't removed. Disconnect LockPlus and try again: its connection can look like one of the old LockPlus. If that doesn't help, disconnect in the old LockPlus or restart your Mac." : {
-      "comment" : "§4.5 removal refused by root while LockPlus itself is connected (E2E-7 F3: its utun can reuse a crashed old tunnel's number)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das alte LockPlus scheint noch verbunden zu sein, deshalb wurde sein Hilfsprogramm nicht entfernt. Trenne die Verbindung in LockPlus und versuche es erneut: Seine Verbindung kann wie eine des alten LockPlus aussehen. Hilft das nicht, trenne die Verbindung im alten LockPlus oder starte deinen Mac neu."
-          }
-        }
-      }
-    },
-    "The old helper isn't responding. Restart your Mac, then remove it." : {
-      "comment" : "§4.5 removal refused: the helper's socket doesn't answer (Fable follow-up LOW-3)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das alte Hilfsprogramm reagiert nicht. Starte deinen Mac neu und entferne es dann."
-          }
-        }
-      }
-    },
-    "Restart your Mac — the old helper then restores your DNS settings — then remove it." : {
-      "comment" : "§4.5 removal refused: the journal holds the user's own DNS servers (review 650b251)",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Starte deinen Mac neu – das alte Hilfsprogramm stellt dann deine DNS-Einstellungen wieder her – und entferne es danach."
-          }
-        }
-      }
-    },
-    "macOS will ask to add VPN configurations first: choose “Allow”. The keychain prompts follow." : {
-      "comment" : "Onboarding step 4 hint by the import button, with saved logins included",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "macOS fragt zuerst, ob VPN-Konfigurationen hinzugefügt werden dürfen: Wähle „Erlauben“. Danach folgen die Schlüsselbund-Abfragen."
-          }
-        }
-      }
-    },
-    "macOS will ask to add VPN configurations: choose “Allow”." : {
-      "comment" : "Onboarding step 4 hint by the import button",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "macOS fragt, ob VPN-Konfigurationen hinzugefügt werden dürfen: Wähle „Erlauben“."
-          }
-        }
-      }
-    },
-    "^[%lld directive](inflect: true) not applied" : {
-      "comment" : "Import report summary; directives whose behaviour LockPlus does not apply (scripts, certificate pin, web sign-in, WireGuard settings)",
-      "localizations" : {
-        "de" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Direktive nicht angewendet"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Direktiven nicht angewendet"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "macOS has already allowed LockPlus to add VPN configurations." : {
-      "comment" : "Onboarding step 3 with no profile but an existing VPN configuration: nothing more to allow",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "macOS hat LockPlus bereits erlaubt, VPN-Konfigurationen hinzuzufügen."
-          }
-        }
-      }
-    },
-    "keepalive is set, which takes precedence" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "keepalive ist gesetzt und hat Vorrang"
-          }
-        }
-      }
-    },
-    "web sign-in isn't supported; the setting is removed" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Web-Anmeldung wird nicht unterstützt; die Einstellung wird entfernt"
-          }
-        }
-      }
-    },
-    "not applied on macOS" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "unter macOS nicht angewendet"
-          }
-        }
-      }
-    },
-    "unknown key; kept for export, not applied" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "unbekannter Schlüssel; für den Export behalten, nicht angewendet"
-          }
-        }
-      }
-    },
-    "lines starting with ';' are skipped" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zeilen, die mit „;“ beginnen, werden übersprungen"
-          }
-        }
-      }
-    },
-    "not supported; the certificate chain is still verified, use peer-fingerprint to pin the server" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "nicht unterstützt; die Zertifikatskette wird trotzdem geprüft, mit peer-fingerprint legst du den Server fest"
-          }
-        }
-      }
-    },
-    "your cipher list isn't applied; LockPlus's engine negotiates the cipher itself" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "deine Verschlüsselungsliste wird nicht angewendet; die Engine von LockPlus handelt die Verschlüsselung selbst aus"
-          }
-        }
-      }
-    },
-    "LockPlus accepts compressed data from the server (asym); “no” isn't enforced" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LockPlus akzeptiert komprimierte Daten vom Server (asym); „no“ wird nicht erzwungen"
-          }
-        }
-      }
-    },
-    "rekey/replay tuning isn't applied; LockPlus uses the engine's defaults" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Feineinstellungen für Neuverhandlung und Replay-Schutz werden nicht angewendet; LockPlus nutzt die Standardwerte der Engine"
-          }
-        }
-      }
-    },
-    "LockPlus routes via the tunnel gateway" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LockPlus routet über das Gateway des Tunnels"
-          }
-        }
-      }
-    },
-    "packet size is managed by LockPlus" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "die Paketgröße verwaltet LockPlus"
-          }
-        }
-      }
-    },
-    "routes are managed by LockPlus" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Routen verwaltet LockPlus"
-          }
-        }
-      }
-    },
-    "the OpenVPN engine handles this itself" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "das erledigt die OpenVPN-Engine selbst"
-          }
-        }
-      }
-    },
-    "obsolete; the server decides about IPv6" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "veraltet; über IPv6 entscheidet der Server"
-          }
-        }
-      }
-    },
-    "only caps the TLS version; the engine's own limits apply" : {
-      "comment" : "Import reason, ignored directive",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "begrenzt nur die TLS-Version; es gelten die Grenzen der Engine"
-          }
-        }
-      }
-    },
-    "Not applied" : {
-      "comment" : "Copy Report heading: ignored directives whose behaviour isn't applied",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nicht angewendet"
-          }
-        }
-      }
-    },
-    "Not needed" : {
-      "comment" : "Copy Report heading: harmless ignored directives",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nicht nötig"
-          }
-        }
-      }
-    },
-    "Security warnings" : {
-      "comment" : "Copy Report heading",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sicherheitshinweise"
+            "value" : "Zu viele Dateien wurden auf einmal geöffnet. Importiere die übrigen über Ablage › Importieren…, sobald diese erledigt sind."
           }
         }
       }

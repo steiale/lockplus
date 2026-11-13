@@ -176,6 +176,10 @@ final class ConnectionStore {
     @ObservationIgnored private let managers: any VPNManaging
     @ObservationIgnored private let service: any TunnelServicing
     @ObservationIgnored private let profiles: ProfilesStore
+    /// Round 2 (M1a): the extension update's resume record is sealed and checked with the profiles' keys.
+    var profileRepository: ProfileRepository { profiles.repository }
+    /// A line in Diagnostics › Problems (the quiescer's).
+    func noteProblem(_ message: String) { profiles.note(message) }
     @ObservationIgnored private let settings: SettingsStore
     /// The wall clock (settable for tests: round 3 freshness tests advance it).
     @ObservationIgnored var now: @MainActor () -> Date
@@ -197,6 +201,11 @@ final class ConnectionStore {
     /// A restore is in flight (the status line doesn't claim a failure meanwhile).
     var restoring: Bool { restoreTask != nil }
     @ObservationIgnored private var reachedConnected: Set<UUID> = []
+    /// Round 5 (Fable r5 L2, Codex r5 #2): profiles whose latest session this run either started itself (an issued start)
+    /// or saw `.connected`. Only such a session, down in a crash gap or a network-restart hold, may become a pause's signed
+    /// resume target (`signableHold`); a start made elsewhere that never connected (a refused outside start, held for
+    /// a few seconds) never does. Set per session: a new attempt not issued by this app, or an unissued end, clears it.
+    @ObservationIgnored private var resumableSession: Set<UUID> = []
     @ObservationIgnored private var userStops: Set<UUID> = []
     @ObservationIgnored private var userStopsAt: [UUID: Date] = [:]
     /// E2E-4 200012: a user stop of a session never seen active (the Cancel of a held refusal) whose `.disconnected` was
@@ -228,6 +237,10 @@ final class ConnectionStore {
     /// 2.0.1 review L3: when a refusal's Diagnostics line (and notice) was last posted, per profile, and beside which
     /// active profiles (re-check L4: a refusal beside a different set is a new one and is said again).
     @ObservationIgnored private var refusalNotedAt: [UUID: (at: Date, blockers: Set<UUID>)] = [:]
+    /// 2.0.2: when this app last armed a start of the profile (`StartArming`). A 225 within `armWindow` of it is not a start
+    /// "made outside LockPlus" (D-1 Diagnostics rule).
+    @ObservationIgnored private var lastArmedAt: [UUID: Date] = [:]
+    static let armWindow: TimeInterval = ArmLifetime.seconds
     /// E2E-4 200011: an issued start whose first reported status was `.disconnecting` (NE refused it); its `.disconnected`
     /// ends the start like an issued start's own `.disconnected`.
     @ObservationIgnored private var issuedEnding: Set<UUID> = []
@@ -258,6 +271,7 @@ final class ConnectionStore {
         self.settings = settings
         self.now = now
         managers.onStatusChange = { [weak self] id, s in self?.handle(id, s) }
+        profiles.onLoad = { [weak self] in self?.retryOwedPauseValue() }        // round 6 (Codex r6 #3)
         managers.onStrayStatusChange = { [weak self] in self?.strayStatusChanged() }
     }
 
@@ -272,6 +286,8 @@ final class ConnectionStore {
             sawActive.insert(id)
             sessionKillSwitch[id] = managerKillSwitch(id)
             if status == .connected { reachedConnected.insert(id) }
+            // Round 6 (Fable r6 L1): `.reasserting` was connected too (NE reconnects it).
+            if status == .connected || status == .reasserting { resumableSession.insert(id) }
         }
         resumeNetworkRestartAtLaunch()        // E2E-4 200011: before the restore below, and before an expired pause resumes
         resumePauseAtLaunch()
@@ -306,6 +322,9 @@ final class ConnectionStore {
             return
         }
         let previous = statuses[id]
+        // Round 7 (Fable r7 L1): NE's restart of a hold a Pause could sign an instant ago (a crash gap or a verified
+        // network-restart hold of a session this run started or saw connected) stays signable while it is `.connecting`.
+        let wasSignableHold = signableHold == id
         statuses[id] = status
         if status == .disconnecting, previous?.isLive != true, userStopSettled.remove(id) != nil {
             log.notice("\(id.uuidString.prefix(8), privacy: .public): a new session after the user's stop; the stop no longer applies")
@@ -345,6 +364,7 @@ final class ConnectionStore {
             if !sawActive.contains(id) {
                 // A new attempt: the previous error belongs to the past.
                 sawActive.insert(id)
+                if !issued, !wasSignableHold { resumableSession.remove(id) }
                 attemptGeneration[id, default: 0] &+= 1
                 if !ours { sessionKillSwitch[id] = managerKillSwitch(id) }     // a session we didn't start (N6)
                 resetSnapshotEpoch()
@@ -377,6 +397,7 @@ final class ConnectionStore {
                     } else { onNotice?(.connected(id)) }
                 }
                 reachedConnected.insert(id)
+                resumableSession.insert(id)
                 if connectedAt[id] == nil || previous != .connected && previous != .reasserting { connectedAt[id] = now() }
                 if id == currentID, connectedSince == nil { connectedSince = connectedAt[id] }
                 crashes.connected(id, at: now())
@@ -397,6 +418,7 @@ final class ConnectionStore {
             let unwatchedEnd = previous == .disconnecting && pending[id]?.teardown == true
             let refusalEnd = refusalStopping.remove(id) != nil && previous == .disconnecting
             let neverActive = !sawActive.contains(id)
+            if neverActive, !issuedStartEnded { resumableSession.remove(id) }      // round 5: a start made elsewhere
             var held = false
             if sawActive.remove(id) != nil { observedDisconnect(id) }
             else if issuedStartEnded || unwatchedEnd, !userStops.contains(id), mayBeRestartedByNE(id), isOwnProfile(id) {
@@ -535,7 +557,15 @@ final class ConnectionStore {
     /// active, Cancel, a newer start), and the record goes again.
     @discardableResult
     private func holdForNetworkRestart(_ id: UUID, replacing token: UInt64) async -> Bool {
-        await settings.updateDurably { $0.networkRestartHold = id }
+        // Round 3 (Codex r3 #4): sealed, so a hold read at a later launch is known to be one this app recorded.
+        let tag = await holdRecordOp { repo in
+            do throws(LPError) { return try await repo.sealRecord(.networkRestartHold, AppSettings.networkRestartHoldMessage(id)) } catch {
+                Logger(subsystem: "io.github.steiale.lockplus.mac", category: "connection")
+                    .error("network-restart hold not sealed (\(error.code.rawValue, privacy: .public)); a relaunch drops it")
+                return nil
+            }
+        }
+        await settings.updateDurably { $0.networkRestartHold = id; $0.networkRestartHoldTag = tag }
         guard pending[id]?.token == token else {
             forgetNetworkRestartRecord(id)
             return false
@@ -555,7 +585,62 @@ final class ConnectionStore {
     }
 
     private func forgetNetworkRestartRecord(_ id: UUID) {
-        settings.update { if $0.networkRestartHold == id { $0.networkRestartHold = nil } }
+        if unverifiedHold == id { unverifiedHold = nil }
+        guard settings.value.networkRestartHold == id else { return }
+        settings.update { if $0.networkRestartHold == id { $0.networkRestartHold = nil; $0.networkRestartHoldTag = nil } }
+        consumeHoldRecord()
+    }
+
+    /// Round 3 (Codex r3 #4): the hold's one-time value goes with the hold, so a copy of its record never verifies again.
+    /// Round 4 (Fable N6): joins the chain synchronously, in call order (a hold sealed right after can't be overtaken).
+    func consumeHoldRecord() {
+        _ = enqueueHoldRecordOp { await $0.consumeRecord(.networkRestartHold); return nil }
+    }
+
+    /// Round 3 (Codex r3 #4): seals and consumes of the hold's record run one at a time, in call order (a consume that
+    /// overtook the next hold's seal would invalidate it).
+    @ObservationIgnored private var holdRecordChain: Task<String?, Never>?
+    func holdRecordOp(_ op: @escaping @MainActor (ProfileRepository) async -> String?) async -> String? {
+        await enqueueHoldRecordOp(op).value
+    }
+    private func enqueueHoldRecordOp(_ op: @escaping @MainActor (ProfileRepository) async -> String?) -> Task<String?, Never> {
+        let previous = holdRecordChain, repo = profiles.repository
+        let t = Task { @MainActor in
+            _ = await previous?.value
+            return await op(repo)
+        }
+        holdRecordChain = t
+        return t
+    }
+    /// Tests (round 4, Fable N6): waits for every queued seal and consume of the hold's record.
+    func awaitHoldRecordOps() async { _ = await holdRecordChain?.value }
+
+    /// Round 3 (Codex r3 #4): the hold re-entered at launch until its tag verified. It holds the restore back (doing less
+    /// is safe) but is never a pause's target: an unsigned hold never feeds a resume signature.
+    @ObservationIgnored private(set) var unverifiedHold: UUID?
+
+    /// The network-restart hold that may name a pause's target: one this run recorded, or one whose record verified.
+    private var verifiedNetworkRestartHolder: UUID? { networkRestartHolder.flatMap { $0 == unverifiedHold ? nil : $0 } }
+
+    /// Round 4 (Fable L2d, Codex r4 #3): an own session that ended without a user stop and whose end is being read or whose
+    /// restart (NE's, or ours after the grace) is awaited: the crash gap (`.awaitingRestart`, the session down). A Pause stops it
+    /// like a running session (cancelling that restart).
+    var crashGapHolder: UUID? {
+        pending.first { $0.value.phase == .awaitingRestart && statuses[$0.key]?.isLive != true && isOwnProfile($0.key) }?.key
+    }
+
+    /// Round 5 (Fable r5 L2, Codex r5 #2): the hold a Pause may sign as its resume target: a verified network-restart hold
+    /// or a crash gap, and only of a session this run started itself or saw `.connected` (`resumableSession`). Any other
+    /// hold (a refused start made elsewhere, a hold re-entered at launch) is still stopped by the Pause, unsigned.
+    private var signableHold: UUID? {
+        [verifiedNetworkRestartHolder, crashGapHolder].compactMap { $0 }.first { resumableSession.contains($0) }
+    }
+
+    /// Round 6 (Fable r6 L1): the live session a Pause may sign, by the same rule: one this run started itself or saw
+    /// connected. A start made elsewhere while it is `.connecting` (a refused `scutil --nc start`) is stopped by the
+    /// Pause like every live session (`pause`'s final stop), never signed.
+    private var signableLive: UUID? {
+        statuses.first { $0.value.isActive && resumableSession.contains($0.key) }?.key
     }
 
     /// An issued start that ended before any active status was read, now held as "the start ended early" (`token`): if
@@ -570,12 +655,15 @@ final class ConnectionStore {
             guard let self, self.pending[id]?.token == token, !self.userStops.contains(id), let e = fetched.error else { return }
             // 2.0.1: the extension refused the start beside another LockPlus session that runs. Its own deliberate end,
             // which NE doesn't restart: the hold ends now and the refusal says why.
-            if Self.observedError(e).0.code == .anotherTunnelActive {
-                guard await self.isFreshRefusal(id, since: self.endSeenAt[id], issued: issued) else { return }   // review L1: sticky otherwise
+            let refusedCode = Self.observedError(e).0.code
+            if refusedCode == .anotherTunnelActive || refusedCode == .startNotAuthorised {      // 2.0.2: 225 the same way
+                guard await self.isFreshRefusal(id, since: self.endSeenAt[id], issued: issued, code: refusedCode) else { return }   // review L1: sticky otherwise
                 guard self.pending[id]?.token == token, !self.userStops.contains(id), self.attemptGeneration[id] == gen else { return }
                 log.notice("\(id.uuidString.prefix(8), privacy: .public): refused beside another LockPlus session; NE won't restart it")
                 self.clearPending(id, token: token)
-                self.surfaceRefusal(id, .anotherTunnelActive, self.refusalDetail(id, e.userInfo[LPTunnelError.detailKey] as? String))
+                self.surfaceRefusal(id, refusedCode, refusedCode == .anotherTunnelActive
+                                    ? self.refusalDetail(id, e.userInfo[LPTunnelError.detailKey] as? String)
+                                    : e.userInfo[LPTunnelError.detailKey] as? String)
                 self.restoreIfIdle()
                 return
             }
@@ -602,9 +690,14 @@ final class ConnectionStore {
     /// (code 2 only then).
     private func readRefusal(_ id: UUID, offline: Bool) {
         let fetching = managers, deadline = disconnectErrorTimeout, gen = attemptGeneration[id], issued = startIssuedAt[id]
+        let retrySleep = refusalReadSleep
         Task { @MainActor [weak self] in
-            let fetched = await withDeadline(deadline, onTimeout: FetchedDisconnectError(error: nil, timedOut: true)) { @MainActor in
-                FetchedDisconnectError(error: await fetching.fetchLastDisconnectError(id), timedOut: false)
+            // Round 1 (E2E F6): NE may report `.disconnected` before it stores the refusal; read again while none is there.
+            guard let me = self else { return }
+            let fetched = await me.readDisconnectError(id, fetching: fetching, deadline: deadline, retry: true, untilRefusal: true,
+                                                       sleep: retrySleep) { [weak self] in
+                guard let self else { return false }
+                return attemptGeneration[id] == gen && pending[id] == nil && statuses[id] == .disconnected
             }
             // A newer start or stop of this profile, or a session of it, has its own story.
             guard let self, let ns = fetched.error, pending[id] == nil, !userStops.contains(id),
@@ -620,6 +713,10 @@ final class ConnectionStore {
             } else if observed.code == .anotherTunnelActive {
                 guard await isFreshRefusal(id, since: endSeenAt[id], issued: issued), stillThisAttempt() else { return }
                 surfaceRefusal(id, observed.code, refusalDetail(id, detail))
+            } else if observed.code == .startNotAuthorised {
+                // 2.0.2: a start the owner's LockPlus didn't arm (System Settings, scutil, another app instance).
+                guard await isFreshRefusal(id, since: endSeenAt[id], code: .startNotAuthorised), stillThisAttempt() else { return }
+                surfaceRefusal(id, observed.code, detail)
             } else if observed.code == .supersededByKillSwitch {
                 // Codex final 5: a pending start the extension ended for a kill-switch start, never seen active.
                 guard await isFreshRefusal(id, since: endSeenAt[id], code: .supersededByKillSwitch, window: Self.supersededWindow),
@@ -628,6 +725,36 @@ final class ConnectionStore {
             }
         }
     }
+
+    /// Round 1 (E2E F6, 26.6.2): NE can report `.disconnected` up to ~1 s before it stores the error (the first start
+    /// made outside LockPlus after a launch then showed no reason anywhere). With `retry`, a missing error (or one that
+    /// isn't a refusal) is read again after each of `refusalReadRetries`, while `still()` holds.
+    /// `untilRefusal`: an error that isn't a refusal (or code 2) is read again too (a sticky older one may still be there).
+    private func readDisconnectError(_ id: UUID, fetching: any VPNManaging, deadline: Duration, retry: Bool, untilRefusal: Bool = false,
+                                     sleep: @Sendable (Duration) async -> Void,
+                                     still: @MainActor () -> Bool) async -> FetchedDisconnectError {
+        var fetched = FetchedDisconnectError(error: nil, timedOut: false)
+        for (i, delay) in ([Duration.zero] + (retry ? Self.refusalReadRetries : [])).enumerated() {
+            if i > 0 {
+                await sleep(delay)
+                guard still() else { return fetched }
+            }
+            fetched = await withDeadline(deadline, onTimeout: FetchedDisconnectError(error: nil, timedOut: true)) { @MainActor in
+                FetchedDisconnectError(error: await fetching.fetchLastDisconnectError(id), timedOut: false)
+            }
+            if fetched.timedOut { return fetched }
+            if let e = fetched.error {
+                guard untilRefusal else { return fetched }
+                let code = Self.observedError(e).0.code
+                if Self.isNoNetwork(e) || [.anotherTunnelActive, .startNotAuthorised, .supersededByKillSwitch].contains(code) { return fetched }
+            }
+        }
+        return fetched
+    }
+
+    /// Round 1 (E2E F6): the re-reads of a refusal NE hadn't stored yet when it reported `.disconnected` (≈3 s in all).
+    static let refusalReadRetries: [Duration] = [.milliseconds(500), .milliseconds(1000), .milliseconds(1500)]
+    @ObservationIgnored var refusalReadSleep: @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0) }
 
     /// Review L1: a `.anotherTunnelActive` from `fetchLastDisconnectError` is sticky. It counts only when the extension's
     /// snapshot says it was recorded for this attempt: no earlier than `refusalWindow` before the attempt's first status
@@ -662,7 +789,7 @@ final class ConnectionStore {
     /// `refusalNoteInterval` (review L3: NE may retry an on-demand start beside the running session).
     static let refusalNoteInterval: TimeInterval = 300
     private func surfaceRefusal(_ id: UUID, _ code: LPErrorCode, _ detail: String?) {
-        let repeated = code == .anotherTunnelActive && refusalRepeated(id)
+        let repeated = (code == .anotherTunnelActive || code == .startNotAuthorised) && refusalRepeated(id)
         noteEnd(id, code, detail)
         // 2.0.1 E2E F1: the hero never leaves a profile NE still reports active for a refused one.
         if !anotherProfileActive(besides: id), id == currentID || pending.isEmpty {
@@ -671,12 +798,28 @@ final class ConnectionStore {
             errorDetail = detail
             errorAt = now()
             userStoppedSinceError = false
-        } else if !repeated {
+        } else if !repeated, code != .startNotAuthorised {
             let name = profiles.profile(id)?.name ?? ""
             profiles.note(String(localized: "\(name) couldn't connect: \(code.reason(detail: detail)).",
                                  comment: "Problem: a start made elsewhere (System Settings) was refused while another profile is current (E2E-4 200012)"))
         }
+        // 2.0.2 (D-1): a start outside LockPlus that the extension refused (225) is always said in Diagnostics (the hero may
+        // be gone by the time anyone looks), unless this app armed a start of the profile itself just before (then it is
+        // this app's own failure, not an outside start). Once per profile per `refusalNoteInterval` (the shared throttle).
+        if code == .startNotAuthorised, !repeated, !armedRecently(id) {
+            let name = profiles.profile(id)?.name ?? ""
+            profiles.note(String(localized: "\(name) was started outside LockPlus and refused. Connect it from LockPlus.",
+                                 comment: "Problem (2.0.2, D-1): a start of a profile that LockPlus didn't make (System Settings toggle, scutil) was refused with error 225"))
+        }
         if code == .anotherTunnelActive, !repeated, managerKillSwitch(id) { onNotice?(.killSwitchStartRefused(id)) }
+    }
+
+    /// This app armed a start of the profile within `armWindow` (a 225 right after is its own failure, not an outside start).
+    private func armedRecently(_ id: UUID) -> Bool {
+        guard let at = lastArmedAt[id] else { return false }
+        if now().timeIntervalSince(at) < Self.armWindow { return true }
+        lastArmedAt[id] = nil                                 // round 1 (Sonnet NIT): an old arm is forgotten
+        return false
     }
 
     /// 2.0.1 E2E F2: the last 222/223 end of a profile, shown in its own detail while it isn't the current one (the hero
@@ -741,6 +884,7 @@ final class ConnectionStore {
         attemptGeneration[id, default: 0] &+= 1
         endSeenAt[id] = nil
         startIssuedAt[id] = now()
+        resumableSession.insert(id)
     }
 
     /// 2.0.1: another configuration's session is active (the extension refuses a start beside it, `.anotherTunnelActive`).
@@ -763,6 +907,22 @@ final class ConnectionStore {
         guard pending[id]?.phase == .awaitingNetworkRestart else { return }
         log.notice("\(id.uuidString.prefix(8), privacy: .public): the user stopped it while NE's restart was awaited")
         clearPending(id)
+        userStops.insert(id)
+        userStopsAt[id] = now()
+        userStopSettled.remove(id)
+        userStoppedSinceError = true
+        managers.stop(id)
+        settleStopOfDownSession(id)
+    }
+
+    /// Round 4 (Fable L2d): the user's Pause while a watched session's restart is awaited (`crashGapHolder`): the entry
+    /// ends, and `stopVPNTunnel` on the disconnected session cancels NE's restart (L-E re-stops one that lands within
+    /// 2 s).
+    private func stopAwaitedRestart(_ id: UUID) {
+        guard pending[id]?.phase == .awaitingRestart else { return }
+        log.notice("\(id.uuidString.prefix(8), privacy: .public): the user paused while its restart was awaited")
+        clearPending(id)
+        crashes.forgetCrash(id)
         userStops.insert(id)
         userStopsAt[id] = now()
         userStopSettled.remove(id)
@@ -838,7 +998,39 @@ final class ConnectionStore {
         log.notice("\(id.uuidString.prefix(8), privacy: .public): NE's restart after \"No network available\" is still awaited at launch")
         sessionKillSwitch[id] = true
         if statuses.allSatisfy({ !$0.value.isActive }) { currentID = id }
+        unverifiedHold = id
         armNetworkRestart(id)
+        // Round 3 (Codex r3 #4): settings.json isn't authenticated. The hold counts as one only once its tag verified;
+        // until then it holds the restore back but is no pause target. Invalid (forged, a copy of an ended hold, or one
+        // written before 2.0.2): dropped.
+        let tag = settings.value.networkRestartHoldTag
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let check = await self.holdRecordOp { repo in
+                switch await repo.checkRecord(.networkRestartHold, tag: tag, AppSettings.networkRestartHoldMessage(id)) {
+                case .valid: "valid"
+                case .unavailable: "unavailable"
+                case .invalid, .neverSealed: nil
+                }
+            }
+            self.holdChecked(id, check)
+        }
+    }
+
+    private func holdChecked(_ id: UUID, _ check: String?) {
+        guard unverifiedHold == id else { return }
+        switch check {
+        case "valid":
+            unverifiedHold = nil
+        case "unavailable":
+            log.error("network-restart hold of \(id.uuidString.prefix(8), privacy: .public) not checked (keychain unavailable): held, never a pause target")
+        default:
+            log.fault("network-restart hold of \(id.uuidString.prefix(8), privacy: .public) in settings.json doesn't verify; dropped")
+            unverifiedHold = nil
+            if pending[id]?.phase == .awaitingNetworkRestart { clearPending(id) }
+            forgetNetworkRestartRecord(id)
+            restoreIfIdle()
+        }
     }
 
     /// Review e321e10 (HIGH, LOW 3): `.invalid` ends a session too (the configuration was removed or became unusable:
@@ -967,8 +1159,12 @@ final class ConnectionStore {
         Task { @MainActor in
             var crashed = false
             // Review R9: bounded; a wedged nesessionmanager must not hold the restore (and `load()`) forever.
-            let fetched = await withDeadline(disconnectErrorTimeout, onTimeout: FetchedDisconnectError(error: nil, timedOut: true)) { @MainActor in
-                FetchedDisconnectError(error: await fetching.fetchLastDisconnectError(id), timedOut: false)
+            // Round 1 (E2E F6): a start that never connected and ended with no error stored yet (26.6.2 stores it up to
+            // ~1 s after `.disconnected`) is read again before anything is decided from "no error".
+            let fetched = await readDisconnectError(id, fetching: fetching, deadline: disconnectErrorTimeout, retry: !wasConnected,
+                                                    sleep: refusalReadSleep) { [weak self] in
+                guard let self else { return false }
+                return attemptGeneration[id] == gen && !userStops.contains(id) && statuses[id] == .disconnected
             }
             if fetched.timedOut { log.error("fetchLastDisconnectError never answered; treating the disconnect as no crash") }
             let ns = fetched.error
@@ -1027,6 +1223,7 @@ final class ConnectionStore {
             // Round 8 (Codex L4): nor for `.supersededByKillSwitch`, which has its own (30 s) window below.
             // Round 9 (Fable L1): only for an attempt that never connected; a connected session's sticky 223 is filtered.
             if let ns, ns.domain == LPTunnelError.errorDomain, ns.code != LPErrorCode.anotherTunnelActive.rawValue,
+               ns.code != LPErrorCode.startNotAuthorised.rawValue,           // 2.0.2: its own freshness rule below, like 222
                ns.code != LPErrorCode.supersededByKillSwitch.rawValue || wasConnected,
                let started = attemptStartedAt[id],
                let snap = try? await service.call(.tunnelSnapshot, ProfileRequest(profileID: id), as: TunnelSnapshot.self),
@@ -1039,6 +1236,10 @@ final class ConnectionStore {
                 let fresh = wasConnected ? false : await isFreshRefusal(id, since: attemptStartedAt[id], issued: issued)
                 if !fresh { mapped = nil }
                 else if !visibleProfileActive(besides: id) { mapped?.1 = LPErrorCode.unseenSessionDetail }
+            } else if mapped?.0.code == .startNotAuthorised {
+                // 2.0.2: never the end of a session that was connected (sticky older one); counts only when dated to this attempt.
+                let fresh = wasConnected ? false : await isFreshRefusal(id, since: attemptStartedAt[id], code: .startNotAuthorised)
+                if !fresh { mapped = nil }
             } else if mapped?.0.code == .supersededByKillSwitch,
                       !(await isFreshRefusal(id, since: disconnectedAt, code: .supersededByKillSwitch, window: Self.supersededWindow)) {
                 mapped = nil                 // re-check N4: a sticky 223 read at a later, clean stop elsewhere
@@ -1055,8 +1256,9 @@ final class ConnectionStore {
                 userStoppedSinceError = false
                 if switchingTo == id { switchingTo = nil }
             }
+            // Round 1 (Fable L1): never for a profile the sandboxed check hasn't passed (`provision` refuses it too).
             if let code = mapped?.0.code, code == .profileNotProvisioned || code == .profileRevisionStale,
-               !retriedAfterProvision.contains(id), let p = profiles.profile(id) {
+               !retriedAfterProvision.contains(id), let p = profiles.profile(id), p.engineVerified {
                 // §6.4: reconcile this profile and retry once.
                 retriedAfterProvision.insert(id)
                 let entryToken = pending[id]?.token
@@ -1090,6 +1292,9 @@ final class ConnectionStore {
                 // Codex 6: through the same throttle as the refusals whose `.connecting` was missed.
                 // E2E F1: through `surfaceRefusal` (hero only with nothing else active, else Diagnostics; the throttle).
                 if !stale { surfaceRefusal(id, .anotherTunnelActive, mapped?.1) }
+            } else if code == .startNotAuthorised {
+                // 2.0.2: a start that never ran (D-1): no "disconnected unexpectedly"; the refusal says what to do.
+                if !stale { surfaceRefusal(id, .startNotAuthorised, mapped?.1) }
             } else if !noNetwork, (wasConnected || mapped != nil), code != .authRequired, code != .authFailed {
                 onNotice?(.stoppedUnexpectedly(id))
             }
@@ -1199,7 +1404,7 @@ final class ConnectionStore {
         restartedAfterCrash = nil
         crashes.forgetCrash(id)
         guard p.engineVerified else {
-            fail(id, LPError(.profileInvalid, detail: "not yet verified by the tunnel component"))
+            fail(id, LPError(.profileInvalid, detail: "not yet verified by LockPlus's file check"))
             return true
         }
         if let held { stopNetworkRestart(held) }
@@ -1251,7 +1456,7 @@ final class ConnectionStore {
         let token = arm(id, .waitingForStop(of: active), timeout: stopTimeout)
         Task { @MainActor [weak self] in
             guard let self else { return }
-            do throws(PauseFailure) { try await self.pauseOtherOnDemand(except: id) } catch {
+            do throws(PauseFailure) { try await self.pauseOtherOnDemand(except: id, token: token) } catch {
                 guard self.pending[id]?.token == token else { self.restoreIfIdle(); return }
                 await self.failPause(id, token, error)
                 return
@@ -1303,8 +1508,13 @@ final class ConnectionStore {
         // whose verified flags still lack the kill switch (E2E-1, fail closed).
         var endpoints: [String: [String]] = [:]
         if let p = profiles.profile(id) {
-            do throws(LPError) { try await profiles.prepareForStart(p); configurationDenied = false } catch {
+            do throws(LPError) {
+                try await profiles.prepareForStart(p, admissible: startMutationAllowed(id, token))
+                configurationDenied = false
+            } catch {
                 guard !gone() else { restoreIfIdle(); return }
+                // 2.0.2 (Codex r9 MEDIUM): a background retry whose save was refused because another session became busy.
+                if isAutomatic(id), othersBusy(except: id) { abandonAutomaticRetry(id); return }
                 configurationDenied = NEManagerStore.isConfigurationDenied(error)
                 fail(id, namingTheBlocker(error, id))
                 return
@@ -1316,7 +1526,7 @@ final class ConnectionStore {
         }
         // Round 8 (Fable N3): a background retry checks for another session before it pauses anyone's on-demand.
         if isAutomatic(id), othersBusy(except: id) { abandonAutomaticRetry(id); return }
-        do throws(PauseFailure) { try await pauseOtherOnDemand(except: id) } catch {
+        do throws(PauseFailure) { try await pauseOtherOnDemand(except: id, token: token) } catch {
             guard !gone() else { restoreIfIdle(); return }
             await failPause(id, token, error)
             return
@@ -1348,11 +1558,42 @@ final class ConnectionStore {
             waitForNetwork(id)
             return
         }
+        // 2.0.2 (PLAN-2.0.2 §3, D-1): the extension honours a manual start only with this owner's `armStart`, so the arm
+        // comes last, right before `startVPNTunnel` (it lapses after 15 s). A failed arm is a failed start, never a start
+        // without one (except for an extension that predates start authorisation, `StartArming.Outcome.legacyExtension`).
+        let nonce: UUID?
+        switch await StartArming.arm(id, service: service) {
+        case .armed(let n): nonce = n; lastArmedAt[id] = now()
+        case .legacyExtension:
+            // Round 1 (Fable L4): the old extension is still running while its replacement (which authorises starts)
+            // waits for approval. A kill-switch session started now carries no nonce; if NE restarts it into the new
+            // extension, that restart is refused (225) and a failed includeAllNetworks start is open. Not started; the
+            // copy says the tunnel component is being updated. Round 2 (L6): whatever settings.json says about an update
+            // (its marker isn't authenticated and needn't span the whole hand-over): a 2.0.2 app never starts a kill-switch
+            // session on an extension that can't authorise its restart.
+            if StartArming.refusesKillSwitchStart(onLegacyExtension: managerKillSwitch(id)) {
+                log.notice("kill-switch start of \(id.uuidString.prefix(8), privacy: .public) waits for the extension update")
+                fail(id, LPError(.versionMismatch, detail: "kill-switch start waits for the tunnel component update"))
+                return
+            }
+            nonce = nil
+        case .failed(let e):
+            guard !gone() else { restoreIfIdle(); return }
+            log.error("armStart for \(id.uuidString.prefix(8), privacy: .public) failed: \(e.code.rawValue, privacy: .public)")
+            fail(id, e)
+            return
+        }
+        guard !gone() else { restoreIfIdle(); return }
+        // The network may have gone during the arm: still no `startVPNTunnel` without one (the wait arms again).
+        if networkAvailable == false {
+            waitForNetwork(id)
+            return
+        }
         pending[id]?.phase = .starting(issued: true)
         sessionKillSwitch[id] = managerKillSwitch(id)          // as `prepareForStart` just verified it (N6)
         newIssuedAttempt(id)
         do throws(LPError) {
-            try managers.start(id, options: StartOptionsBuilder.options(endpoints: endpoints))
+            try managers.start(id, options: StartOptionsBuilder.options(endpoints: endpoints, nonce: nonce))
             startFailure = nil
         } catch {
             fail(id, error)
@@ -1370,8 +1611,11 @@ final class ConnectionStore {
     /// A failed pause throws (review F3): the start must not run beside an enabled on-demand configuration.
     struct PauseFailure: Error { var profileID: UUID; var error: LPError }
 
+    /// `token`: the start's attempt (2.0.2, Codex r9 MEDIUM): each pause re-checks `startMutationAllowed` inside the
+    /// serialization, after every await before it (the restore, the record write, a queued mutation).
     @discardableResult
-    private func pauseOtherOnDemand(except id: UUID) async throws(PauseFailure) -> [UUID] {
+    private func pauseOtherOnDemand(except id: UUID, token: UInt64) async throws(PauseFailure) -> [UUID] {
+        let allowed = startMutationAllowed(id, token)
         await restoreTask?.value                       // never overlap a restore's save (it would re-enable what we pause)
         var paused: [UUID] = []
         for m in managers.managers where m.profileID != id && m.onDemandEnabled && m.stored?.ownerUID == profiles.ownerUID {
@@ -1381,7 +1625,7 @@ final class ConnectionStore {
                 // Round 7 (Fable L3): never inside another configuration's pending start (the one predicate).
                 // This user's own profiles are excluded: a pending start of one of them is switched out by this start.
                 guard try await managers.setOnDemandEnabled(false, for: m.profileID, onlyIf: { [weak self] in
-                    !(self?.foreignStartPending(except: id) ?? true)
+                    allowed() && !(self?.foreignStartPending(except: id) ?? true)
                 }) else {
                     throw LPError(.anotherTunnelActive, detail: "another configuration is starting")
                 }
@@ -1401,6 +1645,9 @@ final class ConnectionStore {
         if managers.managers.first(where: { $0.profileID == failure.profileID })?.onDemandEnabled == true {
             await dropFromPauseRecord(failure.profileID)
         }
+        // 2.0.2 (Codex r9 MEDIUM): a background retry's pause refused because another session became busy: the retry
+        // ends as any other that finds a session busy (no "couldn't be paused" problem: nothing failed).
+        if pending[id]?.token == token, isAutomatic(id), othersBusy(except: id) { abandonAutomaticRetry(id); return }
         let name = profiles.profile(failure.profileID)?.name ?? ""
         profiles.note(String(localized: "Auto-connect of \(name) couldn't be paused; not connecting.", comment: "Problem: a start was refused because on-demand of another profile couldn't be turned off (E2E-3)"))
         if pending[id]?.token == token { fail(id, namingTheBlocker(failure.error, id)) } else { restoreIfIdle() }
@@ -1417,7 +1664,20 @@ final class ConnectionStore {
         await restore(id, unlessBusy: { [weak self] in
             guard let self else { return true }
             return self.pending[id]?.token != token || self.managers.status(id).isLive || self.otherStartPending(except: id)
+                || (self.isAutomatic(id) && self.othersBusy(except: id))          // 2.0.2 (Codex r9 MEDIUM)
         })
+    }
+
+    /// 2.0.2 (Codex r9 MEDIUM): the condition every configuration mutation of a start re-checks INSIDE the manager
+    /// serialization (its `prepareForStart` saves, its pause of the others' on-demand), after any wait for an earlier
+    /// mutation: the attempt (`token`) is still the current one, and an automatic retry still finds nothing else busy.
+    /// A background retry never changes a manager during another start or session (a configuration change inside a
+    /// `.connecting` kill-switch session leaves it passing no traffic, E2E-4 U2/U13); it only abandoned it afterwards.
+    private func startMutationAllowed(_ id: UUID, _ token: UInt64) -> @MainActor () -> Bool {
+        { [weak self] in
+            guard let self, self.pending[id]?.token == token else { return false }
+            return !(self.isAutomatic(id) && self.othersBusy(except: id))
+        }
     }
 
     /// Round 7 (Fable L3): the one predicate for "a configuration mutation of a start must not land inside another
@@ -1465,6 +1725,19 @@ final class ConnectionStore {
 
     /// Anything is starting, active, switching or about to restart.
     var isBusy: Bool { othersBusy(except: nil) }
+
+    /// Round 2 (L2): `isBusy` at the last `restoreIfIdle` (the idle transition sends a revoke).
+    @ObservationIgnored private var wasBusy = false
+
+    /// Round 2 (Fable L1): profiles whose unattended record the extension must keep although they may have no plan: any
+    /// pending entry (starting, a crash or network-restart hold, NE's restart awaited), the recorded network-restart
+    /// hold, and every live session.
+    func revocationHeld() -> Set<UUID> {
+        // Round 3 (Codex r3 #4): the in-memory hold only (a pending entry): the record in settings.json is unauthenticated.
+        var ids = Set(pending.keys)
+        for (id, st) in statuses where st.isLive { ids.insert(id) }
+        return ids
+    }
 
     /// What makes `isBusy` true, for copy (E2E-4 review L1): one of this user's profiles (a pending entry first, then an
     /// active session), another user's VPN connection, or a configuration of ours that no profile can address. The
@@ -1781,6 +2054,11 @@ final class ConnectionStore {
     private func restoreIfIdle() {
         noteForeignBusy()
         healLiveDrift()
+        // Round 2 (Fable L2): each time everything has settled (no start, session, hold or NE restart awaited), the
+        // unattended records of profiles without a plan go: a user stop, a settled disconnect, a hold that ended.
+        let busyNow = isBusy
+        if !busyNow, wasBusy { Task { await profiles.revokeUnattended() } }
+        wasBusy = busyNow
         // Review N3/N5: only when nothing at all is starting, active, switching or awaiting a restart: a profile that is
         // itself active is never restored (a save inside its own pending start), and while busy nothing flips
         // `restoring`. Review N2: during an extension update every plan is held; `resumeAfterUpdate` hands it back.
@@ -1971,39 +2249,94 @@ final class ConnectionStore {
     }
 
     func pause(minutes: Int) async {
-        let until = now().addingTimeInterval(Double(minutes) * 60)
+        // Round 5: the launch's spend of an earlier pause's value ends before this pause seals its own (never after it).
+        // Round 6 (Codex r6 #3): no owed spend runs while this pause is made (each seal below replaces the value anyway).
+        pauseInFlight += 1
+        defer { pauseInFlight -= 1 }
+        let spend = pauseValueSpend
+        pauseValueSpend = nil
+        spend?.cancel()
+        await spend?.value
+        let until = ResumeIntent.wholeSeconds(now().addingTimeInterval(Double(minutes) * 60))
         // E2E-4 200011: a session NE would restart when a network returns counts as the active one: the pause stops it
         // (cancelling that restart) and its end brings it back.
+        // Round 3 (Codex r3 #4): a hold re-entered at launch whose record didn't verify (yet) is stopped like any other,
+        // but never signed as the pause's target.
         let held = networkRestartHolder
-        let live = statuses.first { $0.value.isActive }?.key
-        let active = live ?? held
+        let active = signableLive ?? signableHold
         // What a start paused (the record) is part of what the pause restores at its end; the record is handed over.
         // Review N9: only this user's configurations (another user's is not ours to turn off, or to restore).
         var onDemand = managers.managers.filter { $0.onDemandEnabled && $0.stored?.ownerUID == profiles.ownerUID }.map(\.profileID)
         for id in settings.value.onDemandPausedByStart where !onDemand.contains(id) { onDemand.append(id) }
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
         // Pausing again while paused only extends the pause: the first pause's restore list stays (review M7).
-        let restore = settings.value.pausedState.map { old in
-            PausedState(profileID: old.profileID ?? active, onDemandEnabledIDs: Array(Set(old.onDemandEnabledIDs + onDemand)), agentBuild: build)
+        // Round 2 (Fable L5): the earlier record's profile is carried over only if its intent holds for the earlier end;
+        // otherwise this pause signs only what it stops itself (a record other code wrote is never laundered).
+        // Round 7 (Fable r7 N3): nothing is carried while a value is owed: the record whose value should have gone may
+        // be a genuine one written back, and it would verify against the surviving value.
+        var carried: UUID?
+        if settings.value.pauseValueOwed, settings.value.pausedState?.profileID != nil {
+            log.fault("pause extended while an earlier pause's value is owed; the earlier record's profile is not carried")
+        } else if let old = settings.value.pausedState, let oldID = old.profileID {
+            switch await Self.checkResumeIntent(old, profileID: oldID, until: settings.value.autoConnect.pausedUntil, now: now(),
+                                                repository: profiles.repository) {
+            case .holds: carried = oldID
+            case .unavailable:
+                log.error("pause not extended: the earlier pause record couldn't be checked (keychain unavailable)")
+                profiles.note(String(localized: "Protection wasn't paused for longer: LockPlus couldn't read its keychain. Try again in a moment.",
+                                     comment: "Problems line (2.0.2 round 2): extending a pause failed because the keychain was unavailable"))
+                return
+            case .changedOutside, .tooOld, .olderRecord:
+                log.fault("earlier pause record without a valid intent; its profile is not carried into the extended pause")
+            }
+        }
+        var restore = settings.value.pausedState.map { old in
+            PausedState(profileID: carried ?? active, onDemandEnabledIDs: Array(Set(old.onDemandEnabledIDs + onDemand)), agentBuild: build)
         } ?? PausedState(profileID: active, onDemandEnabledIDs: onDemand, agentBuild: build)
+        // Round 1 (Codex 3), round 2 (L5): the record's profile is armed and started at the pause's end only with this
+        // one-shot intent. A pause that can't make one doesn't happen (and says so): it would end without reconnecting.
+        if let id = restore.profileID {
+            do throws(LPError) { restore.intent = try await profiles.repository.sealRecord(.pause, ResumeIntent.message(profileID: id, until: until)) } catch {
+                log.error("pause refused: no resume intent (\(error.code.rawValue, privacy: .public))")
+                profiles.note(String(localized: "Protection wasn't paused: LockPlus couldn't secure the pause in its keychain (\(error.code.rawValue)). Try again in a moment.",
+                                     comment: "Problems line (2.0.2 round 2): a pause failed because its resume intent couldn't be written to the keychain"))
+                return
+            }
+        }
         // The agent reads settings.json (RunAtLoad fires at register()): durable first, then register, and only then
         // stop, so a crash at any later point still resumes (N3).
         await settings.updateDurably {
             $0.autoConnect.pausedUntil = until
             $0.pausedState = restore
+            if restore.intent != nil { $0.pauseValueOwed = false }     // round 6: the seal replaced the owed value
             $0.onDemandPausedByStart = []
-            if held != nil { $0.networkRestartHold = nil }     // review b47da1c L-4: the stop below ends it; same write
+            if held != nil { $0.networkRestartHold = nil; $0.networkRestartHoldTag = nil }     // review b47da1c L-4: the stop below ends it; same write
         }
         // Review 5 #1: a start that hasn't been issued ends here (after the write: its restore then finds every plan
         // paused and only drops records); one issued meanwhile is stopped like a running session.
         cancelPendingStarts()
         // Review aad7527 #8: read again after the write: a hold may have begun or ended (NE's restart landed) meanwhile.
-        let heldNow = networkRestartHolder, liveNow = statuses.first { $0.value.isActive }?.key
+        let heldNow = networkRestartHolder, liveNow = signableLive
+        let gapNow = crashGapHolder
+        let signable = signableHold
+        if held != nil { consumeHoldRecord() }
         if let heldNow { stopNetworkRestart(heldNow) }
+        if let gapNow { stopAwaitedRestart(gapNow) }
         // Review f0c8c57 #4: the session the pause stops is the one its end reconnects, also when it began during the
         // write (the value written above was taken when the write began).
-        if let begun = liveNow ?? heldNow, settings.value.pausedState?.profileID == nil {
-            await settings.updateDurably { if $0.pausedState?.profileID == nil { $0.pausedState?.profileID = begun } }
+        if let begun = liveNow ?? signable, settings.value.pausedState?.profileID == nil {
+            do throws(LPError) {
+                let intent = try await profiles.repository.sealRecord(.pause, ResumeIntent.message(profileID: begun, until: until))
+                await settings.updateDurably {
+                    if $0.pausedState?.profileID == nil { $0.pausedState?.profileID = begun; $0.pausedState?.intent = intent }
+                    $0.pauseValueOwed = false                                  // round 6: the seal replaced the value
+                }
+            } catch {
+                // Round 2 (L5): the pause holds (the session is stopped below); its end can't reconnect it, and says so now.
+                log.error("pause: no resume intent for the session that began meanwhile (\(error.code.rawValue, privacy: .public))")
+                profiles.note(String(localized: "\(profiles.profile(begun)?.name ?? "") won't reconnect when the pause ends: LockPlus couldn't secure the pause in its keychain. Connect it yourself then.",
+                                     comment: "Problems line (2.0.2 round 2): a session that began during the pause's write can't be resumed because the intent couldn't be written"))
+            }
         }
         resumeAgentStatus = resumeAgent.register()
         let owner = profiles.ownerUID
@@ -2071,17 +2404,99 @@ final class ConnectionStore {
         pauseTask?.cancel()
         pauseTask = nil
         let state = settings.value.pausedState
+        let until = settings.value.autoConnect.pausedUntil
         settings.update { $0.autoConnect.pausedUntil = nil }
+        let status = resumeAgentStatus
         resumeAgentStatus = nil
         return Task { @MainActor in
             // E2E-3: no OTHER configuration's on-demand while the paused profile starts; those come back through the
             // pause record when it ends. Failures stay recorded and are retried (review F4).
             // Review R5: through the record only, whatever is active or starting now.
-            let target = state?.profileID.flatMap { profiles.profile($0) != nil ? $0 : nil }
+            var target = state?.profileID.flatMap { profiles.profile($0) != nil ? $0 : nil }
+            // Round 1 (Codex 3): settings.json isn't authenticated; the record's profile is reconnected only with its intent
+            // (round 2, L5: one shot, consumed here).
+            if let id = target {
+                // Round 6 (Codex r6 #3): an owed value (a genuine record hidden while nothing was paused, written back now)
+                // goes before anything is checked; if it can't go yet, this end is retried like an unreadable keychain.
+                let owedSpent = settings.value.pauseValueOwed ? await spendPauseValue() : true
+                let check = owedSpent
+                    ? await Self.checkResumeIntent(state, profileID: id, until: until, now: now(), repository: profiles.repository)
+                    : .unavailable
+                if check == .unavailable, resumeIntentRetries < Self.maxResumeIntentRetries {
+                    // Round 2 (L5): retryable, like the headless agent's: the pause record stays as it is and the end runs
+                    // again shortly (a quit meanwhile leaves it to the agent, which stays registered).
+                    resumeIntentRetries += 1
+                    log.error("pause record of \(id.uuidString.prefix(8), privacy: .public) not checked (keychain unavailable); retrying")
+                    settings.update { if $0.autoConnect.pausedUntil == nil { $0.autoConnect.pausedUntil = until } }
+                    resumeAgentStatus = status
+                    let sleep = timerSleep, delay = Self.resumeIntentRetryDelay
+                    pauseTask = Task { @MainActor [weak self] in
+                        await sleep(delay)
+                        guard !Task.isCancelled else { return }
+                        self?.resume()
+                    }
+                    return
+                }
+                resumeIntentRetries = 0
+                // Round 3 (Fable L2): the pause ends here whatever the check says: its one-time value goes in every case
+                // (except an unreadable keychain, retried above), so a genuine record that was hidden or altered at this
+                // moment can't be written back and verify later. Round 6 (Fable r6 N4b): a delete that fails stays owed.
+                if await !spendPauseValue() { runPauseValueSpend(.later) }
+                if check != .holds {
+                    log.fault("pause record of \(id.uuidString.prefix(8), privacy: .public): \(String(describing: check), privacy: .public); not reconnected")
+                    profiles.note(Self.resumeRefusedNote(check, name: profiles.profile(id)?.name ?? ""))
+                    target = nil
+                }
+            }
+            if state?.profileID.flatMap({ profiles.profile($0) }) == nil {
+                // Round 3 (L2), round 4 (Codex r4 #4): the pause ends here, so its one-time value goes whatever the record
+                // says: one naming no known profile, naming none (a removed `profileID`), or no record at all. A genuine
+                // record copied earlier and written back later never verifies. Round 6: a failed delete stays owed.
+                if await !spendPauseValue() { runPauseValueSpend(.later) }
+            }
             await returnOnDemand(state?.onDemandEnabledIDs ?? [], thenConnect: target)
             await restoreTask?.value
             await settings.updateDurably { if $0.autoConnect.pausedUntil == nil { $0.pausedState = nil } }
-            await resumeAgent.unregister()          // last: the durable state is already clear (job-not-found = done)
+            // Last: the durable state is already clear (job-not-found = done). Round 6 (Codex r6 #3): kept while the
+            // pause's value is owed (the agent's runs keep spending it after a quit).
+            if !settings.value.pauseValueOwed { await resumeAgent.unregister() }
+        }
+    }
+
+    /// Round 1 (Codex 3): the record names `profileID`, carries its intent for the pause's end `until`, and that end is
+    /// not older than `ResumeIntent.maxAge`. Round 2 (L5): the intent is one shot (the caller consumes it when it acts),
+    /// and a keychain that can't be read is `.unavailable` (retried), never "changed outside". Shared with the headless agent.
+    static func checkResumeIntent(_ state: PausedState?, profileID: UUID, until: Date?, now: Date, repository: ProfileRepository) async -> ResumeIntent.Check {
+        guard let state, state.profileID == profileID, let until else { return .changedOutside }
+        guard ResumeIntent.isFresh(until: until, now: now) else { return .tooOld }
+        switch await repository.checkRecord(.pause, tag: state.intent, ResumeIntent.message(profileID: profileID, until: until)) {
+        case .valid: return .holds
+        case .unavailable: return .unavailable
+        case .invalid: return .changedOutside
+        case .neverSealed: return state.intent == nil ? .olderRecord : .changedOutside
+        }
+    }
+
+    /// Round 2 (L5): the GUI's end of a pause retries an unreadable keychain this often, `resumeIntentRetryDelay` apart.
+    static let maxResumeIntentRetries = 5
+    static let resumeIntentRetryDelay: Duration = .seconds(30)
+    @ObservationIgnored private var resumeIntentRetries = 0
+
+    /// Round 2 (L5): the Problems line for a pause end that doesn't reconnect its profile, by reason.
+    static func resumeRefusedNote(_ check: ResumeIntent.Check, name: String) -> String {
+        switch check {
+        case .tooOld:
+            String(localized: "\(name) wasn't reconnected: the pause ended more than 7 days ago. Connect it yourself.",
+                   comment: "Problems line (2.0.2 round 2): a pause record older than 7 days isn't resumed")
+        case .unavailable:
+            String(localized: "\(name) wasn't reconnected: LockPlus couldn't read its keychain to check the pause. Connect it yourself.",
+                   comment: "Problems line (2.0.2 round 2): the keychain stayed unavailable at the end of a pause")
+        case .olderRecord:
+            String(localized: "\(name) wasn't reconnected: the pause was started by an earlier version of LockPlus. Connect it yourself.",
+                   comment: "Problems line (2.0.2 round 2): a pause record written before 2.0.2 restores on-demand only")
+        case .holds, .changedOutside:
+            String(localized: "The pause record was changed outside LockPlus, so \(name) wasn't reconnected. Connect it yourself.",
+                   comment: "Problems line (2.0.2 round 2): the pause record in settings.json failed its authentication check")
         }
     }
 
@@ -2106,9 +2521,67 @@ final class ConnectionStore {
     }
 
     private func resumePauseAtLaunch() {
-        guard let until = settings.value.autoConnect.pausedUntil else { return }
+        guard let until = settings.value.autoConnect.pausedUntil else { spendPauseValueWhileUnpaused(); return }
         if until <= now() { resume() } else { schedulePauseExpiry(until) }
     }
+
+    /// Round 5 (Codex r5 #5): nothing is paused at launch, so no pause can end later: its one-time value goes now (a
+    /// genuine record whose expiry was removed, written back with it later, never verifies). Round 6 (Codex r6 #3): a
+    /// failed delete is owed (`AppSettings.pauseValueOwed`) until one succeeds: retried `maxResumeIntentRetries` times
+    /// `resumeIntentRetryDelay` apart, then at each `load()` and wake and at the next launch; spent first at the end of
+    /// any pause; the agent isn't unregistered meanwhile. The user's Pause cancels a spend before it seals its own value
+    /// (which replaces the owed one).
+    @ObservationIgnored private var pauseValueSpend: Task<Void, Never>?
+    @ObservationIgnored private var pauseInFlight = 0
+    private func spendPauseValueWhileUnpaused() { runPauseValueSpend(.launch) }
+
+    /// Deletes the pause's one-time value. A failure makes (and keeps) it owed, durably; success ends the debt.
+    @discardableResult
+    private func spendPauseValue() async -> Bool {
+        let spent = await profiles.repository.consumeRecord(.pause)
+        if settings.value.pauseValueOwed == spent { await settings.updateDurably { $0.pauseValueOwed = !spent } }
+        return spent
+    }
+
+    /// Round 6 (Codex r6 #3): an owed value may be spent now: no pause is being made, and no pause holds a value of its
+    /// own (that pause's end spends it, owed first).
+    private var mayRetryOwedSpend: Bool {
+        let s = settings.value
+        return s.pauseValueOwed && pauseInFlight == 0 && (s.autoConnect.pausedUntil == nil || s.pausedState?.intent == nil)
+    }
+
+    enum PauseValueSpendStart { case launch, now, later }
+    /// One spend chain at a time: `.launch` spends unconditionally (nothing is paused), `.now` (`load()`, wake) and
+    /// `.later` (after a failed spend at a pause's end) only an owed value. Up to `maxResumeIntentRetries` timer retries,
+    /// `resumeIntentRetryDelay` apart; then the next `load()`, wake or launch. The chain ends with the agent's reconcile
+    /// (round 7): one deferred while it ran, or an agent kept for a debt it cleared, goes when nothing is paused.
+    private func runPauseValueSpend(_ start: PauseValueSpendStart) {
+        guard pauseValueSpend == nil else { return }
+        let sleep = timerSleep
+        pauseValueSpend = Task { @MainActor [weak self] in
+            var attempt = start == .later ? 1 : 0
+            while !Task.isCancelled {
+                if attempt > 0 { await sleep(Self.resumeIntentRetryDelay) }
+                guard !Task.isCancelled, let me = self, start == .launch && attempt == 0 || me.mayRetryOwedSpend else { break }
+                if await me.spendPauseValue() { break }
+                if attempt >= Self.maxResumeIntentRetries { break }
+                attempt += 1
+            }
+            guard !Task.isCancelled, let me = self else { return }
+            me.pauseValueSpend = nil
+            // Round 7 (Codex r7 #3): a reconcile deferred while this spend was pending (the launch's) runs on its result:
+            // spent, an agent kept for it goes when nothing is paused; owed, it stays.
+            await me.reconcileResumeAgent()
+        }
+    }
+
+    /// Round 6 (Codex r6 #3): `ProfilesStore.load()` and wake spend an owed pause value.
+    func retryOwedPauseValue() {
+        if mayRetryOwedSpend { runPauseValueSpend(.now) }
+    }
+
+    /// Tests: waits for the spend of the pause value (its retries included).
+    func awaitPauseValueSpend() async { await pauseValueSpend?.value }
 
     /// Launch (§10.4, C12): re-register the agent for a new binary while paused; drop a stale registration otherwise.
     func reconcileResumeAgent(currentBuild: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?") async {
@@ -2116,6 +2589,10 @@ final class ConnectionStore {
         switch ResumeAgentLaunchPolicy.action(pausedUntil: s.autoConnect.pausedUntil, agentBuild: s.pausedState?.agentBuild,
                                               currentBuild: currentBuild, status: resumeAgent.status, now: now()) {
         case .none: break
+        case .unregister where s.pauseValueOwed: break           // round 6 (Codex r6 #3): kept for the owed spend
+        // Round 7 (Codex r7 #3, Fable r7 N2): the launch's spend may still fail and make the value owed; the chain
+        // reconciles again on its result.
+        case .unregister where pauseValueSpend != nil: break
         case .unregister: await resumeAgent.unregister()
         case .reregister:
             await resumeAgent.unregister()
@@ -2131,6 +2608,7 @@ final class ConnectionStore {
 
     /// `NSWorkspace.didWakeNotification`: the pause check, and a held start gets fresh endpoint IPs (PF 50).
     func didWake() {
+        retryOwedPauseValue()                 // round 6 (Codex r6 #3)
         checkPauseExpiry()
         pushFreshEndpointsIntoHeldStart()
     }

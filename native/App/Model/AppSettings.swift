@@ -15,6 +15,15 @@ struct AutoConnectRules: Codable, Sendable, Equatable {
     var connectOnEthernet = false
     /// "Pause protection" (§10.4); nil = not paused.
     var pausedUntil: Date?
+    /// Round 2 (Fable M1b): the tag of the choice (`enabled`, `profileID`) as LockPlus last made it
+    /// (`ProfileRepository.sealRecord(.autoConnectChoice, …)`). An enabled choice whose tag doesn't verify at launch gives
+    /// no plan (no on-demand rules, no unattended-start consent) and is turned off. The rest of the rules only shape when
+    /// on-demand fires, never whether a profile has consent, so they aren't covered.
+    /// Round 3 (Fable M1, Codex r3 #2): every state is sealed, "off" included, and each change replaces the one-time
+    /// value, so a copy of an earlier enabled choice never verifies after the user turned it off. The first 2.0.2 launch
+    /// seals whatever the choice is: from then on the one-time value exists (the "initialised" marker) and an untagged
+    /// enabled choice is a forgery, not a choice from before 2.0.2.
+    var choiceTag: String?
 
     init() {}
     init(from d: Decoder) throws {
@@ -25,6 +34,12 @@ struct AutoConnectRules: Codable, Sendable, Equatable {
         connectOnUntrustedWiFi = (try? c.decodeIfPresent(Bool.self, forKey: .connectOnUntrustedWiFi)) ?? true
         connectOnEthernet = (try? c.decodeIfPresent(Bool.self, forKey: .connectOnEthernet)) ?? false
         pausedUntil = try? c.decodeIfPresent(Date.self, forKey: .pausedUntil)
+        choiceTag = try? c.decodeIfPresent(String.self, forKey: .choiceTag)
+    }
+
+    /// Round 2 (Fable M1b), round 3 (M1): what the choice's tag covers: the toggle and the profile.
+    static func choiceMessage(enabled: Bool, profileID: UUID?) -> Data {
+        Data("lockplus.autoconnect-choice.v2\n\(enabled ? 1 : 0)\n\(profileID?.uuidString ?? "-")".utf8)
     }
 
     /// The profile the user just turned Auto-Connect on for: the toggle went on, or another profile was picked while
@@ -48,6 +63,13 @@ struct PendingResume: Codable, Sendable, Equatable {
     var profileID: UUID?
     var onDemandEnabledIDs: [UUID]
     var reason: Reason
+    /// Round 2 (Fable M1a): `ProfileRepository.sealRecord(.pendingResume, message(…))`, one shot. Without a valid one the
+    /// end of the update restores on-demand but connects nothing.
+    var intent: String? = nil
+
+    static func message(profileID: UUID, reason: Reason) -> Data {
+        Data("lockplus.pending-resume.v1\n\(profileID.uuidString)\n\(reason.rawValue)".utf8)
+    }
 }
 
 /// §12.3 step 2 (variant B): Sparkle's postpone hook records the install it is about to perform. The §4.2 preflight
@@ -62,6 +84,54 @@ struct PausedState: Codable, Sendable, Equatable {
     var profileID: UUID?
     var onDemandEnabledIDs: [UUID]
     var agentBuild: String
+    /// Round 1 (Codex 3), round 2 (L5): `ProfileRepository.sealRecord(.pause, ResumeIntent.message(…))` for `profileID`
+    /// and the pause's end, one shot (consumed at the resume). A record without a valid one restores on-demand but arms
+    /// and starts nothing.
+    var intent: String? = nil
+}
+
+/// The settings.json records that can lead to a start or to unattended-start consent (round 2, Fable M1). Each has its
+/// own HKDF key and its own one-time value in the keychain (`ProfileRepository.sealRecord`).
+enum SettingsRecord: String, CaseIterable, Sendable {
+    case pause = "pause"
+    case pendingResume = "pending-resume"
+    case autoConnectChoice = "autoconnect-choice"
+    /// Round 3 (Codex r3 #4): `networkRestartHold`.
+    case networkRestartHold = "network-restart-hold"
+}
+
+/// `ProfileRepository.checkRecord`.
+enum RecordCheck: Sendable, Equatable {
+    case valid
+    /// The tag doesn't verify (forged, replayed, or a copy of a record already acted on).
+    case invalid
+    /// No record of this kind was ever sealed on this Mac (one written before 2.0.2).
+    case neverSealed
+    /// The keychain couldn't be read now: retry, never "changed outside LockPlus".
+    case unavailable
+}
+
+/// Round 1 (Codex 3): the authenticated part of a pause record.
+enum ResumeIntent {
+    /// A pause end older than this is not resumed by its record (bounds the replay of an old, genuine record).
+    static let maxAge: TimeInterval = 7 * 24 * 3600
+    /// Whole seconds: settings.json stores dates in ISO 8601 without fractions, and the pause end is written rounded.
+    static func message(profileID: UUID, until: Date) -> Data {
+        Data("lockplus.resume-intent.v2\n\(profileID.uuidString)\n\(Int64(until.timeIntervalSince1970.rounded(.down)))".utf8)
+    }
+
+    /// What a resume may do with the record's profile.
+    enum Check: Sendable, Equatable {
+        case holds
+        case changedOutside
+        case tooOld
+        /// Written before 2.0.2 (no intent, and no pause was ever sealed here).
+        case olderRecord
+        /// The keychain couldn't be read: retried, the pause stays.
+        case unavailable
+    }
+    static func wholeSeconds(_ d: Date) -> Date { Date(timeIntervalSince1970: d.timeIntervalSince1970.rounded(.down)) }
+    static func isFresh(until: Date, now: Date) -> Bool { now.timeIntervalSince(until) <= maxAge }
 }
 
 struct AppSettings: Codable, Sendable, Equatable {
@@ -118,6 +188,16 @@ struct AppSettings: Codable, Sendable, Equatable {
     /// applicable), nothing paused is restored, at launch and by the headless resume too. Written durably when the hold
     /// begins; cleared when NE's restart is active, the user stops it, or the fallback after the network's return ends it.
     var networkRestartHold: UUID?
+    /// Round 3 (Codex r3 #4): `ProfileRepository.sealRecord(.networkRestartHold, networkRestartHoldMessage(id))`, written
+    /// with the hold and consumed when it ends. A hold read at launch without a valid one is dropped: it never becomes a
+    /// recovery hold, so it can't be a pause's target (a pause signs its target for an armed start at its end).
+    var networkRestartHoldTag: String?
+    /// Round 6 (Codex r6 #3, Fable r6 N4b): a delete of the pause's one-time value failed and is still owed. Retried
+    /// (GUI: timer, `load()`, wake; agent: each run) until it succeeds; spent first at the end of any pause; the agent
+    /// stays registered while it is set. Not authenticated (defence in depth for a crash or quit while owed).
+    var pauseValueOwed = false
+
+    static func networkRestartHoldMessage(_ id: UUID) -> Data { Data("lockplus.network-restart-hold.v1\n\(id.uuidString)".utf8) }
 
     /// §12.3, review N2: between `quiesce` (or Sparkle's `prepareForInstall`) and `resumeAfterUpdate` no configuration's
     /// on-demand is turned on (`ProfilesStore.onDemandPlan` holds it) and nothing is restored or dropped from the pause
@@ -131,6 +211,10 @@ struct AppSettings: Codable, Sendable, Equatable {
     }
     /// §6.4 step 4: extension removals that failed, retried on the next reconcile.
     var pendingRemovals: [UUID] = []
+    /// Round 2 (Fable L8): per profile (UUID string), the runs in which its file check timed out. At
+    /// `ProfilesStore.maxTimeoutRuns` the check isn't retried automatically any more ("Check Again" resets it). Not
+    /// authenticated: a forged value can only stop retries the user can restart.
+    var verifyTimeoutRuns: [String: Int] = [:]
     /// User-defined sidebar order (default alphabetical).
     var profileOrder: [UUID] = []
 
@@ -165,7 +249,10 @@ struct AppSettings: Codable, Sendable, Equatable {
         onDemandSuspendedNetwork = try? c.decodeIfPresent(String.self, forKey: .onDemandSuspendedNetwork)
         onDemandPausedByStart = (try? c.decodeIfPresent([UUID].self, forKey: .onDemandPausedByStart)) ?? []
         networkRestartHold = try? c.decodeIfPresent(UUID.self, forKey: .networkRestartHold)
+        networkRestartHoldTag = try? c.decodeIfPresent(String.self, forKey: .networkRestartHoldTag)
+        pauseValueOwed = (try? c.decodeIfPresent(Bool.self, forKey: .pauseValueOwed)) ?? false
         pendingRemovals = (try? c.decodeIfPresent([UUID].self, forKey: .pendingRemovals)) ?? []
+        verifyTimeoutRuns = (try? c.decodeIfPresent([String: Int].self, forKey: .verifyTimeoutRuns)) ?? [:]
         profileOrder = (try? c.decodeIfPresent([UUID].self, forKey: .profileOrder)) ?? []
         // Schema 1 wrote the default (monochrome) into every file, so a stored "monochrome" can't be told from "never
         // changed": it moves to the new default. Any choice made from schema 2 on is kept as stored.
@@ -173,6 +260,16 @@ struct AppSettings: Codable, Sendable, Equatable {
             if menuBarIconStyle == .monochrome { menuBarIconStyle = .color }
             schema = Self.currentSchema
         }
+    }
+
+    /// Round 2 (M1b): the settings without the Auto-Connect choice's tag, which lands asynchronously after the choice
+    /// (`ProfilesStore`): its arrival is not a change the editable UI models must be refreshed from (E2E-2 bug 1: a push
+    /// between a click and its persistence reverts the click).
+    var uiComparable: AppSettings {
+        var s = self
+        s.autoConnect.choiceTag = nil
+        s.pauseValueOwed = false
+        return s
     }
 
     /// §11.3 visibility (2.0.1 E2E): the first launch of a build (a first launch or an update) opens the main window.

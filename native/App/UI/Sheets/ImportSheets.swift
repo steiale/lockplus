@@ -10,12 +10,15 @@ struct ImportPreviewSheet: View {
     @State private var showIgnored: Bool
     @State private var showNotApplied: Bool
     @State private var showNotes = false
+    /// Round 1 (Fable L2): an opened file's Import enables after `OpenedImportGuard.delay`.
+    @State private var armed: Bool
 
     /// `ignoredExpanded`: only the screenshot tests open the section; in the app it starts collapsed.
     init(preview: ImportPreview, ignoredExpanded: Bool = false) {
         _draft = State(initialValue: preview)
         _showIgnored = State(initialValue: ignoredExpanded)
         _showNotApplied = State(initialValue: ignoredExpanded)
+        _armed = State(initialValue: preview.openedFrom == nil)
     }
 
     var body: some View {
@@ -27,6 +30,7 @@ struct ImportPreviewSheet: View {
         let notes = report.items(in: .note)
         VStack(alignment: .leading, spacing: 14) {
             Text("Import “\(draft.fileName)”", comment: "Import sheet title").font(.headline)
+            if let source = draft.openedFrom { OpenedFromLine(source: source) }
 
             LPFormGrid {
                 LPFormRow(label: String(localized: "Name", comment: "Field")) {
@@ -109,13 +113,14 @@ struct ImportPreviewSheet: View {
                 Button(String(localized: "Cancel", comment: "Button")) { env.actions.cancelImport(); dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button(String(localized: "Import", comment: "Button")) { env.actions.confirmImport(draft); dismiss() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!draft.canImport)
+                    .keyboardShortcut(OpenedImportGuard.shortcut(openedFrom: draft.openedFrom))
+                    .disabled(!draft.canImport || !armed)
                     .help(report.blocksImport ? String(localized: "This profile uses something LockPlus doesn't support.", comment: "Tooltip") : "")
             }
         }
         .padding(20)
         .frame(width: 540)
+        .task { if !armed { await OpenedImportGuard.wait(); armed = true } }
     }
 
     private var typeLine: String {
@@ -126,6 +131,25 @@ struct ImportPreviewSheet: View {
     private var notNeededExplanation: some View {
         Text(ImportReportCopy.notNeededExplanation).font(.callout).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Round 1 (Fable L2): an import that came from an open event (any process can send one) is never confirmed by a
+/// Return the user meant for something else, nor by a click that landed as the sheet appeared: no default button, and
+/// the confirm button enables after `delay`.
+enum OpenedImportGuard {
+    static let delay: Duration = .seconds(1)
+    static func shortcut(openedFrom: String?) -> KeyboardShortcut? { openedFrom == nil ? .defaultAction : nil }
+    static func wait() async { try? await Task.sleep(for: delay) }
+}
+
+/// "Opened from ~/Downloads/work.ovpn": names the source of an open event's import.
+struct OpenedFromLine: View {
+    let source: String
+    var body: some View {
+        Text("Opened from \(source)", comment: "Import sheet: where the opened file came from; the argument is a path such as ~/Downloads/work.ovpn")
+            .font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)   // round 2 (Fable N4): never truncated
     }
 }
 
@@ -206,7 +230,7 @@ extension ImportReportItem {
              .separateRemotePortNotSupported, .protoForceNotSupported, .socksProxyNotSupported, .fragmentNotSupported, .pkcs12NotSupported,
              .engineRejects, .notSupportedInsideConnection, .httpProxyNeedsTCPRemote, .proxyOptionWithoutProxy, .proxyAuthNeedsInlineCredentials,
              .tlsClientNeedsPull, .inlineBodyLineStartsWithCloseTag, .inlineCredentialsMalformed, .staticChallengeMalformed, .privilegedLocalPort,
-             .parserDisagreement, .engineValidationFailed, .duplicateKeptLast, .devRewrittenToTun, .remoteCertEKUAppended, .keepaliveFloorAppended,
+             .parserDisagreement, .engineValidationFailed, .checkCrashed, .duplicateKeptLast, .devRewrittenToTun, .remoteCertEKUAppended, .keepaliveFloorAppended,
              .mssfixFloorAppended, .authNocacheAppended, .credentialsExtracted, .proxyCredentialsExtracted, .routeGatewayRewritten,
              .routeFormIgnoredByEngine, .setenvOptClassifiedAsDirective, .serverIdentityNotPinned, .legacyCBCEncryption, .compressionEnabled,
              .serverOnOtherNetwork, .proxyHostUnresolved, .wgHostBitsNormalized, .wgMTUAbove9000, .wgKeepaliveSuggested, .wgInvalid, .wgSyntax,
@@ -234,14 +258,17 @@ struct BatchImportSheet: View {
     @Environment(UIEnvironment.self) private var env
     @Environment(\.dismiss) private var dismiss
     @State private var draft: BatchImport
+    @State private var armed: Bool
 
     init(batch: BatchImport) {
         _draft = State(initialValue: batch)
+        _armed = State(initialValue: batch.openedFrom == nil)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Import “\(draft.archiveName)”", comment: "Batch import title").font(.headline)
+            if let source = draft.openedFrom { OpenedFromLine(source: source) }
             ForEach(draft.capErrors, id: \.self) { InlineStrip(severity: .critical, message: $0) }
             List {
                 ForEach($draft.items) { $item in
@@ -263,13 +290,14 @@ struct BatchImportSheet: View {
                 } else {
                     Button(String(localized: "Cancel", comment: "Button")) { env.actions.cancelImport(); dismiss() }.keyboardShortcut(.cancelAction)
                     Button(String(localized: "Import Selected", comment: "Button")) { env.actions.confirmBatch(draft) }
-                        .keyboardShortcut(.defaultAction)
-                        .disabled(!draft.items.contains { $0.selected && $0.isImportable })
+                        .keyboardShortcut(OpenedImportGuard.shortcut(openedFrom: draft.openedFrom))
+                        .disabled(!draft.items.contains { $0.selected && $0.isImportable } || !armed)
                 }
             }
         }
         .padding(20)
         .frame(width: 520, height: 420)
+        .task { if !armed { await OpenedImportGuard.wait(); armed = true } }
     }
 
     private var summary: String {

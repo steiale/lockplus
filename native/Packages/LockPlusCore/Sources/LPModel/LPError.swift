@@ -21,7 +21,8 @@ public enum LPErrorCode: Int, Codable, Sendable, CaseIterable {
          payloadTooLarge, malformedRequest, rateLimited /* reserved */, notOwner, cancelled, staleAnswer
     // profile
     case profileNotProvisioned = 100, profileInvalid, profileRevisionStale, unsupportedDirective,
-         killSwitchNotApplied        // E2E-1: the NE configuration's protocol flags don't carry the kill switch (app-side, never on the wire)
+         killSwitchNotApplied,       // E2E-1: the NE configuration's protocol flags don't carry the kill switch (app-side, never on the wire)
+         profileCheckCrashed         // 2.0.2: the validator service died twice on the same profile check (app-side, never on the wire)
     // tunnel (also NSError codes for cancelTunnelWithError, domain LPTunnelError.errorDomain)
     case authFailed = 200, authRequired, authTimedOut, webAuthUnsupported, keyPassphraseRequired,
          connectTimeout, peerUnreachable, dnsResolutionFailed, engineFatal, tunDeviceFailed,
@@ -32,7 +33,8 @@ public enum LPErrorCode: Int, Codable, Sendable, CaseIterable {
          noNetwork,                  // E2E-4 200011: NE ended the session for want of a network (NEVPNConnectionError 2; app-side, never on the wire)
          anotherTunnelActive,        // 2.0.1: a start refused while another LockPlus configuration's session runs in the extension
          supersededByKillSwitch,     // 2.0.1 (review H1): a session without the kill switch ended for a kill-switch profile's start
-         sessionInterrupted          // 2.0.1 round 5: a session torn down for a kill-switch start, then kept (protected meanwhile) and held
+         sessionInterrupted,         // 2.0.1 round 5: a session torn down for a kill-switch start, then kept (protected meanwhile) and held
+         startNotAuthorised          // 2.0.2: a start the profile's owner didn't authorise (no LockPlus arm, no replay, no auto-connect)
 }
 
 /// The tunnel error keeps its code across `fetchLastDisconnectError` (CustomNSError, §5.5).

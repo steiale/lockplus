@@ -32,7 +32,54 @@ public struct PersistedTunnelState: Codable, Sendable, Equatable {
     /// (kill switch off only), merged; the fallback when a start carries none (§9.3).
     public var endpointHosts: [ProfileKey: [String: [String]]] = [:]
     public var sessions: [OwnedSession] = []
+    /// 2.0.2 (PLAN §3): the start each profile's session was admitted under (armed: its nonce; unattended: nil); NE's
+    /// restart of that session is honoured against it. Additive: a state file without the key decodes to empty (schema
+    /// unchanged), and a 2.0.2 record always carries a nonce or none. Capped at `maxAuthorisedStarts` (oldest out, never
+    /// the running session's).
+    public var authorisedStarts: [ProfileKey: AuthorisedStart] = [:]
+    public static let maxAuthorisedStarts = 256
     public init() {}
+
+    private enum CodingKeys: String, CodingKey {
+        case schema, latches, lastErrors, authFailedAt, endpointHosts, sessions, authorisedStarts
+    }
+    public init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        schema = try c.decode(Int.self, forKey: .schema)
+        latches = try c.decode([ProfileKey: Latch].self, forKey: .latches)
+        lastErrors = try c.decode([ProfileKey: LastError].self, forKey: .lastErrors)
+        authFailedAt = try c.decode([ProfileKey: Date].self, forKey: .authFailedAt)
+        endpointHosts = try c.decode([ProfileKey: [String: [String]]].self, forKey: .endpointHosts)
+        sessions = try c.decode([OwnedSession].self, forKey: .sessions)
+        authorisedStarts = try c.decodeIfPresent([ProfileKey: AuthorisedStart].self, forKey: .authorisedStarts) ?? [:]
+    }
+}
+
+extension PersistedTunnelState {
+    /// Round 4 (Codex r4): the start authorisations of a state file that doesn't decode as a whole (another schema,
+    /// another part damaged). Record by record: a damaged one is skipped, the rest kept. Bounded by the cap (kill-switch
+    /// records first, newest first).
+    static func salvageAuthorisedStarts(_ d: Data) -> [ProfileKey: AuthorisedStart] {
+        struct Skip: Decodable { init(from d: Decoder) throws {} }
+        struct Lenient: Decodable { let records: [ProfileKey: AuthorisedStart]
+            enum K: String, CodingKey { case authorisedStarts }
+            init(from d: Decoder) throws {
+                let c = try d.container(keyedBy: K.self)
+                // A dictionary with a non-String key encodes as [key, value, key, value, …].
+                var u = try c.nestedUnkeyedContainer(forKey: .authorisedStarts)
+                var out: [ProfileKey: AuthorisedStart] = [:]
+                while !u.isAtEnd {
+                    guard let k = try? u.decode(ProfileKey.self) else { _ = try? u.decode(Skip.self); _ = try? u.decode(Skip.self); continue }
+                    if let v = try? u.decode(AuthorisedStart.self) { out[k] = v } else { _ = try? u.decode(Skip.self) }
+                }
+                records = out
+            }
+        }
+        guard let all = (try? PropertyListDecoder().decode(Lenient.self, from: d))?.records else { return [:] }
+        guard all.count > maxAuthorisedStarts else { return all }
+        let kept = all.sorted { ($0.value.killSwitch ? 1 : 0, $0.value.at) > ($1.value.killSwitch ? 1 : 0, $1.value.at) }.prefix(maxAuthorisedStarts)
+        return Dictionary(uniqueKeysWithValues: kept.map { ($0.key, $0.value) })
+    }
 }
 
 /// Synchronous on purpose: called from the controller actor with no suspension point (no reentrancy, §7.1 rule 1).
@@ -64,21 +111,35 @@ public final class PlistTunnelStateStore: TunnelStateStore {
     }
     public func load() -> PersistedTunnelState {
         lock.withLock { _ in
-            guard let d = try? Data(contentsOf: url),
-                  let s = try? PropertyListDecoder().decode(PersistedTunnelState.self, from: d),
-                  s.schema == PersistedTunnelState.currentSchema else { return PersistedTunnelState() }
+            guard let d = try? Data(contentsOf: url) else { return PersistedTunnelState() }
+            guard let s = try? PropertyListDecoder().decode(PersistedTunnelState.self, from: d),
+                  s.schema == PersistedTunnelState.currentSchema else {
+                // Round 1 (Fable L7): discarding the file used to discard the start authorisations too. Round 4 (Codex r4):
+                // the start authorisations are salvaged on their own (each record carries its boot; one of another boot
+                // is dropped at load as always), so NE's restart of a running kill-switch session survives a state file
+                // of another schema or with another part unreadable.
+                var fresh = PersistedTunnelState()
+                fresh.authorisedStarts = PersistedTunnelState.salvageAuthorisedStarts(d)
+                engineLog.fault("state.plist unreadable or of another schema: starting empty but for \(fresh.authorisedStarts.count) start authorisation(s)")
+                return fresh
+            }
             return s
         }
     }
     public func save(_ s: PersistedTunnelState) {
         lock.withLock { _ in
-            guard let d = try? PropertyListEncoder.binary.encode(s) else { return }
+            guard let d = try? PropertyListEncoder.binary.encode(s) else {
+                engineLog.fault("state.plist encode failed: state not persisted")
+                return
+            }
             try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             do {
                 try d.write(to: url, options: [.atomic])
                 chmod(url.path, 0o600)
             } catch {
-                engineLog.error("state.plist write failed")
+                // Round 1 (Fable L7): a lost write can lose a start authorisation, and NE's restart of a kill-switch
+                // session would then be refused (225). Fault level so it shows in a sysdiagnose.
+                engineLog.fault("state.plist write failed: start authorisations, latches and last errors not persisted; NE's restart of a running session may be refused")
             }
         }
     }

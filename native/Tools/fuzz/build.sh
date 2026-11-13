@@ -9,7 +9,7 @@
 # fallback builds the same LLVMFuzzerTestOneInput entry points with ASan + SanitizerCoverage and the bundled
 # StandaloneDriver.swift (corpus replay + seeded mutations). Corpus: corpus/<ovpn|wg|keychain|zip>/; crashes become
 # fixtures under corpus/regressions/.
-# fuzz_zip_import (draft 9.1) compiles App/Services/ProfileZip.swift against ZIPFoundation at the pins.sh pin, fetched
+# fuzz_zip_import (draft 9.1, 2.0.2) compiles Packages/ProfileValidator/Sources/LPValidatorService/ArchiveReader.swift (+ LPModel/ZipModel.swift) against ZIPFoundation at the pins.sh pin, fetched
 # into $LP_BUILD_ROOT/fuzz/ZIPFoundation (commit-checked) and built as its own Swift 5 module with the same sanitizers.
 set -euo pipefail
 here=${0:A:h}
@@ -65,7 +65,10 @@ $swiftc -O -g -sdk "$(xcrun --sdk macosx --show-sdk-path)" -target arm64-apple-m
   -module-name ZIPFoundation -emit-module -emit-module-path $zmod/ZIPFoundation.swiftmodule -emit-library -static \
   -o $zmod/libZIPFoundation.a ${san:#-parse-as-library} $zf/Sources/ZIPFoundation/*.swift
 zcommon=(${common:#LPParsingFuzz}); zcommon=(${zcommon:#-module-name} -module-name LPZipFuzz -I $zmod -L $zmod -lZIPFoundation)
-zsrcs=($here/../../App/Services/ProfileZip.swift $here/targets/fuzz_zip_import.swift)
+# 2.0.2: the zip reader lives in the validator service package (ArchiveReader.swift); it imports LPModel for the zip
+# model types (LPModel/ZipModel.swift); both are compiled as one module.
+sed -E '/^import LPModel$/d' $here/../../Packages/ProfileValidator/Sources/LPValidatorService/ArchiveReader.swift > $src/ArchiveReader.swift
+zsrcs=($src/ArchiveReader.swift $src/LPModel/ZipModel.swift $src/LPModel/ImportLimits.swift $here/targets/fuzz_zip_import.swift)   # round 1: ZipCaps defaults use OVPNImportLimits
 if [[ $mode == libfuzzer ]]; then
   $swiftc $zcommon -parse-as-library -sanitize=fuzzer,address $zsrcs -o $out/fuzz_zip_import
 else

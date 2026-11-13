@@ -47,10 +47,10 @@ import TunnelEngineTestSupport
         /// `latchSelf`: profile A has a `.hard` start latch (`.authFailed`) at the controller's init.
         /// `summaries`: that many session summaries of profile B stored at the controller's init (the ring's cap is 100).
         init(killSwitch: Bool = false, routeProtection: Bool = false, latchOther: Bool = false, latchSelf: Bool = false,
-             summaries: Int = 0, routed: Bool = false) {
+             summaries: Int = 0, routed: Bool = false, authorisation: Bool = false) {
             self.routed = routed
             let other = otherPID
-            h = Harness(killSwitch: killSwitch, routeProtection: routeProtection, state: { pid in
+            h = Harness(killSwitch: killSwitch, routeProtection: routeProtection, authorisation: authorisation, state: { pid in
                 var st = PersistedTunnelState()
                 for i in 0..<summaries {
                     let t = Date(timeIntervalSinceReferenceDate: Double(i) * 60)
@@ -95,8 +95,8 @@ import TunnelEngineTestSupport
 
         /// `startTunnel` of `inst` for profile A (`other: false`) or B; `killSwitch` overrides its `includeAllNetworks`.
         func start(_ inst: ProviderLease, other: Bool = false, killSwitch: Bool? = nil, manual: Bool = true,
-                   bindSucceeds: Bool = true) -> StartTask {
-            start(inst, StartRequest(options: StartOptions(isManual: manual), configuration: config(other: other, killSwitch: killSwitch)),
+                   bindSucceeds: Bool = true, nonce: UUID? = nil) -> StartTask {
+            start(inst, StartRequest(options: StartOptions(isManual: manual, nonce: nonce), configuration: config(other: other, killSwitch: killSwitch)),
                   bindSucceeds: bindSucceeds)
         }
 
@@ -627,6 +627,50 @@ import TunnelEngineTestSupport
         #expect(w.h.host.cancelledCodes.isEmpty)
     }
 
+    /// Round 2 (Fable L1): a replay waiting in the guard carries the record it matched. When that record went meanwhile
+    /// (a revoke, here the incumbent's user stop), the replay puts it back at admission: the session it starts keeps
+    /// NE's restart honoured.
+    @Test func aReplayWaitingInTheGuardPutsItsRecordBackAtAdmission() async {
+        let w = World(killSwitch: true, authorisation: true)
+        await w.provision()
+        let a1 = w.instance(), a2 = w.instance()
+        let nonce = UUID()
+        _ = await w.h.controller.armStart(profileID: w.h.pid, ownerUID: w.h.owner, nonce: nonce)
+        let t1 = w.start(a1, nonce: nonce)
+        await w.finish(await w.adapter(0))
+        #expect(w.code(await w.value(t1, "A1")) == nil)
+        let t2 = w.start(a2, nonce: nonce)                                  // NE's start of the duplicate: a replay, waits
+        #expect(!(await waitUntil(timeout: .milliseconds(300)) { w.h.factory.adapters.count > 1 }))
+        // A revoke while it waits removes nothing for good; the incumbent then ends without a user stop (its instance
+        // is stopped by NE, e.g. a crash restart): the duplicate is admitted and its record is back.
+        var st = w.h.state.load(); st.authorisedStarts[w.h.key] = nil; w.h.state.save(st)
+        await w.h.controller.revokeUnattended(keeping: [], ownerUID: w.h.owner)
+        w.providers.stopped(a1.token)
+        await w.h.controller.stop(reason: .providerFailed, owner: a1)
+        await w.finish(await w.adapter(1))
+        #expect(w.code(await w.value(t2, "A2")) == nil)
+        #expect(w.h.state.load().authorisedStarts[w.h.key]?.nonce == nonce)
+    }
+
+    /// Round 3 (Fable N1): the user's stop of the incumbent ends the record; a replay of it waiting in the guard is no
+    /// longer NE's restart of a session the user wants: refused (225), and the record is not put back.
+    @Test func aReplayWaitingInTheGuardIsRefusedAfterTheUsersStop() async {
+        let w = World(killSwitch: true, authorisation: true)
+        await w.provision()
+        let a1 = w.instance(), a2 = w.instance()
+        let nonce = UUID()
+        _ = await w.h.controller.armStart(profileID: w.h.pid, ownerUID: w.h.owner, nonce: nonce)
+        let t1 = w.start(a1, nonce: nonce)
+        await w.finish(await w.adapter(0))
+        #expect(w.code(await w.value(t1, "A1")) == nil)
+        let t2 = w.start(a2, nonce: nonce)
+        #expect(!(await waitUntil(timeout: .milliseconds(300)) { w.h.factory.adapters.count > 1 }))
+        await w.stopTunnel(a1)                                              // the user's stop clears the record
+        #expect(w.code(await w.value(t2, "A2")) == .startNotAuthorised)
+        #expect(w.h.state.load().authorisedStarts[w.h.key] == nil)
+        #expect(w.h.factory.adapters.count == 1)
+    }
+
     /// The waiting start's own stop ends it cleanly (`.startCancelled`); the incumbent is untouched.
     @Test func aStopOfTheWaitingStartEndsIt() async {
         let w = World(killSwitch: true)
@@ -964,6 +1008,19 @@ import TunnelEngineTestSupport
             r = await backend.handle(.wipeAllSecrets, request: try! LPWire.encode(EmptyRequest()), peer: peer)
         }
         if case .failure(let e) = r { Issue.record("backend: \(e.code)") }
+        if how == .changed {
+            // Round 3 (Codex r3 #1): a profile change never ends the kill-switch hold (it stays held, closed). Round 4
+            // (2.0.2, Fable L1): nor the kill-switch duplicate waiting beside it; once the user's stop ends the hold, the
+            // duplicate binds and runs the committed revision.
+            #expect(!(await waitUntil(timeout: .milliseconds(200)) { w.binds.list.count > 1 }))
+            if case .held = await w.h.phase {} else { Issue.record("the kill-switch hold ended") }
+            await w.stopTunnel(a1)
+            #expect(w.code(await w.value(ta1, "A1")) != nil)
+            await w.finish(await w.adapter(1))
+            #expect(w.code(await w.value(t2, "A2")) == nil)
+            #expect(w.binds.list == [a1.token, a2.token])
+            return
+        }
         #expect(w.code(await w.value(ta1, "A1")) != nil)
         #expect(w.code(await w.value(t2, "A2")) == .startCancelled)
         #expect(w.binds.list == [a1.token])
@@ -992,7 +1049,8 @@ import TunnelEngineTestSupport
 
     /// Round 6 (Fable L3): a higher revision of the preempting start's profile during the preempted session's teardown
     /// doesn't take it down too: it proceeds on the new payload and connects with the kill switch; B ends as preempted.
-    /// A duplicate of the old revision waiting behind its reservation still ends.
+    /// Round 4 (2.0.2, Fable L1): a kill-switch duplicate of the old revision waiting behind its reservation is kept too
+    /// (it waits beside K's session, and proceeds on the committed payload once that ends).
     @Test func aPreemptingStartProceedsWhenItsProfileChangesDuringTheTeardown() async {
         let w = World(routed: true)
         await w.provision()
@@ -1009,13 +1067,17 @@ import TunnelEngineTestSupport
             profileID: w.h.pid, kind: w.h.kind, revision: 2, payload: Data(Harness.payload(w.h.kind).utf8), credentials: nil)),
             peer: PeerContext(uid: w.h.owner, pid: 1))
         if case .failure(let e) = r { Issue.record("provision: \(e.code)") }
-        #expect(w.code(await w.value(td, "D", within: .seconds(1))) == .startCancelled)
         adapterB.releaseStop()
         await w.finish(await w.adapter(n))
         #expect(w.code(await w.value(tk, "K")) == nil)
         #expect(await w.h.waitPhase(.connected))
         #expect(w.binds.list == [b.token, k.token])
         #expect(await waitUntil { w.host(b)?.cancelledCodes == [.supersededByKillSwitch] })
+        #expect(!(await waitUntil(timeout: .milliseconds(200)) { w.binds.list.count > 2 }))   // D still waits, not ended
+        await w.stopTunnel(k)
+        await w.finish(await w.adapter(n + 1))
+        #expect(w.code(await w.value(td, "D")) == nil)
+        #expect(w.binds.list == [b.token, k.token, d.token])
     }
 
     /// Round 7 (Codex M3): the same for a PENDING incumbent (its start completion still open): it gains the flag while
@@ -1040,10 +1102,10 @@ import TunnelEngineTestSupport
         #expect(await w.h.waitPhase(.connected))
     }
 
-    /// Round 7 (Fable L1, probe P1): the exempted reservation holder (a kill-switch duplicate of A, revision 1, with A
-    /// provisioned at revision 2 during the teardown) whose preemption is vetoed (A regained the flag) would wait as a
-    /// duplicate of the OLD revision: it ends instead, and never binds once A ends.
-    @Test func anExemptedHolderWhosePreemptionIsVetoedEnds() async {
+    /// Round 7 (Fable L1, probe P1), round 4 of 2.0.2 (Fable L1): the reservation holder (a kill-switch duplicate of A,
+    /// revision 1, with A provisioned at revision 2 during the teardown) whose preemption is vetoed (A regained the flag)
+    /// waits as a duplicate: a kill-switch start is never ended by a commit. Once A ends it binds, on the new revision.
+    @Test func anExemptedHolderWhosePreemptionIsVetoedWaitsAndProceeds() async {
         let w = World(routed: true)
         await w.provision()
         let a = w.instance(), k = w.instance()
@@ -1051,19 +1113,25 @@ import TunnelEngineTestSupport
         adapterA.s.withLock { $0.hangStop = true }
         let tk = w.start(k, killSwitch: true)
         #expect(await waitUntil { adapterA.stopCount == 1 })
+        await w.h.provision(revision: 2, payload: Round3ControllerTests.revision2)
         await w.h.controller.profileProvisioned(w.h.pid, ownerUID: w.h.owner, revision: 2)
         w.host(a)?.setIncludeAllNetworks(true)
         adapterA.releaseStop()
-        #expect(w.code(await w.value(tk, "K")) == .startCancelled)
-        #expect(await w.h.phase == .held(.blockedAfterFailure(.sessionInterrupted)))
+        #expect(await w.h.waitPhase(.held(.blockedAfterFailure(.sessionInterrupted))))
+        #expect(!(await waitUntil(timeout: .milliseconds(200)) { w.binds.list.count > 1 }))   // K waits
+        let n = w.h.factory.adapters.count
         await w.stopTunnel(a)
-        #expect(!(await waitUntil(timeout: .milliseconds(300)) { w.binds.list.count > 1 }))
+        let next = await w.adapter(n)
+        #expect(next.request?.payload.bytesForTest == Array(Round3ControllerTests.revision2.utf8))
+        await w.finish(next)
+        #expect(w.code(await w.value(tk, "K")) == nil)
+        #expect(w.binds.list == [a.token, k.token])
     }
 
     /// Round 8 (Fable L1, probe P1): the other order: the preemption is vetoed FIRST (the duplicate then waits), and
-    /// only then A is provisioned at revision 2: the duplicate gave the reservation back, so it is invalidated like any
-    /// waiter of the old revision and never binds once A ends.
-    @Test func aVetoedPreemptorIsInvalidatedByALaterRevision() async {
+    /// only then A is provisioned at revision 2. Round 4 of 2.0.2 (Fable L1): a kill-switch waiter is kept; it binds once
+    /// A ends.
+    @Test func aVetoedPreemptorIsKeptAcrossALaterRevision() async {
         let w = World(routed: true)
         await w.provision()
         let a = w.instance(), k = w.instance()
@@ -1076,9 +1144,12 @@ import TunnelEngineTestSupport
         #expect(await w.h.waitPhase(.held(.blockedAfterFailure(.sessionInterrupted))))
         #expect(!(await waitUntil(timeout: .milliseconds(200)) { w.binds.list.count > 1 }))   // K waits
         await w.h.controller.profileProvisioned(w.h.pid, ownerUID: w.h.owner, revision: 2)
-        #expect(w.code(await w.value(tk, "K", within: .seconds(1))) == .startCancelled)
+        #expect(!(await waitUntil(timeout: .milliseconds(200)) { w.binds.list.count > 1 }))   // still waiting, not ended
+        let n = w.h.factory.adapters.count
         await w.stopTunnel(a)
-        #expect(!(await waitUntil(timeout: .milliseconds(300)) { w.binds.list.count > 1 }))
+        await w.finish(await w.adapter(n))
+        #expect(w.code(await w.value(tk, "K")) == nil)
+        #expect(w.binds.list == [a.token, k.token])
     }
 
     /// Round 9 (Codex LOW): B's start is refused (222) beside A while B's payload is missing; the refusal is recorded
@@ -1124,34 +1195,46 @@ import TunnelEngineTestSupport
         _ = (tk, td)
     }
 
-    /// Round 6 (Codex M2): the credential write fails after the new payload was written; the waiter of the OLD revision
-    /// ends with that write, and a successful retry of the same revision (no longer "higher") ends one too. Released
-    /// incumbent: the waiter never binds.
-    @Test func aPartialProvisionStillEndsAWaiterOfTheOldRevision() async {
-        let w = World(killSwitch: true)
-        await w.provision()
-        let backend = EngineServiceBackend(controller: w.h.controller, secrets: w.h.secrets, validator: FakeValidator())
-        let peer = PeerContext(uid: w.h.owner, pid: 1)
-        let a1 = w.instance(), a2 = w.instance(), a3 = w.instance()
-        _ = await w.connect(a1)
-        let t2 = w.start(a2)
-        #expect(!(await waitUntil(timeout: .milliseconds(200)) { w.binds.list.count > 1 }))
-        func provision() async -> Result<Data?, LPError> {
-            await backend.handle(.provisionProfile, request: try! LPWire.encode(ProvisionRequest(
-                profileID: w.h.pid, kind: w.h.kind, revision: 2, payload: Data(Harness.payload(w.h.kind).utf8),
-                credentials: CredentialRecord(username: Data("a".utf8), password: Data("p".utf8)))), peer: peer)
+    /// Round 6 (Codex M2): the credential write fails after the new payload was written; a waiter of the OLD revision
+    /// WITHOUT a kill switch (here in a stale session's teardown: NE stopped A's instance) ends with that write.
+    /// Round 4 of 2.0.2 (Fable L1): a kill-switch waiter of the old revision is kept across the partial write and the
+    /// successful retry, and binds once the incumbent ends.
+    @Test func aPartialProvisionEndsAWaiterWithoutAKillSwitchOnly() async {
+        for killSwitch in [false, true] {
+            let w = World(killSwitch: killSwitch)
+            await w.provision()
+            let backend = EngineServiceBackend(controller: w.h.controller, secrets: w.h.secrets, validator: FakeValidator())
+            let peer = PeerContext(uid: w.h.owner, pid: 1)
+            let a1 = w.instance(), a2 = w.instance()
+            let first = await w.connect(a1)
+            if !killSwitch {                                                // stale: the waiter tears it down (slowly)
+                first.s.withLock { $0.hangStop = true }
+                w.providers.stopped(a1.token)
+            }
+            let t2 = w.start(a2)
+            if !killSwitch { #expect(await waitUntil { first.stopCount == 1 }) }
+            #expect(!(await waitUntil(timeout: .milliseconds(200)) { w.binds.list.count > 1 }))
+            func provision() async -> Result<Data?, LPError> {
+                await backend.handle(.provisionProfile, request: try! LPWire.encode(ProvisionRequest(
+                    profileID: w.h.pid, kind: w.h.kind, revision: 2, payload: Data(Harness.payload(w.h.kind).utf8),
+                    credentials: CredentialRecord(username: Data("a".utf8), password: Data("p".utf8)))), peer: peer)
+            }
+            await w.h.secrets.setFailure(LPError(.secretStoreUnavailable), for: .credential)
+            if case .success = await provision() { Issue.record("the credential write should fail") }
+            await w.h.secrets.setFailure(nil, for: .credential)
+            if case .failure(let e) = await provision() { Issue.record("retry: \(e.code)") }
+            if killSwitch {
+                #expect(!(await waitUntil(timeout: .milliseconds(200)) { w.binds.list.count > 1 }))
+                await w.stopTunnel(a1)
+                await w.finish(await w.adapter(1))
+                #expect(w.code(await w.value(t2, "A2")) == nil)
+                #expect(w.binds.list == [a1.token, a2.token])
+            } else {
+                first.releaseStop()
+                #expect(w.code(await w.value(t2, "A2")) == .startCancelled)
+                #expect(w.binds.list == [a1.token])
+            }
         }
-        await w.h.secrets.setFailure(LPError(.secretStoreUnavailable), for: .credential)
-        if case .success = await provision() { Issue.record("the credential write should fail") }
-        #expect(w.code(await w.value(t2, "A2", within: .seconds(1))) == .startCancelled)
-        let t3 = w.start(a3)                                                 // another waiter of the old revision
-        #expect(!(await waitUntil(timeout: .milliseconds(200)) { w.binds.list.count > 1 }))
-        await w.h.secrets.setFailure(nil, for: .credential)
-        if case .failure(let e) = await provision() { Issue.record("retry: \(e.code)") }
-        #expect(w.code(await w.value(t3, "A3", within: .seconds(1))) == .startCancelled)
-        await w.stopTunnel(a1)
-        #expect(!(await waitUntil(timeout: .milliseconds(200)) { w.binds.list.count > 1 }))
-        #expect(w.binds.list == [a1.token])
     }
 
     /// Round 6 (Fable N3): the credential delete of a removal fails after the payload delete: the removal still ends
@@ -1215,9 +1298,9 @@ import TunnelEngineTestSupport
         _ = t2
     }
 
-    /// Round 5: the incumbent's held start ends by itself (a higher revision ends the old configuration's start), not
-    /// by a stop: a waiting duplicate that already carries the new revision is not invalidated; `endSession` wakes it
-    /// and it proceeds.
+    /// Round 5, round 3 (Codex r3 #1): the incumbent's held kill-switch start is NOT ended by a higher revision (a failed
+    /// protected start is open); a waiting duplicate that already carries the new revision is not invalidated either. It
+    /// proceeds once the incumbent ends (here the user's stop).
     @Test func aWaitingDuplicateOfTheNewRevisionProceedsWhenTheOldOneEnds() async {
         let w = World(killSwitch: true)
         await w.provision()
@@ -1232,14 +1315,18 @@ import TunnelEngineTestSupport
         _ = await backend.handle(.provisionProfile, request: try! LPWire.encode(ProvisionRequest(
             profileID: w.h.pid, kind: w.h.kind, revision: 2, payload: Data(Harness.payload(w.h.kind).utf8), credentials: nil)),
             peer: PeerContext(uid: w.h.owner, pid: 1))
+        #expect(!(await waitUntil(timeout: .milliseconds(200)) { w.binds.list.count > 1 }))     // A1 kept, held
+        if case .held = await w.h.phase {} else { Issue.record("the kill-switch hold ended") }
+        await w.stopTunnel(a1)
         #expect(w.code(await w.value(ta1, "A1")) != nil)
         #expect(await waitUntil { w.binds.list == [a1.token, a2.token] })
         _ = t2
     }
 
-    /// Round 5 (Codex 2): beside a CONNECTED session of its profile (which the change doesn't end), a waiting duplicate
-    /// of the old revision ends at once; the connected session stays.
-    @Test func aDuplicateWaitingBesideAConnectedSessionEndsAtOnceWhenItsProfileChanges() async {
+    /// Round 5 (Codex 2), round 4 of 2.0.2 (Fable L1: one rule for every kill-switch start): beside a CONNECTED session
+    /// of its profile, a waiting kill-switch duplicate of the old revision is kept; the connected session stays, and the
+    /// duplicate binds once it ends.
+    @Test func aDuplicateWaitingBesideAConnectedSessionIsKeptWhenItsProfileChanges() async {
         let w = World(killSwitch: true)
         await w.provision()
         let a1 = w.instance(), a2 = w.instance()
@@ -1247,9 +1334,12 @@ import TunnelEngineTestSupport
         let t2 = w.start(a2)
         #expect(!(await waitUntil(timeout: .milliseconds(200)) { w.binds.list.count > 1 }))
         await w.h.controller.profileProvisioned(w.h.pid, ownerUID: w.h.owner, revision: 2)
-        #expect(w.code(await w.value(t2, "A2", within: .seconds(1))) == .startCancelled)
+        #expect(!(await waitUntil(timeout: .milliseconds(200)) { w.binds.list.count > 1 }))
         #expect(await w.h.phase == .connected)
-        #expect(w.binds.list == [a1.token])
+        await w.stopTunnel(a1)
+        await w.finish(await w.adapter(1))
+        #expect(w.code(await w.value(t2, "A2")) == nil)
+        #expect(w.binds.list == [a1.token, a2.token])
     }
 
     // MARK: Round 5, Codex 5: the latch at admission

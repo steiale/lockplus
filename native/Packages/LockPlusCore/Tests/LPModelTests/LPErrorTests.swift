@@ -13,6 +13,9 @@ import Testing
         #expect(LPErrorCode.anotherTunnelActive.rawValue == 222)
         #expect(LPErrorCode.supersededByKillSwitch.rawValue == 223)
         #expect(LPErrorCode.sessionInterrupted.rawValue == 224)
+        #expect(LPErrorCode.startNotAuthorised.rawValue == 225)
+        #expect(LPErrorCode.killSwitchNotApplied.rawValue == 104)
+        #expect(LPErrorCode.profileCheckCrashed.rawValue == 105)
     }
 
     @Test func detailIsCapped() {

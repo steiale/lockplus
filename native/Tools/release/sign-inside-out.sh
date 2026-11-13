@@ -2,6 +2,7 @@
 # Inside-out Developer ID signing with the golden entitlements (DESIGN §12.4, ref/toolchain §6, §7.5).
 #   Sparkle Autoupdate → Updater.app → Sparkle.framework (each -o runtime, no entitlements; XPCServices/ must already
 #   be stripped) → extension dylibs (--timestamp, no -o runtime; the ASan runtime in ASan test builds only) →
+#   LockPlusValidator.xpc (-o runtime, golden Validator entitlements = app-sandbox only, no profile) →
 #   .systemextension (-o runtime, golden Tunnel entitlements) → app (-o runtime, golden app entitlements).
 # Rules: -f -s <identity> --timestamp (no value: Apple's server; never `--timestamp <url>`), never --deep, never sudo,
 # never on a stapled bundle (re-signing invalidates the ticket).
@@ -11,8 +12,11 @@ source "${0:A:h}/common.sh"
 APP=${1:?usage: sign-inside-out.sh <LockPlus.app> [--embed-profiles] [--asan]}; shift
 EMBED=0; ASAN=0
 for a in "$@"; do case $a in --embed-profiles) EMBED=1;; --asan) ASAN=1;; *) fail "unknown option $a";; esac; done
-EXT=$(ext_of "$APP"); X=$(ext_bin_of "$APP")
+EXT=$(ext_of "$APP"); X=$(ext_bin_of "$APP"); VAL=$(val_of "$APP")
 [[ -x "$X" ]] || fail "no extension binary at $X"
+[[ -x "$(val_bin_of "$APP")" ]] || fail "no validator service binary in $VAL"
+XS=("$APP"/Contents/XPCServices/*(N))
+[[ ${#XS} -eq 1 && "${XS[1]:t}" == LockPlusValidator.xpc ]] || fail "Contents/XPCServices must contain exactly LockPlusValidator.xpc"
 [[ $EUID -ne 0 ]] || fail "never sign as root"
 [[ ! -f "$APP/Contents/CodeResources" ]] || fail "stapled bundle: never re-sign after staple"
 xcrun stapler validate "$APP" >/dev/null 2>&1 && fail "bundle already carries a notarization ticket; never re-sign after staple"
@@ -52,6 +56,9 @@ fi
 if [[ -d "$EXT/Contents/Frameworks" ]]; then
   find "$EXT/Contents/Frameworks" -name '*.dylib' -print0 | xargs -0 -n1 "${S[@]}"
 fi
+# The validator service: sandbox-only entitlements, no provisioning profile (PLAN-2.0.2 §1.6). Never --embed-profiles.
+[[ ! -e "$VAL/Contents/embedded.provisionprofile" ]] || fail "the validator service must not carry a provisioning profile"
+"${S[@]}" -o runtime --entitlements "$GOLD/LockPlusValidator.entitlements" "$VAL"
 "${S[@]}" -o runtime --entitlements "$GOLD/LockPlusTunnel.entitlements" "$EXT"
 if [[ -d "$APP/Contents/Frameworks" ]]; then
   find "$APP/Contents/Frameworks" -maxdepth 1 -name '*.dylib' -print0 | xargs -0 -n1 "${S[@]}"

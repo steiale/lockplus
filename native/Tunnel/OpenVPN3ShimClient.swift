@@ -1,4 +1,5 @@
 import Foundation
+import LPOptionsParser
 import LPModel
 import OpenVPN3Shim
 import TunnelEngine
@@ -26,8 +27,8 @@ struct OpenVPN3ShimFactory: OpenVPNClientFactory {
         var err: NSString?
         guard let session = LPOpenVPN3Session(config: c, delegate: bridge, error: &err) else {
             // L5: eval_config's raw message can quote option arguments (possibly secrets): only its category reaches
-            // LPTunnelError.detail, as in validateProfile.
-            throw LPTunnelError(.profileInvalid, detail: (err as String?).map(ExtensionPayloadValidator.category))
+            // LPTunnelError.detail, as in the validator service.
+            throw LPTunnelError(.profileInvalid, detail: (err as String?).map(ProfileCheckRules.category))
         }
         return OpenVPN3ShimClient(session)
     }

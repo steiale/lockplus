@@ -458,13 +458,19 @@ import TunnelEngineTestSupport
         #expect(h.code(await t.value) == .engineFatal)
     }
 
-    @Test func aChangedProfileEndsTheHold() async {
+    /// Round 3 (Codex r3 #1): a profile change never ends a kill-switch start's hold (a failed protected start is open,
+    /// and this may be NE's replay that nothing else would start again). It stays held, closed; the user's stop ends it.
+    @Test func aChangedProfileKeepsAKillSwitchHold() async {
         let h = Harness(killSwitch: true)
         await h.provision()
         let t = h.start()
         (await h.adapter()).finishStart(.failure(.failed(LPTunnelError(.serverIdentityMismatch))))
         #expect(await h.waitPhase(.held(.blockedAfterFailure(.serverIdentityMismatch))))
+        await h.provision(revision: 2)
         await h.controller.profileProvisioned(h.pid, ownerUID: h.owner, revision: 2)
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(await h.phase == .held(.blockedAfterFailure(.serverIdentityMismatch)))
+        await h.controller.stop(reason: .userInitiated)
         #expect(h.code(await t.value) == .serverIdentityMismatch)
         #expect(await h.phase == .idle)
     }
@@ -479,9 +485,10 @@ import TunnelEngineTestSupport
         _ = await h.adapter(1)
     }
 
-    /// Review L2: new credentials AND a higher revision (one `provision`): the retry they would start never runs the
-    /// new payload under the old configuration; the profile change ends the start. Also when a retry is in flight.
-    @Test func aChangedProfileEndsARetryInFlight() async {
+    /// Review L2, round 3 (Codex r3 #1): new credentials AND a higher revision (one `provision`) while a kill-switch
+    /// start's retry is in flight: the attempt is not torn down, it finishes and the start connects. Without a kill
+    /// switch the profile change still ends a waiting start (`aWaitingStartEndsWhenTheProfileChanges`).
+    @Test func aChangedProfileLeavesAKillSwitchRetryInFlight() async {
         let h = Harness(killSwitch: true)
         await h.provision()
         let t = h.start()
@@ -489,10 +496,28 @@ import TunnelEngineTestSupport
         #expect(await h.waitPhase(.held(.blockedAfterFailure(.serverIdentityMismatch))))
         await h.controller.credentialsUpdated(h.pid, ownerUID: h.owner)     // the retry attempt is now running
         let b = await h.adapter(1)
+        await h.provision(revision: 2)
         await h.controller.profileProvisioned(h.pid, ownerUID: h.owner, revision: 2)
-        #expect(h.code(await t.value) == .serverIdentityMismatch)
-        #expect(await waitUntil { b.stopCount == 1 })
-        #expect(await h.phase == .idle && h.factory.adapters.count == 2)
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(b.stopCount == 0)
+        _ = await b.requestSettings(Harness.plan).value()
+        b.finishStart()
+        #expect(h.code(await t.value) == nil)
+        #expect(await h.waitPhase(.connected))
+        #expect(h.factory.adapters.count == 2)
+    }
+
+    /// Without a kill switch the round 9 rule stands: a higher revision ends the attempt in flight (the app starts the
+    /// new revision; a failed split start is not open).
+    @Test func aChangedProfileEndsAStartWithoutAKillSwitch() async {
+        let h = Harness()
+        await h.provision()
+        let t = h.start()
+        let a = await h.adapter()
+        await h.controller.profileProvisioned(h.pid, ownerUID: h.owner, revision: 2)
+        #expect(h.code(await t.value) == .startCancelled)
+        #expect(await waitUntil { a.stopCount == 1 })
+        #expect(await h.phase == .idle)
     }
 
     /// Review L4: under the flag no new endpoint IPs can appear inside the hold, so a resolution failure waits for the

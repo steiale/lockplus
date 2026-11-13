@@ -131,7 +131,9 @@ import UniformTypeIdentifiers
         case .details:
             openMainWindow()
         case .runDiagnostics:
+            // A user's press of "Run Diagnostics": show the section and run it (checks + the connection self-test).
             NavigationRequest.post(.diagnostics)
+            runDiagnostics()
         case .openSystemSettings:
             env.extensionStore.openExtensionSettings()
         case .showSwitchAgain:
@@ -259,11 +261,18 @@ import UniformTypeIdentifiers
 
     /// ⌘D copies the payload, so it goes through the same gate as export (§11.4).
     func duplicate(_ profileID: ProfileItem.ID) {
-        guard let env, let p = env.profiles.profile(profileID) else { return }
+        guard let env, let shown = env.profiles.profile(profileID) else { return }
         Task { @MainActor in
-            guard await env.hooks.authenticate(reason: String(localized: "duplicate the profile “\(p.name)”", comment: "LAContext reason")) else { return }
+            guard await env.hooks.authenticate(reason: String(localized: "duplicate the profile “\(shown.name)”", comment: "LAContext reason")) else { return }
             do throws(LPError) {
-                let payload = try await env.profiles.payload(profileID)
+                // Round 1 (Codex 5): one consistent snapshot, taken after the wait: the metadata (its `engineVerified`
+                // included) and the payload of exactly that revision, checked against its digest. An editor save that
+                // landed meanwhile is duplicated as saved, never as new bytes under the old verdict.
+                guard let p = env.profiles.profile(profileID) else { return }
+                let payload = try await env.profiles.repository.payload(for: p)
+                guard payload.withUnsafeBytes({ PayloadDigest.sha256Hex(bytes: $0) }) == p.payloadDigest else {
+                    throw LPError(.profileInvalid, detail: "the profile changed while it was duplicated")
+                }
                 let creds = await env.profiles.credentialRecord(profileID)
                 let copy = try await env.profiles.create(ProfileDraft(
                     name: p.name, kind: p.kind, payload: payload, summary: p.summary, auth: p.auth, report: p.importReport ?? ImportReport(),
@@ -339,6 +348,7 @@ import UniformTypeIdentifiers
     func forgetPassword(_ profileID: ProfileItem.ID) { with { env in Task { await env.profiles.forgetPassword(profileID) } } }
 
     /// "Show" (RevealGate, §6.4/F-10): LAContext, then the capture-excluded sheet.
+    func checkAgain(_ profileID: ProfileItem.ID) { with { env in Task { await env.profiles.checkAgain(profileID) } } }
     func showPassword(_ profileID: ProfileItem.ID) {
         guard let env, let p = env.profiles.profile(profileID) else { return }
         Task { @MainActor in

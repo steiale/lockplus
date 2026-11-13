@@ -176,8 +176,15 @@ public final class FakeAdapter: TunnelAdapter, @unchecked Sendable {
 public final class FakeAdapterFactory: TunnelAdapterFactory, @unchecked Sendable {
     private let made = Mutex<[FakeAdapter]>([])
     public init() {}
+    private let reuse = Mutex(false)
+    /// Round 6 (Fable r6 N2): while on, `makeAdapter` hands out the last adapter object again (listed again), so a
+    /// test can tell an attempt apart from its adapter's identity.
+    public func reuseLastAdapter(_ on: Bool) { reuse.withLock { $0 = on } }
     public func makeAdapter(kind: VPNProtocolKind) -> any TunnelAdapter {
-        let a = FakeAdapter(kind: kind); made.withLock { $0.append(a) }; return a
+        made.withLock { m in
+            let a = (reuse.withLock { $0 } ? m.last : nil) ?? FakeAdapter(kind: kind)
+            m.append(a); return a
+        }
     }
     public var adapters: [FakeAdapter] { made.withLock { $0 } }
     public var last: FakeAdapter? { made.withLock { $0.last } }
@@ -198,13 +205,26 @@ public actor InMemorySecretStore: ExtensionSecretStore {
     public var kindFailures: [SecretKind: LPError] = [:]
     public func setFailure(_ e: LPError?) { failure = e }
     public func setFailure(_ e: LPError?, for kind: SecretKind) { kindFailures[kind] = e }
-    public func put(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t, revision: UInt64, _ bytes: SecretBytes) throws(LPError) {
+    public func put(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t, revision: UInt64, _ bytes: SecretBytes) async throws(LPError) {
+        if kind == .credential { await waitIfCredentialWriteHeld() }
+        try write(kind, id, ownerUID: ownerUID, revision: revision, bytes)
+    }
+    private func write(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t, revision: UInt64, _ bytes: SecretBytes) throws(LPError) {
         if let failure { throw failure }
         if let f = kindFailures[kind] { throw f }
         puts += 1
         items[key(kind, id, ownerUID)] = Item(bytes: bytes.withUnsafeBytes { Array($0) }, owner: ownerUID, revision: revision)
     }
-    public func get(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t) throws(LPError) -> SecretBytes? {
+    /// Round 5 (Codex r5 #6): while set, every `.credential` read waits until `holdCredentialReads(false)`.
+    private var credentialReadsHeld = false
+    private var heldReads: [CheckedContinuation<Void, Never>] = []
+    public var heldReadCount: Int { heldReads.count }
+    public func holdCredentialReads(_ on: Bool) {
+        credentialReadsHeld = on
+        if !on { heldReads.forEach { $0.resume() }; heldReads = [] }
+    }
+    public func get(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t) async throws(LPError) -> SecretBytes? {
+        if credentialReadsHeld && kind == .credential { await withCheckedContinuation { heldReads.append($0) } }
         gets += 1
         if let failure { throw failure }
         return items[key(kind, id, ownerUID)].map { SecretBytes(copying: $0.bytes) }
@@ -212,6 +232,31 @@ public actor InMemorySecretStore: ExtensionSecretStore {
     public func entry(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t) throws(LPError) -> ProvisionIndexEntry? {
         if let failure { throw failure }
         return items[key(kind, id, ownerUID)].map { ProvisionIndexEntry(id: id, kind: kind, revision: $0.revision, ownerUID: $0.owner, digest: nil) }
+    }
+    public func load(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t) throws(LPError) -> (entry: ProvisionIndexEntry, bytes: SecretBytes)? {
+        gets += 1
+        if let failure { throw failure }
+        return items[key(kind, id, ownerUID)].map {
+            (ProvisionIndexEntry(id: id, kind: kind, revision: $0.revision, ownerUID: $0.owner, digest: nil), SecretBytes(copying: $0.bytes))
+        }
+    }
+    /// Round 6 (Codex r6 #2): the next credential write (`put(.credential)` or `putCredential`) waits, before it checks
+    /// or writes anything, until `releaseCredentialWrite()`; a conditional write's check and write then run together.
+    private var holdNextWrite = false
+    private var heldWrite: CheckedContinuation<Void, Never>?
+    public var credentialWriteHeld: Bool { heldWrite != nil }
+    public func holdNextCredentialWrite() { holdNextWrite = true }
+    public func releaseCredentialWrite() { heldWrite?.resume(); heldWrite = nil }
+    private func waitIfCredentialWriteHeld() async {
+        guard holdNextWrite else { return }
+        holdNextWrite = false
+        await withCheckedContinuation { heldWrite = $0 }
+    }
+    public func putCredential(_ id: UUID, ownerUID: uid_t, ifPayloadRevision revision: UInt64, _ bytes: SecretBytes) async throws(LPError) -> Bool {
+        await waitIfCredentialWriteHeld()
+        guard try entry(.payload, id, ownerUID: ownerUID)?.revision == revision else { return false }
+        try write(.credential, id, ownerUID: ownerUID, revision: revision, bytes)
+        return true
     }
     public func delete(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t) throws(LPError) {
         if let f = kindFailures[kind] { throw f }
@@ -305,10 +350,19 @@ public final class FakePathSource: PathSource, @unchecked Sendable {
     public func send(_ p: PathSnapshot) { c.withLock { $0 }?.yield(p) }
 }
 
-public struct FakeValidator: PayloadValidator {
-    public var reject: Bool
+/// Records which of the two checks ran (2.0.2): `provisionCalls` / `startCalls`.
+public final class FakeValidator: PayloadValidator {
+    public let reject: Bool
+    private let calls = Mutex<(provision: Int, start: Int)>((0, 0))
     public init(reject: Bool = false) { self.reject = reject }
-    public func validate(kind: VPNProtocolKind, payload: SecretBytes) throws(LPTunnelError) {
+    public var provisionCalls: Int { calls.withLock { $0.provision } }
+    public var startCalls: Int { calls.withLock { $0.start } }
+    public func validateForProvision(kind: VPNProtocolKind, payload: SecretBytes) throws(LPTunnelError) {
+        calls.withLock { $0.provision += 1 }
+        if reject { throw LPTunnelError(.profileInvalid, detail: "fake") }
+    }
+    public func validateForStart(kind: VPNProtocolKind, payload: SecretBytes) throws(LPTunnelError) {
+        calls.withLock { $0.start += 1 }
         if reject { throw LPTunnelError(.profileInvalid, detail: "fake") }
     }
 }

@@ -162,6 +162,8 @@ public enum ImportReason: Codable, Sendable, Hashable {
     case privilegedLocalPort
     case parserDisagreement                  // [6]
     case engineValidationFailed(category: String)   // [7]
+    /// 2.0.2: the validator service died twice checking this file (`LPErrorCode.profileCheckCrashed`). Not supported.
+    case checkCrashed
 
     // MARK: OpenVPN, ignored / dropped
     case loggingManaged
@@ -281,6 +283,7 @@ public enum ImportReason: Codable, Sendable, Hashable {
         case .privilegedLocalPort: return "Binding a local port below 1024 isn't allowed; use `remote host port` for the server port."
         case .parserDisagreement: return "The profile parses differently in LockPlus's OpenVPN engine (parser disagreement)."
         case .engineValidationFailed(let c): return "LockPlus's OpenVPN engine rejected the profile (\(c))."
+        case .checkCrashed: return "LockPlus couldn't check this file safely."
         case .loggingManaged: return "logging is managed by LockPlus"
         case .reconnectManaged: return "LockPlus handles reconnecting"
         case .persistenceNotNeeded: return "not needed; LockPlus keeps the tunnel up itself"

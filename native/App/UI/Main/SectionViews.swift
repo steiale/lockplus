@@ -172,6 +172,7 @@ struct EndReasonLabel: View {
 
 struct DiagnosticsView: View {
     @Environment(UIEnvironment.self) private var env
+    @Environment(\.selfTestStore) private var selfTestStore
     @State private var routeFilter = ""
 
     var body: some View {
@@ -181,8 +182,9 @@ struct DiagnosticsView: View {
                 Text("Diagnostics", comment: "Section title").font(.title2).foregroundStyle(Color.lp.label).accessibilityAddTraits(.isHeader)
                 Spacer()
                 if d.isRunning { ProgressView().controlSize(.small) }
+                // A button press: also runs the connection self-test (it may contact its probe host), AppEnvironment.runDiagnostics.
                 Button(String(localized: "Run All", comment: "Button")) { env.actions.runDiagnostics() }
-                    .keyboardShortcut("r", modifiers: .command)
+                .keyboardShortcut("r", modifiers: .command)
             }
             VStack(spacing: 0) {
                 ForEach(d.checks) { check in
@@ -192,6 +194,8 @@ struct DiagnosticsView: View {
             }
             .padding(.horizontal, 12)
             .lpSurface(.heroCard)
+
+            if let store = selfTestStore { SelfTestSection(store: store) }
 
             HStack {
                 Text("Routes", comment: "Diagnostics heading").font(.headline).foregroundStyle(Color.lp.label).accessibilityAddTraits(.isHeader)
@@ -228,6 +232,105 @@ struct DiagnosticsView: View {
             }
         }
         .padding(20)
+    }
+}
+
+// MARK: - Connection self-test (2.0.2, D-5)
+
+private struct SelfTestStoreKey: EnvironmentKey { static let defaultValue: DiagnosticsStore? = nil }
+
+extension EnvironmentValues {
+    /// The diagnostics store that runs the connection self-test; nil hides the section (previews, tests).
+    var selfTestStore: DiagnosticsStore? {
+        get { self[SelfTestStoreKey.self] }
+        set { self[SelfTestStoreKey.self] = newValue }
+    }
+}
+
+/// Reads the store; `SelfTestContent` is the pure part (screenshot-tested).
+struct SelfTestSection: View {
+    let store: DiagnosticsStore
+    var body: some View {
+        SelfTestContent(report: store.selfTest, running: store.selfTestRunning, canRun: store.connectedProfileID != nil) {
+            Task { await store.runSelfTest() }
+        }
+    }
+}
+
+struct SelfTestContent: View {
+    let report: SelfTestReport?
+    let running: Bool
+    let canRun: Bool
+    let run: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Connection Test", comment: "Diagnostics heading").font(.headline).foregroundStyle(Color.lp.label).accessibilityAddTraits(.isHeader)
+                Spacer()
+                if running { ProgressView().controlSize(.small) }
+                Button(String(localized: "Test Connection", comment: "Button")) { run() }
+                    .disabled(running || !canRun)
+                    .help(canRun ? String(localized: "Checks that IPv4, IPv6 and DNS use the tunnel.", comment: "Tooltip")
+                                 : String(localized: "Connect first to test the connection.", comment: "Tooltip"))
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                if let report {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        ResultGlyph(result: report.overallGlyph)
+                        Text(report.headline).font(.headline).foregroundStyle(Color.lp.label).fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, 8)
+                    .accessibilityElement(children: .combine)
+                    ForEach(report.rows()) { row in
+                        Divider()
+                        SelfTestRowView(row: row)
+                    }
+                    Divider()
+                    HStack {
+                        Text("Tested \(report.at.formatted(date: .omitted, time: .shortened))", comment: "Self-test timestamp")
+                            .font(.caption).foregroundStyle(Color.lp.label2)
+                        Spacer()
+                        Button(String(localized: "Copy Results", comment: "Button")) {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(report.copyText(), forType: .string)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                } else {
+                    Text(canRun ? String(localized: "Checks that IPv4, IPv6 and DNS use the tunnel. LockPlus contacts its own test page (steiale.github.io) only when you press the button, and nothing else.",
+                                         comment: "Self-test placeholder")
+                                : String(localized: "Connect to a profile to test the connection.", comment: "Self-test placeholder, disconnected"))
+                        .font(.callout).foregroundStyle(Color.lp.label2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.vertical, 10)
+                }
+            }
+            .padding(.horizontal, 12)
+            .lpSurface(.heroCard)
+        }
+    }
+}
+
+struct SelfTestRowView: View {
+    let row: SelfTestRow
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            if let r = row.result {
+                ResultGlyph(result: r)
+            } else {
+                Image(systemName: "info.circle").foregroundStyle(.secondary).accessibilityHidden(true)
+            }
+            Text(row.title).frame(width: 140, alignment: .leading).foregroundStyle(Color.lp.label)   // 140: the German "Ausgangsadresse" fits
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.text).foregroundStyle(Color.lp.label2).textSelection(.enabled)
+                if !row.detail.isEmpty { Text(row.detail).font(.caption).foregroundStyle(Color.lp.label2).textSelection(.enabled) }
+            }
+            .fixedSize(horizontal: false, vertical: true)       // wraps, never truncates (owner review: cut-off text)
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
     }
 }
 

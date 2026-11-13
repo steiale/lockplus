@@ -89,9 +89,15 @@ struct OnDemandPlan: Sendable, Equatable {
     /// network change". A profile that would need the user (a one-time code, or a password that isn't saved) can't
     /// start on demand (§8.4, review L8).
     static func plan(for profile: Profile, rules: AutoConnectRules, paused: Bool, hasSavedPassword: Bool = true) -> OnDemandPlan? {
+        // Round 1 (Fable L1): an unverified profile ("Not yet verified") is never started by NE on its own: its start
+        // would ask for a provision of bytes the sandboxed check never passed.
+        guard profile.engineVerified else { return nil }
         let interactive = profile.needsOneTimeCode || (profile.auth?.needsUserPass == true && !hasSavedPassword)
         guard !interactive else { return nil }
-        if rules.profileID == profile.id { return autoConnect(rules, paused: paused) }
+        // Round 1 (Codex 4): a profile picked for Auto-Connect while the toggle is off has no plan: rules on the
+        // configuration (`onDemand` in its provider configuration) are the user's consent to unattended starts, which the
+        // extension admits without an arm. A pause keeps the plan (disabled): the consent stands, only the rules rest.
+        if rules.profileID == profile.id { return rules.enabled ? autoConnect(rules, paused: paused) : nil }
         if profile.policy.stayConnected { return stayConnected(paused: paused) }
         return nil
     }
@@ -176,13 +182,15 @@ struct ProviderConfigurationValues: Sendable, Equatable {
         var revision: UInt64
         var metaRev: UInt64
         var ownerUID: uid_t?
+        /// The configuration's `onDemand` (unattended-start consent as the extension reads it).
+        var onDemand: Bool = false
     }
 
     static func stored(_ d: [String: Any]?) -> Stored? {
         guard let d, (d["v"] as? Int) == 1,
               let rev = (d["revision"] as? NSNumber)?.uint64Value,
               let meta = (d["metaRev"] as? NSNumber)?.uint64Value else { return nil }
-        return Stored(revision: rev, metaRev: meta, ownerUID: ownerUID(d))
+        return Stored(revision: rev, metaRev: meta, ownerUID: ownerUID(d), onDemand: (d["onDemand"] as? Bool) ?? false)
     }
 
     /// The owner of a saved configuration, readable even when the rest of its dictionary isn't (E2E-4: another user's
@@ -201,8 +209,12 @@ enum StartOptionsBuilder {
     /// endpoints from the extension's cache). Non-nil (NE would replay it on a later restart of its own).
     static var crashRestart: [String: NSObject] { [:] }
 
-    static func options(endpoints: [String: [String]] = [:]) -> [String: NSObject] {
+    /// 2.0.2 (PLAN-2.0.2 §3): `nonce` is the one this start's `armStart` announced (`StartArming`); the extension honours
+    /// a manual start only with a matching arm of the profile's owner. A UUID string, never anything else. nil only for
+    /// an extension that predates start authorisation (`StartArming.Outcome.legacyExtension`).
+    static func options(endpoints: [String: [String]] = [:], nonce: UUID? = nil) -> [String: NSObject] {
         var o: [String: NSObject] = [StartOptionKey.manual: NSNumber(value: 1)]
+        if let nonce { o[StartOptionKey.startNonce] = nonce.uuidString as NSString }
         let bounded = endpoints.keys.sorted().prefix(StartOptionKey.maxEndpointHosts).reduce(into: [String: [String]]()) { d, h in
             let ips = Array((endpoints[h] ?? []).prefix(StartOptionKey.maxIPsPerHost))
             if !ips.isEmpty { d[h] = ips }
@@ -211,5 +223,54 @@ enum StartOptionsBuilder {
             o[StartOptionKey.endpoints] = bounded.mapValues { $0.map { $0 as NSString } as NSArray } as NSDictionary
         }
         return o
+    }
+}
+
+/// 2.0.2 (PLAN-2.0.2 §3, D-1): every start the app makes of a manual profile is announced to the extension first
+/// (`armStart`, over the kernel-authenticated XPC connection), and the start carries the same nonce. Without that the
+/// extension refuses it (225): a System Settings toggle or `scutil --nc start` of a manual profile is not an authorised start.
+/// Unattended starts (PF 52 crash restart `StartOptionsBuilder.crashRestart`, on-demand) are not armed: the extension
+/// admits them by the profile's on-demand rules.
+enum StartArming {
+    enum Outcome: Sendable, Equatable {
+        /// Armed: start with this nonce.
+        case armed(UUID)
+        /// The extension predates start authorisation (its hello lacks `.startAuthorisation`, e.g. the 2.0.1 extension is
+        /// still running until its replacement is approved): it enforces nothing and ignores the option. The start goes
+        /// ahead without a nonce. Only ever chosen when the hello itself succeeded and says so (never on a timeout).
+        case legacyExtension
+        case failed(LPError)
+    }
+
+    /// Round 2 (Fable L6): on `.legacyExtension` a kill-switch start is refused, in the GUI and the headless agent alike:
+    /// it would carry no nonce, and NE's restart of it into the replacement extension would be refused (an open Mac).
+    static func refusesKillSwitchStart(onLegacyExtension killSwitch: Bool) -> Bool { killSwitch }
+
+    /// Whether a failure is the extension's definite answer about this profile (not a transport problem): the profile
+    /// isn't provisioned in the caller's namespace, or the request was refused. A retry would not help.
+    static func isDefinite(_ e: LPError) -> Bool {
+        switch e.code {
+        case .profileNotProvisioned, .profileRevisionStale, .malformedRequest, .unauthorizedPeer, .notOwner: true
+        default: false
+        }
+    }
+
+    /// `cap`: an upper bound for the whole exchange (the wire timeout of `armStart` is 2 s already).
+    static func arm(_ id: UUID, service: any TunnelServicing, cap: Duration = .seconds(2)) async -> Outcome {
+        let nonce = UUID()
+        let attempt: Result<Void, LPError> = await withDeadline(cap, onTimeout: .failure(LPError(.timeout, detail: "armStart"))) {
+            do throws(LPError) {
+                _ = try await service.call(.armStart, ArmStartRequest(profileID: id, nonce: nonce), as: ArmStartReply.self)
+                return .success(())
+            } catch { return .failure(error) }
+        }
+        switch attempt {
+        case .success: return .armed(nonce)
+        case .failure(let e):
+            guard !isDefinite(e), e.code != .timeout else { return .failed(e) }
+            // An older extension answers an unknown method with a transport error. Only its own hello can say it is older.
+            if let h = try? await service.hello(), !h.capabilities.contains(.startAuthorisation) { return .legacyExtension }
+            return .failed(e)
+        }
     }
 }

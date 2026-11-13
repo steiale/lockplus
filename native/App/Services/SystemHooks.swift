@@ -45,7 +45,13 @@ import UserNotifications
 
     func authenticate(reason: String) async -> Bool {
         let ctx = LAContext()
-        do { return try await ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) } catch { return false }
+        do { return try await ctx.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason) } catch {
+            // 200026 E2E (Edit Config…): a refused or cancelled prompt ends the action silently by design; logged (the
+            // LAError code only, never the reason, which names the profile) so "nothing happened" can be told apart
+            // from a window that didn't open.
+            log.notice("authentication not granted: \((error as NSError).domain, privacy: .public) \((error as NSError).code, privacy: .public)")
+            return false
+        }
     }
 
     func loginItemState() -> LoginItemState {
@@ -152,7 +158,13 @@ import UserNotifications
     var onNotificationActivated: (@MainActor () -> Void)?
     private var loginItem = LoginItemState.disabled
 
-    func authenticate(reason: String) async -> Bool { calls.append("authenticate"); return authenticateResult }
+    /// Tests (round 1, Codex 5): runs while the authentication is "showing", so a change can land inside the wait.
+    var duringAuthenticate: (@MainActor () async -> Void)?
+    func authenticate(reason: String) async -> Bool {
+        calls.append("authenticate")
+        await duringAuthenticate?()
+        return authenticateResult
+    }
     func loginItemState() -> LoginItemState { loginItem }
     func setLaunchAtLogin(_ on: Bool) -> LoginItemState { calls.append("launchAtLogin \(on)"); loginItem = on ? .enabled : .disabled; return loginItem }
     func notificationsDenied() async -> Bool { false }

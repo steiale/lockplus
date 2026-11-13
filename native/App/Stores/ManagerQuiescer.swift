@@ -1,10 +1,14 @@
 import Foundation
 import LPModel
+import os
 
 /// `TunnelQuiescing` over the NE managers (DESIGN §4.2 step 3, §4.6 step 2, §12.3). `SystemExtensionManager` is
 /// created before the stores, so the stores are attached afterwards (`attach`); until then it answers "nothing to do".
 @MainActor final class ManagerQuiescer: TunnelQuiescing {
     private weak var connection: ConnectionStore?
+    private let log = Logger(subsystem: "io.github.steiale.lockplus.mac", category: "lifecycle")
+    /// Between the checks of an unreadable keychain (tests: no wait).
+    var retrySleep: @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0) }
     private var managers: (any VPNManaging)?
     private var settings: SettingsStore?
 
@@ -27,10 +31,15 @@ import LPModel
         let active = snapshot.first { $0.status.isActive }?.profileID
         let onDemand = snapshot.filter(\.onDemandEnabled).map(\.profileID)
         if settings.value.pendingResume == nil {
-            await settings.updateDurably {
-                $0.pendingResume = PendingResume(profileID: active, onDemandEnabledIDs: onDemand,
-                                                 reason: reason == .reinstall ? .reinstall : .extensionUpdate)
+            let why: PendingResume.Reason = reason == .reinstall ? .reinstall : .extensionUpdate
+            var record = PendingResume(profileID: active, onDemandEnabledIDs: onDemand, reason: why)
+            // Round 2 (Fable M1a): the profile is reconnected after the update only with this one-shot intent.
+            if let active, let repository = connection?.profileRepository {
+                do throws(LPError) { record.intent = try await repository.sealRecord(.pendingResume, PendingResume.message(profileID: active, reason: why)) } catch {
+                    log.error("update resume record not sealed (\(error.code.rawValue, privacy: .public)); the profile won't reconnect by itself")
+                }
             }
+            await settings.updateDurably { $0.pendingResume = record }
         }
         for id in onDemand { try? await managers.setOnDemandEnabled(false, for: id) }
         // Review e321e10 LOW 1: user stops (no teardown entry, no error fetch, no crash wait).
@@ -64,9 +73,42 @@ import LPModel
             $0.expectedUpdate = nil
         }
         if let connection {
-            await connection.returnOnDemand(r.onDemandEnabledIDs, thenConnect: r.profileID, ending: clear)
+            // Round 2 (Fable M1a): settings.json isn't authenticated; the profile is reconnected only with the record's
+            // one-shot intent (consumed here). Without it, on-demand comes back and nothing is connected.
+            var target = r.profileID
+            if let id = target {
+                let check = await Self.checkIntent(r, profileID: id, repository: connection.profileRepository, sleep: retrySleep)
+                // Round 3 (Fable L2): the update's resume ends here whatever the check says; its one-time value goes (an
+                // unreadable keychain excepted), so a genuine record altered at this moment can't be written back later.
+                if check != .unavailable { await connection.profileRepository.consumeRecord(.pendingResume) }
+                if check != .valid {
+                    log.fault("update resume record of \(id.uuidString.prefix(8), privacy: .public): \(String(describing: check), privacy: .public); not reconnected")
+                    connection.noteProblem(check == .unavailable
+                        ? String(localized: "A profile wasn't reconnected after the update: LockPlus couldn't read its keychain. Connect it yourself.",
+                                 comment: "Problems line (2.0.2 round 2): the extension update's resume record couldn't be checked")
+                        : String(localized: "A profile wasn't reconnected after the update: its resume record was changed outside LockPlus. Connect it yourself.",
+                                 comment: "Problems line (2.0.2 round 2): the extension update's resume record failed its authentication check"))
+                    target = nil
+                }
+            } else {
+                // Round 3 (Fable L2): a record whose profile was removed at this moment ends too (its value is spent).
+                await connection.profileRepository.consumeRecord(.pendingResume)
+            }
+            await connection.returnOnDemand(r.onDemandEnabledIDs, thenConnect: target, ending: clear)
         } else {
             await settings.updateDurably(clear)
         }
+    }
+
+    /// Round 2 (Fable M1a): a keychain that can't be read is asked again twice, a second apart (the record stays valid).
+    static func checkIntent(_ r: PendingResume, profileID: UUID, repository: ProfileRepository,
+                            sleep: @Sendable (Duration) async -> Void) async -> RecordCheck {
+        let message = PendingResume.message(profileID: profileID, reason: r.reason)
+        var check = await repository.checkRecord(.pendingResume, tag: r.intent, message)
+        for _ in 0..<2 where check == .unavailable {
+            await sleep(.seconds(1))
+            check = await repository.checkRecord(.pendingResume, tag: r.intent, message)
+        }
+        return check
     }
 }

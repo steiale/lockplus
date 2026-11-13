@@ -22,3 +22,14 @@ for n in LockPlus LockPlusTunnel; do
   diff <(print -r -- "$want") <(norm_plist "$gold") || fail "$n: sources and golden differ beyond suffix + identity keys"
   ok "$n entitlements: sources ≡ golden (modulo suffix and identity keys)"
 done
+# 2.0.2: the validator service's pair is IDENTICAL and is exactly { com.apple.security.app-sandbox: true } (PLAN-2.0.2 §1.6).
+for f in "$SRC_ENT/LockPlusValidator.entitlements" "$GOLD/LockPlusValidator.entitlements"; do
+  plutil -lint "$f" >/dev/null || fail "$f: plutil -lint"
+  [[ "$(head -c 5 "$f")" == '<?xml' ]] || fail "$f: not XML (or has a BOM)"
+  ! grep -q $'\r' "$f" || fail "$f: CRLF"
+  [[ "$(norm_plist "$f" | jq -cS .)" == '{"com.apple.security.app-sandbox":true}' ]] \
+    || fail "$f: the validator's entitlements must be exactly {com.apple.security.app-sandbox: true}"
+done
+diff <(norm_plist "$SRC_ENT/LockPlusValidator.entitlements") <(norm_plist "$GOLD/LockPlusValidator.entitlements") \
+  || fail "LockPlusValidator: sources and golden differ (they must be identical)"
+ok "LockPlusValidator entitlements: sources ≡ golden ≡ {app-sandbox}"

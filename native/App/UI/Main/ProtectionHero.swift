@@ -6,6 +6,8 @@ import SwiftUI
 /// 5-minute chart, the DNS line, the error strip and the actions the derived state allows.
 struct ProtectionHero: View {
     @Environment(UIEnvironment.self) private var env
+    /// 2.0.2 (PLAN-2.0.2 §5.3): the connection self-test, for the "Test Connection" link (nil in previews: no link).
+    @Environment(\.selfTestStore) private var selfTestStore
     let profile: ProfileItem
 
     var body: some View {
@@ -58,7 +60,20 @@ struct ProtectionHero: View {
                 HeroStats()
                 LiveThroughputChart(samples: env.stats.samples)
                     .frame(height: 90)
-                DNSLine(verdict: env.connection.inputs.dns)
+                HStack(alignment: .firstTextBaseline) {
+                    DNSLine(verdict: env.connection.inputs.dns)
+                    Spacer(minLength: 8)
+                    if isCurrentProfile, let store = selfTestStore {
+                        // A user's press only (it contacts the probe host); the results are in Diagnostics.
+                        Button(String(localized: "Test Connection", comment: "Button")) {
+                            NavigationRequest.post(.diagnostics)
+                            Task { await store.runSelfTest(profile.id) }
+                        }
+                        .buttonStyle(.link)
+                        .disabled(store.selfTestRunning)
+                        .help(String(localized: "Checks that IPv4, IPv6 and DNS use the tunnel.", comment: "Tooltip"))
+                    }
+                }
             }
 
             // 2.0.1 E2E F2: why this (non-current) profile ended or couldn't start: refused beside another LockPlus
@@ -70,7 +85,15 @@ struct ProtectionHero: View {
                 InlineStrip(severity: .info, message: ConnectionUIModel.reconnectedAfterRestartText)
             }
             if profile.notYetVerified && !condition.isActive {
-                InlineStrip(severity: .info, message: ProfileItem.notYetVerifiedExplanation)
+                if profile.verificationStalled {
+                    InlineStrip(severity: .attention, message: ProfileItem.verificationStalledExplanation) {
+                        Button(String(localized: "Check Again", comment: "Button: run the file check of a not-yet-verified profile again (2.0.2 round 2)")) {
+                            env.actions.checkAgain(profile.id)
+                        }
+                    }
+                } else {
+                    InlineStrip(severity: .info, message: ProfileItem.notYetVerifiedExplanation)
+                }
             }
             if profile.protectionRepairing && profile.killSwitch {
                 InlineStrip(severity: .attention, message: ProfileItem.protectionRepairingExplanation)
@@ -113,7 +136,7 @@ struct ProtectionHero: View {
         case .details:
             Button(action.title) { env.presentation.showErrorDetails = true }
         case .runDiagnostics:
-            Button(action.title) { env.actions.runDiagnostics() }
+            Button(action.title) { env.actions.perform(.runDiagnostics) }       // shows Diagnostics, where the results are
         default:
             if primary {
                 Button(action.title) { env.actions.perform(action) }

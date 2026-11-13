@@ -179,7 +179,10 @@ struct AppRootBehaviourTests {
         q.attach(managers: h.managers, settings: h.env.settings, connection: h.env.connection)
         #expect(await q.hasOnDemandOrResumeMarker())
         await q.quiesce(reason: .extensionUpdate)
-        #expect(h.env.settings.value.pendingResume == PendingResume(profileID: p.id, onDemandEnabledIDs: [p.id], reason: .extensionUpdate))
+        var recorded = h.env.settings.value.pendingResume
+        #expect(recorded?.intent != nil)                                    // round 2 (M1a): sealed
+        recorded?.intent = nil
+        #expect(recorded == PendingResume(profileID: p.id, onDemandEnabledIDs: [p.id], reason: .extensionUpdate))
         #expect(h.managers.entries[p.id]?.onDemand == false)
         #expect(h.managers.stops == [p.id])
         await q.resumeAfterUpdate()
@@ -403,9 +406,8 @@ struct AppRootBehaviourTests {
     }
 
     @Test func unverifiedOpenVPNProfileCannotConnect() async throws {
-        let h = Harness()
+        let h = Harness(validator: FakeProfileValidator(.fails(LPError(.extensionUnavailable))))   // the validator service is down
         defer { h.dir.cleanup() }
-        h.service.state.withLock { $0.failAll = LPError(.extensionUnavailable) }
         let p = try await h.add("Office.ovpn", PreviewSeed.officeOvpn)
         #expect(!p.engineVerified)
         h.env.connection.connect(p.id)

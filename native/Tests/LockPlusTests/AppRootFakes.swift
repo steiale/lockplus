@@ -48,6 +48,8 @@ struct TestDir {
     var onStatusChange: ((UUID, TunnelStatus) -> Void)?
     var onConfigurationChange: (() -> Void)?
     var onStrayStatusChange: (() -> Void)?
+    /// Round 2 (Fable M2): the NE store's "unknown connection went live" signal (tests fire it by hand).
+    var onUnknownConnectionActive: (() -> Void)?
     /// Pulsed after every state change of the fake (`until` re-checks its condition on it: event-driven, no polling).
     var onChange: (@MainActor () -> Void)?
 
@@ -72,7 +74,8 @@ struct TestDir {
     }
     var managers: [ManagerSnapshot] {
         entries.map { id, e in
-            ManagerSnapshot(profileID: id, stored: .init(revision: e.cfg.provider.revision, metaRev: e.cfg.provider.metaRev, ownerUID: e.cfg.provider.ownerUID),
+            ManagerSnapshot(profileID: id, stored: .init(revision: e.cfg.provider.revision, metaRev: e.cfg.provider.metaRev, ownerUID: e.cfg.provider.ownerUID,
+                                                     onDemand: e.cfg.provider.onDemand),
                             flags: e.cfg.flags, onDemandEnabled: e.onDemand, status: e.status)
         }
     }
@@ -167,13 +170,20 @@ struct TestDir {
 final class FakeTunnelService: TunnelServicing {
     struct State {
         var calls: [LPMethod] = []
+        /// Round 1 (Codex 4), round 2 (L3): every `revokeUnattended` request's KEEP list (the profiles whose consent stands).
+        var revokeKeeps: [[UUID]] = []
+        /// Round 3 (Codex r3 #8): every `revokeUnattended` request as sent (pages).
+        var revokeRequests: [RevokeUnattendedRequest] = []
+        /// Round 2 (L1): the error `revokeUnattended` answers (e.g. `.extensionBusy`, a fresh extension process).
+        var revokeError: LPError?
         var resets = 0
         var provisioned: [UUID: ProvisionedEntry] = [:]
         var snapshot: TunnelSnapshot?
         var prompt: AuthPrompt?
         var answers: [WireAuthAnswer] = []
         var failAll: LPError?
-        var validateAccepts = true
+        /// 2.0.2: the hello lists `.startAuthorisation` (an extension that enforces armed starts); false = an older extension.
+        var startAuthorisation = true
         /// PF 50: every `pushEndpoints` request, and the outcome to answer.
         var pushes: [PushEndpointsRequest] = []
         var pushOutcome: PushEndpointsReply.Outcome = .retrying
@@ -181,6 +191,11 @@ final class FakeTunnelService: TunnelServicing {
         var linkInterruptedAt: Date?
         /// Codex final 4: `tunnelSnapshot` calls wait until `releaseSnapshots()` (a slow XPC answer).
         var holdSnapshots = false
+        /// 2.0.2 (PLAN-2.0.2 §3): every `armStart` request in order, and the error to answer instead (nil = armed).
+        var arms: [ArmStartRequest] = []
+        var armError: LPError?
+        /// Round 4 (Fable L2a): the error `hello` answers (nil = the hello succeeds).
+        var helloError: LPError?
     }
     let state = Mutex(State())
     private let snapshotWaiters = Mutex<[CheckedContinuation<Void, Never>]>([])
@@ -196,7 +211,10 @@ final class FakeTunnelService: TunnelServicing {
     func calls(_ m: LPMethod) -> Int { state.withLock { $0.calls.filter { $0 == m }.count } }
 
     func hello() async throws(LPError) -> ServerHello {
-        ServerHello(extVersion: "2.0.0", extBuild: "test", capabilities: [.openVPN, .wireGuard])
+        if let e = state.withLock({ $0.helloError }) { throw e }
+        let capable = state.withLock { $0.startAuthorisation }
+        return ServerHello(extVersion: "2.0.2", extBuild: "test",
+                           capabilities: capable ? [.openVPN, .wireGuard, .startAuthorisation] : [.openVPN, .wireGuard])
     }
 
     func call<Req: Encodable & Sendable, Resp: Decodable & Sendable>(
@@ -217,11 +235,16 @@ final class FakeTunnelService: TunnelServicing {
             guard let r = request as? PrepareStartAuth else { throw LPError(.malformedRequest) }
             v = AuthPrompt(promptID: UUID(), profileID: r.profileID, kind: r.kind, challengeText: nil, echo: false, lockedUsername: nil,
                            reason: .initial, savedUsername: "u", nextStart: true, expiresAt: Date().addingTimeInterval(600))
-        case .validateProfile: v = ValidateProfileReply(error: s.validateAccepts ? nil : LPError(.unsupportedDirective), rejectedCategory: s.validateAccepts ? nil : "UNUSED_OPTIONS", autologin: true)
+        case .validateProfile: throw LPError(.extensionBusy)      // 2.0.2: the extension no longer checks profiles (the validator service does)
         case .sessionSummaries: v = SessionSummariesReply(sessions: [])
         case .pushEndpoints:
             guard let r = request as? PushEndpointsRequest, r.isWireValid else { throw LPError(.malformedRequest) }
             v = state.withLock { $0.pushes.append(r); return PushEndpointsReply(outcome: $0.pushOutcome) }
+        case .armStart:
+            guard let r = request as? ArmStartRequest else { throw LPError(.malformedRequest) }
+            if let e = s.armError { throw e }
+            state.withLock { $0.arms.append(r) }
+            v = ArmStartReply(expiresAt: Date().addingTimeInterval(15))
         default: throw LPError(.malformedRequest)
         }
         guard let r = v as? Resp else { throw LPError(.malformedRequest) }
@@ -236,6 +259,10 @@ final class FakeTunnelService: TunnelServicing {
             state.withLock { $0.provisioned[r.profileID] = ProvisionedEntry(id: r.profileID, revision: r.revision, digest: digest) }
         }
         if let a = request as? WireAuthAnswer { state.withLock { $0.answers.append(a) } }
+        if let r = request as? RevokeUnattendedRequest {
+            if let e = state.withLock({ $0.revokeError }) { throw e }
+            state.withLock { $0.revokeKeeps.append(r.keepProfileIDs); $0.revokeRequests.append(r) }
+        }
     }
 
     func resetAfterUserAction() async { state.withLock { $0.resets += 1 } }
@@ -308,6 +335,63 @@ final class FakeTimers: Sendable {
     }
 }
 
+/// 2.0.2 validator seam (PLAN-2.0.2 §1.4, §1.8): a scripted `OpenVPN3ProfileValidating` that stands for the app's
+/// validator-service client (`ServiceProfileValidator`), so import, editor, migrator and re-verify tests run without
+/// XPC. Records every canonical text it was asked about.
+final class FakeProfileValidator: OpenVPN3ProfileValidating {
+    enum Outcome: Sendable {
+        case accepted(autologin: Bool)
+        case rejected(category: String)
+        /// The service died on the file twice (`ServiceProfileValidator` maps `.profileCheckCrashed` to this).
+        case checkCrashed
+        /// A transport-level failure (`.profileCheckCrashed` after the service died twice, `.extensionUnavailable`, …).
+        case fails(LPError)
+    }
+    private let state = Mutex<(outcome: Outcome, checked: [String])>((.accepted(autologin: true), []))
+    /// Round 1 (Codex 5): runs inside `validate`, before the answer (a change can land while the check runs).
+    let beforeAnswer = Mutex<(@MainActor @Sendable () async -> Void)?>(nil)
+    init(_ outcome: Outcome = .accepted(autologin: true)) { state.withLock { $0.outcome = outcome } }
+    var outcome: Outcome {
+        get { state.withLock { $0.outcome } }
+        set { state.withLock { $0.outcome = newValue } }
+    }
+    var checked: [String] { state.withLock { $0.checked } }
+
+    func validate(canonical: String, disableClientCert: Bool) async throws -> OVPNEngineEvaluation {
+        let o = state.withLock { $0.checked.append(canonical); return $0.outcome }
+        if let hook = beforeAnswer.withLock({ $0 }) { await hook() }
+        switch o {
+        case .accepted(let autologin):
+            return OVPNEngineEvaluation(verdict: .accepted, autologin: autologin, staticChallenge: nil, staticChallengeEcho: false,
+                                        privateKeyPasswordRequired: false)
+        case .rejected(let category):
+            return OVPNEngineEvaluation(verdict: .rejected(category: category), autologin: false, staticChallenge: nil,
+                                        staticChallengeEcho: false, privateKeyPasswordRequired: false)
+        case .checkCrashed: return OVPNEngineEvaluation(verdict: .checkCrashed)
+        case .fails(let e): throw e
+        }
+    }
+}
+
+/// 2.0.2 validator seam: a scripted zip reader standing for the service's `readArchive` (a synchronous witness also
+/// satisfies an `async` requirement, so it keeps working when `ZipArchiveReading.read` becomes async).
+final class FakeZipArchiveReader: ZipArchiveReading {
+    private let state = Mutex<(result: Result<ZipProfiles, ZipArchiveError>, reads: Int)>((.failure(.noProfiles), 0))
+    init(_ result: Result<ZipProfiles, ZipArchiveError>) { state.withLock { $0.result = result } }
+    var reads: Int { state.withLock { $0.reads } }
+    func read(_ data: Data) throws(ZipArchiveError) -> ZipProfiles {
+        let r = state.withLock { $0.reads += 1; return $0.result }
+        return try r.get()
+    }
+}
+
+/// Round 1 (Codex 3): a pause record's resume intent, as `ConnectionStore.pause` writes it (whole-second end; round 2:
+/// one shot, so the last one sealed is the only one that verifies).
+func resumeIntent(_ id: UUID?, until: Date, keychain: any SecretItemStore, dir: AppDataDirectory) async -> String? {
+    guard let id else { return nil }
+    return try? await ProfileRepository(directory: dir.profiles, keys: keychain).sealRecord(.pause, ResumeIntent.message(profileID: id, until: until))
+}
+
 struct NullProbe: EndpointRouteProbing {
     func nonPrimaryInterface(for endpoint: ImportEndpoint) async -> String? { nil }
 }
@@ -320,14 +404,22 @@ struct NullProbe: EndpointRouteProbing {
     let ext = FakeExtension()
     let hooks = InertSystemHooks()
     let keychain: InMemoryKeychain
+    /// 2.0.2: [6]/[7] and the zip read (the sandboxed validator service in the live app).
+    let validator: FakeProfileValidator
+    let zipReader: FakeZipArchiveReader
+    /// 2.0.2: the self-test's network; records every fetch and never touches the real network.
+    let selfTestNet = ConnectionSelfTestTests.Recorder()
     let env: AppEnvironment
 
     init(goSource: (@Sendable () -> (any GoAppDataSource)?)? = nil, legacyKeychain: (any LegacyKeychainReading)? = nil,
          legacySystem: (any LegacySystemReading)? = nil, legacyHelperRunner: (any PrivilegedScriptRunning)? = nil, makeWiFi: (@MainActor () -> any WiFiLocating)? = nil,
          network: FixtureNetworkWatcher? = nil, settleClock: SettleClock? = nil,
          dir: TestDir? = nil, managers: FakeVPNManager? = nil, keychain: InMemoryKeychain? = nil,
-         settingsWritableBeforeLoad: Bool = true, agentHome: String? = nil) {
+         settingsWritableBeforeLoad: Bool = true, agentHome: String? = nil,
+         validator: FakeProfileValidator? = nil, zipReader: FakeZipArchiveReader? = nil) {
         self.dir = dir ?? TestDir()
+        self.validator = validator ?? FakeProfileValidator()
+        self.zipReader = zipReader ?? FakeZipArchiveReader(.failure(.noProfiles))
         self.managers = managers ?? FakeVPNManager()
         self.keychain = keychain ?? InMemoryKeychain()
         var b = AppEnvironment.Backends(
@@ -335,6 +427,9 @@ struct NullProbe: EndpointRouteProbing {
             extensionStore: ext, systemExtensions: nil, hooks: hooks, goSource: goSource ?? { nil }, probe: NullProbe(),
             persistFiles: true)
         b.legacyKeychain = legacyKeychain
+        b.validator = self.validator
+        b.zipReader = self.zipReader
+        b.selfTestNetworking = selfTestNet
         b.settingsWritableBeforeLoad = settingsWritableBeforeLoad
         b.makeUpdater = { PreviewUpdater(coordinator: $0) }
         if let legacySystem { b.legacySystem = legacySystem }
@@ -353,7 +448,7 @@ struct NullProbe: EndpointRouteProbing {
     /// Creates a profile through the real import pipeline and store.
     @discardableResult
     func add(_ name: String, _ text: String, killSwitch: Bool? = nil) async throws -> Profile {
-        let a = await ImportCoordinator.analyse(fileName: name, bytes: Array(text.utf8), service: service, probe: NullProbe())
+        let a = await ImportCoordinator.analyse(fileName: name, bytes: Array(text.utf8), validator: validator, probe: NullProbe())
         let d = try #require(env.importer.draft(a, name: a.displayName, killSwitch: killSwitch ?? a.summary.isFullTunnel, allowLAN: false))
         return try await env.profiles.create(d)
     }

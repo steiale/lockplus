@@ -176,6 +176,9 @@ struct ImportPreview: Identifiable, Sendable, Equatable {
     var report: ImportReport
     var killSwitch = true
     var allowLocalNetwork = false
+    /// Round 1 (Fable L2): where an open event's file came from ("~/Downloads/work.ovpn"); nil for the user's own drop,
+    /// file panel or paste. Such a sheet has no default button and its Import enables after a moment.
+    var openedFrom: String? = nil
 
     var isFullTunnel: Bool { summary.isFullTunnel }
     var canImport: Bool { !report.blocksImport && !name.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -197,9 +200,11 @@ struct BatchImport: Identifiable, Sendable, Equatable {
     let id: UUID
     var archiveName: String
     var items: [BatchImportItem]
-    /// Cap violations appear as errors, never as silent truncation (500 entries, 10 MB per entry).
+    /// Cap violations appear as errors, never as silent truncation (500 entries, 1 MB per entry, 64 MB in total; 2.0.2 validator service caps).
     var capErrors: [String] = []
     var finished = false
+    /// Round 1 (Fable L2): as `ImportPreview.openedFrom`.
+    var openedFrom: String? = nil
 }
 
 @MainActor @Observable final class ImportUIModel {

@@ -246,7 +246,7 @@ struct OnDemandPauseReviewTests {
         defer { h.dir.cleanup() }
         h.env.profiles.settleAfterSave = .milliseconds(500)
         let (auto, work) = try await setUp(h)
-        nonisolated(unsafe) let managers = h.managers
+        let managers = h.managers
         let autoID = auto.id
         fake.onFirstSleep { await MainActor.run { managers.emit(autoID, .connecting) } }
         h.env.connection.connect(work.id)
@@ -335,7 +335,7 @@ struct OnDemandPauseReviewTests {
         #expect(UIBinder.autoConnectStatusLine(h.env) == nil)
         h.managers.emit(work.id, .disconnected)
 
-        nonisolated(unsafe) let env = h.env
+        let env = h.env
         let line = LockBox<String?>(nil)
         fake.onFirstSleep { await MainActor.run { line.set(UIBinder.autoConnectStatusLine(env)) } }
         h.env.connection.connect(work.id)                                 // the start window: paused, no status yet

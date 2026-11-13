@@ -560,6 +560,56 @@ struct E2E4FixTests {
         #expect(h.env.profiles.tampered.isEmpty)
     }
 
+    /// 2.0.2 (Fable final spot check of 12552857, LOW): a rollback is pending (metadata N, manager N+1); the user edits
+    /// again while idle, the manager is saved at N+2, the metadata write fails again and a start begins inside that save,
+    /// so the second rollback is skipped too. The marker records the manager's revision (N+2), so `load()` reads the
+    /// manager as the skipped rollback, not as a replay (the old marker accepted only N+1 and quarantined the profile).
+    /// Once the start ends, the rollback brings the manager back to the metadata (N).
+    @Test func aSecondSkippedRollbackIsStillRecognised() async throws {
+        let h = Harness()
+        defer { h.dir.cleanup() }
+        let (_, work) = try await setUp(h)
+        let before = try #require(h.env.profiles.profile(work.id)).metaRevision
+        let meta = h.dir.data.profiles.appending(path: "\(work.id.uuidString).json")
+        let metaData = try Data(contentsOf: meta)
+        /// The next save of Work breaks the metadata write and another user's start begins inside it.
+        func failNextEdit() {
+            h.managers.onSave = { id in
+                guard id == work.id else { return }
+                h.managers.onSave = nil
+                try? FileManager.default.removeItem(at: meta)
+                try? FileManager.default.createDirectory(at: meta.appending(path: "x"), withIntermediateDirectories: true)
+                h.managers.strayEntries = [StraySnapshot(key: UUID(), ownerUID: getuid() &+ 1, status: .connecting)]
+                h.managers.onStrayStatusChange?()
+            }
+        }
+        func restoreMetadata() throws {
+            try FileManager.default.removeItem(at: meta)
+            try metaData.write(to: meta)                                    // the metadata as it was (revision N)
+        }
+        failNextEdit()
+        await #expect(throws: LPError.self) { try await h.env.profiles.updatePolicy(work.id) { $0.allowLAN.toggle() } }
+        try restoreMetadata()
+        #expect(h.managers.entries[work.id]?.cfg.provider.metaRev == before + 1)   // the first rollback was skipped
+        // That start is gone without the store hearing of it (no idle sync ran): the rollback is still pending, idle.
+        h.managers.strayEntries = []
+        try await h.env.managers.loadAll()
+        #expect(!h.env.connection.isBusy)
+        failNextEdit()
+        await #expect(throws: LPError.self) { try await h.env.profiles.rename(work.id, to: "Work 4") }
+        try restoreMetadata()
+        #expect(h.env.profiles.profile(work.id)?.metaRevision == before)
+        #expect(h.managers.entries[work.id]?.cfg.provider.metaRev == before + 2)   // saved at N+2, the rollback skipped again
+        await h.env.profiles.load()
+        #expect(h.env.profiles.tampered.isEmpty)
+        h.managers.strayEntries[0].status = .disconnected                   // that start ends: the rollback is saved
+        h.managers.onStrayStatusChange?()
+        #expect(await eventually { h.managers.entries[work.id]?.cfg.provider.metaRev == before })
+        await h.env.profiles.load()
+        #expect(h.env.profiles.tampered.isEmpty)
+        #expect(h.env.profiles.profile(work.id)?.name == "Work")
+    }
+
     /// Round 8 (Codex H1, Fable M1): same-user code restores an authentic older metadata file (before the kill switch was
     /// turned on) and writes a "pending rollback" into settings.json: the key is ignored, the profile is quarantined
     /// and the manager keeps its flags.
@@ -864,6 +914,24 @@ struct E2E4FixTests {
         #expect(r.addressable == [id: "new"] && r.strays == ["old"])
         r = ManagerClassifier.classify([c("first", id.uuidString), c("second", id.uuidString)], me: me)
         #expect(r.addressable == [id: "first"] && r.strays == ["second"])
+        // Round 1 (F8, stray investigation): on a tie the live one is the profile's, in either order; then the more
+        // protective one; never NE's list order.
+        func t(_ name: String, _ st: TunnelStatus, ian: Bool = true, er: Bool = false) -> Candidate {
+            Candidate(manager: name, profileID: id.uuidString, owner: 501, metaRev: 4, status: st, includeAllNetworks: ian, enforceRoutes: er)
+        }
+        for pair in [[t("K", .connected), t("dup", .connecting)], [t("dup", .connecting), t("K", .connected)]] {
+            r = ManagerClassifier.classify(pair, me: me)
+            #expect(r.addressable == [id: "K"] && r.strays == ["dup"])
+        }
+        for pair in [[t("weak", .disconnected, ian: false), t("strong", .disconnected)], [t("strong", .disconnected), t("weak", .disconnected, ian: false)]] {
+            r = ManagerClassifier.classify(pair, me: me)
+            #expect(r.addressable == [id: "strong"] && r.strays == ["weak"])
+        }
+        r = ManagerClassifier.classify([t("split", .disconnected, ian: false), t("routes", .disconnected, ian: false, er: true)], me: me)
+        #expect(r.addressable == [id: "routes"])
+        // The metadata revision decides first: a newer one wins over a live older one.
+        r = ManagerClassifier.classify([t("liveOld", .connected), Candidate(manager: "new", profileID: id.uuidString, owner: 501, metaRev: 5)], me: me)
+        #expect(r.addressable == [id: "new"])
         // An own duplicate whose metadata can't be read counts as the oldest.
         r = ManagerClassifier.classify([c("unparsed", id.uuidString, rev: nil), c("parsed", id.uuidString, rev: 1)], me: me)
         #expect(r.addressable == [id: "parsed"] && r.strays == ["unparsed"])

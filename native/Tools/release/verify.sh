@@ -2,14 +2,18 @@
 # Verification gates (DESIGN §12.4, ref/toolchain §8).
 #   verify.sh static <LockPlus.xcarchive|LockPlus.app> [--asan]  CI + release.sh: unsigned build checks
 #   verify.sh pre  <signed LockPlus.app>                          release.sh: before notarization upload
+#                  LP_PREV_APP=<previous notarized LockPlus.app>   also: that app fails this APP_REQ (build floor, W8);
+#                  mandatory when LP_RELEASE_RUN=1 (release.sh sets it; round 1 Fable N4)
 #   verify.sh post <stapled LockPlus.app> [LockPlus.dmg]          release.sh: after stapling
 set -euo pipefail
 source "${0:A:h}/common.sh"
 HERE="${0:A:h}"
 MODE=${1:?usage: verify.sh static|pre|post <bundle>}; TARGET=${2:?bundle}
 APP=$(resolve_app "$TARGET"); EXT=$(ext_of "$APP"); X=$(ext_bin_of "$APP"); AX="$APP/Contents/MacOS/$APP_NAME"
+VAL=$(val_of "$APP"); VX=$(val_bin_of "$APP")
 ASAN=0; [[ "${3:-}" == --asan ]] && ASAN=1
 [[ -x "$X" && -x "$AX" ]] || fail "not a LockPlus bundle with an embedded extension: $APP"
+[[ -x "$VX" ]] || fail "no validator service (Contents/XPCServices/LockPlusValidator.xpc) in $APP"
 # Capture-then-test everywhere in this file: `! a | grep -q X` under pipefail turns grep's early exit (SIGPIPE 141 in `a`)
 # into a silent PASS. Never pipe into `grep -q`/`head` here.
 machos() { find "$APP" -type f -print0 | while IFS= read -r -d '' f; do if [[ "$(file -b "$f")" == Mach-O* ]]; then print -r -- "$f"; fi; done; }
@@ -39,6 +43,33 @@ static_checks() {
   as=$(nm -a "$AX" 2>/dev/null || true); as+=$(strings -a "$AX")
   grep -q 'ZIPFoundation' <<<"$as" || fail "ZIPFoundation not found in the app binary (SPM pin not linked?)"
   ok "ZIPFoundation in the app, not in the extension"
+
+  step "the extension links no [7] wrapper (LPEngineCheck; round 1 Fable N5)"
+  ! grep -Eq '13LPEngineCheck|OpenVPNEngineCheck' <<<"$xs" || fail "LPEngineCheck symbols in the extension"
+  ok "no LPEngineCheck in the extension"
+
+  step "validator service: sandboxed XPC service, no GUI/network frameworks, own ZIPFoundation, build == app (PLAN-2.0.2 §1.6)"
+  local vlibs vbad vs
+  vlibs=$(otool -L "$VX")
+  [[ -n "$vlibs" ]] || fail "otool -L produced no output for $VX"
+  ! grep -Eq 'AppKit|SwiftUI|Sparkle|NetworkExtension|ZIPFoundation' <<<"$vlibs" || fail "GUI/app/NE framework linked into the validator"
+  vbad=$(tail -n +2 <<<"$vlibs" | awk '{print $1}' | grep -vE '^(/System/Library/|/usr/lib/)' || true)
+  (( ASAN )) && vbad=$(print -r -- "$vbad" | grep -v 'libclang_rt.asan_osx_dynamic.dylib' || true)
+  [[ -z "$vbad" ]] || fail "non-system dylib in the validator: $vbad"
+  [[ "$(plutil -extract CFBundlePackageType raw -o - "$VAL/Contents/Info.plist")" == 'XPC!' ]] || fail "validator CFBundlePackageType is not XPC!"
+  [[ "$(plutil -extract CFBundleIdentifier raw -o - "$VAL/Contents/Info.plist")" == "$VAL_ID" ]] || fail "validator bundle identifier is not $VAL_ID"
+  [[ "$(plutil -extract CFBundleVersion raw -o - "$VAL/Contents/Info.plist")" == "$(plutil -extract CFBundleVersion raw -o - "$APP/Contents/Info.plist")" ]] \
+    || fail "validator CFBundleVersion differs from the app's (hello would answer versionMismatch)"
+  [[ ! -e "$VAL/Contents/embedded.provisionprofile" ]] || fail "the validator carries a provisioning profile (it needs none)"
+  vs=$(nm -a "$VX" 2>/dev/null || true); vs+=$(strings -a "$VX")
+  [[ -n "$vs" ]] || fail "nm/strings produced no output for $VX"
+  grep -q 'ZIPFoundation' <<<"$vs" || fail "ZIPFoundation not found in the validator (the zip reader moved there)"
+  grep -q 'LPOpenVPN3Profile' <<<"$vs" || fail "openvpn3 shim not found in the validator"
+  ! grep -Eq '_wgTurnOn|libwg-go' <<<"$vs" || fail "WireGuard Go runtime linked into the validator"
+  ok "validator: system libraries only, XPC!, build $(plutil -extract CFBundleVersion raw -o - "$VAL/Contents/Info.plist"), ZIPFoundation + openvpn3 inside"
+  step "the app contains no openvpn3 (F3: OptionList parser unlinked from the unsandboxed app)"
+  ! grep -Eq 'LPOpenVPN3|options_core|OptionList|openvpn::' <<<"$as" || fail "openvpn3 symbols or strings in the app binary"
+  ok "no openvpn3 in the app binary"
 
   step "Release content (invariant 11, §5.3)"
   local mlist; mlist=("${(@f)$(machos)}")
@@ -104,14 +135,17 @@ static_checks() {
 
   step "requirement literals agree (common.sh ≡ RequirementTests)"
   local rt="$NATIVE_ROOT/Tests/RequirementTests/RequirementTests.swift"
-  grep -qF -- "$APP_REQ" "$rt" && grep -qF -- "$EXT_REQ" "$rt" || fail "Release requirement strings drifted between common.sh and $rt"
-  ok "APP_REQ, EXT_REQ"
+  grep -qF -- "$APP_REQ" "$rt" && grep -qF -- "$EXT_REQ" "$rt" && grep -qF -- "$VALIDATOR_REQ" "$rt" \
+    || fail "Release requirement strings drifted between common.sh and $rt"
+  grep -qF -- "$DEV_APP_REQ" "$rt" && grep -qF -- "$DEV_EXT_REQ" "$rt" && grep -qF -- "$DEV_VALIDATOR_REQ" "$rt" \
+    || fail "Debug requirement strings drifted between common.sh and $rt"
+  ok "APP_REQ (floor $MIN_APP_BUILD), EXT_REQ, VALIDATOR_REQ and their Debug forms"
 
   "$HERE/check-entitlement-sources.sh"
   "$HERE/version-check.sh" --app "$APP"
   # S7 duplicate-symbol check over the archive's intermediates (build-unsigned.sh keeps DerivedData next to it).
   if [[ "$TARGET" == *.xcarchive && -d "${TARGET:A:h}/DerivedData" ]]; then
-    "$NATIVE_ROOT/Tools/build/check-symbols.sh" "${TARGET:A:h}/DerivedData" "$X"
+    "$NATIVE_ROOT/Tools/build/check-symbols.sh" "${TARGET:A:h}/DerivedData" "$X" "$VX"
   fi
 }
 
@@ -119,7 +153,7 @@ pre_checks() {
   step "signature (pre-notarization)"
   codesign --verify --deep --strict --verbose=2 "$APP" 2>&1 | tail -2
   local d
-  for B in "$EXT" "$APP"; do
+  for B in "$VAL" "$EXT" "$APP"; do
     d=$(codesign -dvvv "$B" 2>&1)
     grep -qF -- "Authority=$IDENTITY" <<<"$d" || fail "$B: wrong authority"
     grep -q '^Timestamp=' <<<"$d" || fail "$B: no secure timestamp"
@@ -130,6 +164,11 @@ pre_checks() {
   local OUT="$LP_BUILD_ROOT/verify"; mkdir -p "$OUT"
   codesign -d --entitlements - --xml "$EXT" > "$OUT/ext.ent" 2>/dev/null
   codesign -d --entitlements - --xml "$APP" > "$OUT/app.ent" 2>/dev/null
+  codesign -d --entitlements - --xml "$VAL" > "$OUT/val.ent" 2>/dev/null
+  diff <(norm_plist "$OUT/val.ent") <(norm_plist "$GOLD/LockPlusValidator.entitlements") || fail "validator entitlements != golden"
+  ! grep -q 'com.apple.security.network' "$OUT/val.ent" || fail "validator has a network entitlement"
+  ! grep -q 'com.apple.security.cs.' "$OUT/val.ent" || fail "hardened-runtime exception on the validator"
+  ! grep -q 'get-task-allow' "$OUT/val.ent" || fail "get-task-allow on the validator"
   diff <(norm_plist "$OUT/ext.ent") <(norm_plist "$GOLD/LockPlusTunnel.entitlements") || fail "extension entitlements != golden"
   diff <(norm_plist "$OUT/app.ent") <(norm_plist "$GOLD/LockPlus.entitlements") || fail "app entitlements != golden"
   ! grep -q 'com.apple.security.cs.' "$OUT/ext.ent" || fail "hardened-runtime exception on the extension"
@@ -139,9 +178,27 @@ pre_checks() {
   # syntax error (exit 1) would also make the negative check below pass. Not satisfied is exit 3.
   codesign --verify -R "=$APP_REQ" "$APP" || fail "APP_REQ does not match the app"
   codesign --verify -R "=$EXT_REQ" "$EXT" || fail "EXT_REQ does not match the extension"
-  local rc=0; codesign --verify -R "=$APP_REQ" "$EXT" 2>/dev/null || rc=$?
+  codesign --verify -R "=$VALIDATOR_REQ" "$VAL" || fail "VALIDATOR_REQ does not match the validator service"
+  local rc=0; codesign --verify -R "=$VALIDATOR_REQ" "$EXT" 2>/dev/null || rc=$?
+  (( rc == 3 )) || fail "VALIDATOR_REQ on the extension: want 'does not satisfy' (3), got $rc"
+  rc=0
+  codesign --verify -R "=$APP_REQ" "$EXT" 2>/dev/null || rc=$?
   (( rc == 3 )) || fail "APP_REQ on the extension: want 'does not satisfy' (3), got $rc"
   ok "Release requirements match (and are not interchangeable)"
+  # 2.0.2 (PLAN-2.0.2 §2.6 R1): the previous release is no longer a trusted peer of this extension (build floor).
+  if [[ -n "${LP_PREV_APP:-}" ]]; then
+    [[ -d "$LP_PREV_APP" ]] || fail "LP_PREV_APP is not a bundle: $LP_PREV_APP"
+    codesign --verify -R "=$EXT_REQ" "$(ext_of "$LP_PREV_APP")" 2>/dev/null \
+      || fail "LP_PREV_APP does not look like a signed LockPlus release: $LP_PREV_APP"
+    rc=0; codesign --verify -R "=$APP_REQ" "$LP_PREV_APP" 2>/dev/null || rc=$?
+    (( rc == 3 )) || fail "APP_REQ on the previous release ($LP_PREV_APP): want 'does not satisfy' (3), got $rc"
+    ok "the previous release fails APP_REQ (build floor $MIN_APP_BUILD)"
+  elif [[ "${LP_RELEASE_RUN:-0}" == 1 ]]; then
+    # Round 1 (Fable N4): the only check of the floor on real Developer ID signatures; a release never skips it.
+    fail "LP_PREV_APP unset: a release run must check the build floor against the previous notarized release"
+  else
+    print "  note: LP_PREV_APP unset: the build-floor check against the previous release was skipped (not a release run)"
+  fi
   for B in "$APP" "$EXT"; do
     local prof pad
     prof=$(security cms -D -i "$B/Contents/embedded.provisionprofile" 2>/dev/null) || fail "$B: cannot decode embedded profile"

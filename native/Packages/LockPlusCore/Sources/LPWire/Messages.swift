@@ -24,7 +24,9 @@ public struct ServerHello: Codable, Sendable, Equatable {
     }
 }
 
-public enum Capability: String, Codable, Sendable, CaseIterable { case openVPN, wireGuard, keyPassphrase }
+/// `.startAuthorisation` (2.0.2, PLAN-2.0.2 §3): the extension honours a manual start only with an `armStart` of the
+/// profile's owner (`StartOptionKey.startNonce`).
+public enum Capability: String, Codable, Sendable, CaseIterable { case openVPN, wireGuard, keyPassphrase, startAuthorisation }
 
 /// Empty request body for calls that take no parameters (`listProvisioned`, `wipeAllSecrets` uses the peer's uid).
 public struct EmptyRequest: Codable, Sendable, Equatable { public init() {} }
@@ -140,6 +142,10 @@ public enum StartOptionKey {
     /// Draft 9 (S2 E10): the endpoint hostnames the app resolved before the start, `[host: [IP literal]]`
     /// (≤ 8 hosts, ≤ 16 IPs each). The provider never resolves under `includeAllNetworks`.
     public static let endpoints = "lp.endpoints"
+    /// 2.0.2 (PLAN-2.0.2 §3): a manual start's nonce (a UUID string), the one the owner's app armed just before the start
+    /// (`armStart`). Read only when `manual` is set; NE replays it with the original options, which is how its own
+    /// restart of an authorised session is recognised. Not a secret: it only binds the start to an arm over XPC.
+    public static let startNonce = "lp.startNonce"
     public static let maxEndpointHosts = 8
     public static let maxIPsPerHost = 16
 }

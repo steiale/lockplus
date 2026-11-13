@@ -37,6 +37,52 @@ import Testing
         #expect(LPMethod.answerAuth.requestLimit == 8 * 1024)
         #expect(LPMethod.statistics.requestLimit == 16 * 1024)
         #expect(LPMethod.listProvisioned.replyLimit == 160 * 1024)
+        #expect(LPMethod.armStart.requestLimit == 16 * 1024 && LPMethod.armStart.replyLimit == 16 * 1024)
+        #expect(!LPMethod.armStart.repliesErrorOnly)
+    }
+
+    /// Round 2 (Fable L3): the largest `revokeUnattended` request the app may send fits its request cap, and one more
+    /// entry is refused by validation (never truncated).
+    @Test func aMaximalRevokeRequestFitsItsLimit() throws {
+        let max = RevokeUnattendedRequest(keepProfileIDs: (0..<RevokeUnattendedRequest.maxProfiles).map { _ in UUID() })
+        let d = try LPWire.encode(max)
+        #expect(d.count <= LPMethod.revokeUnattended.requestLimit)
+        #expect(try LPWire.decode(RevokeUnattendedRequest.self, d, max: LPMethod.revokeUnattended.requestLimit) == max)
+        let over = RevokeUnattendedRequest(keepProfileIDs: (0...RevokeUnattendedRequest.maxProfiles).map { _ in UUID() })
+        #expect(!over.isWireValid)
+        // Round 3 (Codex r3 #8): with the page fields, it still fits.
+        let full = RevokeUnattendedRequest(keepProfileIDs: max.keepProfileIDs,
+                                           batch: UUID(), page: RevokeUnattendedRequest.maxPages - 1, pageCount: RevokeUnattendedRequest.maxPages)
+        let fd = try LPWire.encode(full)
+        #expect(fd.count <= LPMethod.revokeUnattended.requestLimit)
+        #expect(try LPWire.decode(RevokeUnattendedRequest.self, fd, max: LPMethod.revokeUnattended.requestLimit) == full)
+    }
+
+    /// 2.0.2 round 5 (the user-stop notice removed): every request carries a keep set; one without it (the round 4
+    /// stop-only shape) is refused at decode, never read as "revoke nothing" or "revoke everything".
+    @Test func aRequestWithoutAKeepSetIsRefused() throws {
+        struct StopOnly: Encodable { var userStops: [UUID] }
+        let d = try LPWire.encode(StopOnly(userStops: [UUID()]))
+        #expect(throws: (any Error).self) { try LPWire.decode(RevokeUnattendedRequest.self, d, max: LPMethod.revokeUnattended.requestLimit) }
+    }
+
+    /// Round 3 (Codex r3 #8): a keep set is split into pages of one batch (sorted, so a retry sends the same pages);
+    /// the page fields are validated; a request of an older app (no page fields) decodes as one page.
+    @Test func revokePagesAndTheirValidation() throws {
+        let keep = Set((0..<1201).map { _ in UUID() })
+        let pages = try #require(RevokeUnattendedRequest.pages(keeping: keep))
+        #expect(pages.count == 3 && pages.map(\.page) == [0, 1, 2] && pages.allSatisfy { $0.pageCount == 3 && $0.isWireValid })
+        #expect(Set(pages.compactMap(\.batch)).count == 1)
+        #expect(Set(pages.flatMap(\.keepProfileIDs)) == keep)
+        #expect(RevokeUnattendedRequest.pages(keeping: []).map { $0.count == 1 && $0[0].batch == nil } == true)
+        #expect(RevokeUnattendedRequest.pages(keeping: Set((0..<(RevokeUnattendedRequest.maxProfiles * RevokeUnattendedRequest.maxPages + 1)).map { _ in UUID() })) == nil)
+        #expect(!RevokeUnattendedRequest(keepProfileIDs: [], batch: nil, page: 0, pageCount: 2).isWireValid)
+        #expect(!RevokeUnattendedRequest(keepProfileIDs: [], batch: UUID(), page: 2, pageCount: 2).isWireValid)
+        #expect(!RevokeUnattendedRequest(keepProfileIDs: [], batch: UUID(), page: 0, pageCount: RevokeUnattendedRequest.maxPages + 1).isWireValid)
+        struct Legacy: Encodable { var keepProfileIDs: [UUID] }
+        let legacy = try LPWire.encode(Legacy(keepProfileIDs: [UUID()]))
+        let r = try LPWire.decode(RevokeUnattendedRequest.self, legacy, max: LPMethod.revokeUnattended.requestLimit)
+        #expect(r.pageCount == 1 && r.page == 0 && r.batch == nil && r.keepProfileIDs.count == 1)
     }
 
     @Test func timeoutsMatchDesignAndServerDeadlineIsOneSecondLess() {
@@ -44,7 +90,7 @@ import Testing
             .hello: .seconds(3), .tunnelSnapshot: .seconds(2), .statistics: .seconds(2), .pendingAuthPrompt: .seconds(2),
             .prepareStartAuth: .seconds(2), .cancelAuth: .seconds(2), .provisionProfile: .seconds(10),
             .removeProfile: .seconds(10), .wipeAllSecrets: .seconds(10), .validateProfile: .seconds(5),
-            .answerAuth: .seconds(5), .measureLatency: .seconds(6), .pushEndpoints: .seconds(2),
+            .answerAuth: .seconds(5), .measureLatency: .seconds(6), .pushEndpoints: .seconds(2), .armStart: .seconds(2),
         ]
         for (m, t) in expected { #expect(m.timeout == t, "\(m)") }
         for m in LPMethod.allCases { #expect(m.serverDeadline == m.timeout - .seconds(1)) }
@@ -83,16 +129,29 @@ import Testing
 /// The Release requirement strings, as reviewed text (DESIGN §5.3). The Unit/UnitRelease `RequirementTests` bundle in
 /// the Xcode project checks the target-level ActiveRequirements.swift; this checks the package constants.
 @Suite struct SigningRequirementTests {
-    static let releaseApp = #"anchor apple generic and identifier "io.github.steiale.lockplus.mac" and (certificate 1[field.1.2.840.113635.100.6.2.6] and certificate leaf[field.1.2.840.113635.100.6.1.13]) and certificate leaf[subject.OU] = "M53GHX9FAY""#
+    static let releaseApp = #"anchor apple generic and identifier "io.github.steiale.lockplus.mac" and (certificate 1[field.1.2.840.113635.100.6.2.6] and certificate leaf[field.1.2.840.113635.100.6.1.13]) and info [CFBundleVersion] >= "200027" and certificate leaf[subject.OU] = "M53GHX9FAY""#
     static let releaseExt = #"anchor apple generic and identifier "io.github.steiale.lockplus.mac.tunnel" and (certificate 1[field.1.2.840.113635.100.6.2.6] and certificate leaf[field.1.2.840.113635.100.6.1.13]) and certificate leaf[subject.OU] = "M53GHX9FAY""#
+    static let releaseValidator = #"anchor apple generic and identifier "io.github.steiale.lockplus.mac.validator" and (certificate 1[field.1.2.840.113635.100.6.2.6] and certificate leaf[field.1.2.840.113635.100.6.1.13]) and certificate leaf[subject.OU] = "M53GHX9FAY""#
 
     @Test func releaseStringsAreTheReviewedLiterals() {
         #expect(SigningRequirements.appReq(signer: SigningRequirements.releaseSigner) == Self.releaseApp)
         #expect(SigningRequirements.extReq(signer: SigningRequirements.releaseSigner) == Self.releaseExt)
+        #expect(SigningRequirements.validatorReq(signer: SigningRequirements.releaseSigner) == Self.releaseValidator)
         #expect(!SigningRequirements.releaseSigner.contains("113635.100.6.2.1]"))
     }
 
-    @Test(arguments: [releaseApp, releaseExt])
+    /// 2.0.2 (PLAN-2.0.2 §2): the build floor sits right before the team clause, quoted, with the given value; the
+    /// extension and validator requirements carry none.
+    @Test func appReqInsertsFloorBeforeTeam() {
+        let r = SigningRequirements.appReq(signer: "X", minimumBuild: "123")
+        #expect(r == #"anchor apple generic and identifier "io.github.steiale.lockplus.mac" and X and info [CFBundleVersion] >= "123" and certificate leaf[subject.OU] = "M53GHX9FAY""#)
+        #expect(SigningRequirements.appReq(signer: "X").contains(#"info [CFBundleVersion] >= "\#(SigningRequirements.minimumAppBuild)" and certificate leaf"#))
+        #expect(!SigningRequirements.minimumAppBuild.isEmpty && SigningRequirements.minimumAppBuild.allSatisfy { $0.isASCII && $0.isNumber })
+        #expect(!SigningRequirements.extReq(signer: "X").contains("CFBundleVersion"))
+        #expect(!SigningRequirements.validatorReq(signer: "X").contains("CFBundleVersion"))
+    }
+
+    @Test(arguments: [releaseApp, releaseExt, releaseValidator])
     func compiles(_ text: String) {
         var req: SecRequirement?
         #expect(SecRequirementCreateWithString(text as CFString, [], &req) == errSecSuccess)
@@ -115,6 +174,9 @@ import Testing
         try rt(SessionSummariesReply(sessions: [SessionSummary(id: id, profileID: id, start: .distantPast, end: .distantPast,
                                                                rxBytes: 0, txBytes: 0, endReason: "user")]))
         try rt(MeasureLatencyReply(results: [LatencyResult(endpoint: "h:1", rttMilliseconds: 3, error: nil)]))
+        try rt(ArmStartRequest(profileID: id, nonce: UUID()))
+        try rt(ArmStartReply(expiresAt: Date(timeIntervalSince1970: 15)))
+        try rt(ValidatorHello(build: "200025"))
     }
 
     /// S16: the largest legal listProvisioned reply (500 entries with full-length digests) fits its reply cap.
@@ -169,6 +231,8 @@ import Testing
             LPWire.encode(ValidateProfileRequest(kind: .openVPN, payload: Data("client".utf8))),
             LPWire.encode(SessionSummariesRequest(after: id)),
             LPWire.encode(PushEndpointsRequest(profileID: id, endpoints: ["vpn.example": ["192.0.2.1", "2001:db8::1"]])),
+            LPWire.encode(ArmStartRequest(profileID: id, nonce: UUID())),
+            LPWire.encode(ValidatorHello(build: "200025")), LPWire.encode(ReadArchiveRequest(archive: Data("PK\u{5}\u{6}".utf8))),
         ]
         func probe(_ d: Data) {
             func one<T: Decodable>(_ t: T.Type) {
@@ -179,7 +243,7 @@ import Testing
             one(ClientHello.self); one(EmptyRequest.self); one(ProfileRequest.self); one(ProvisionRequest.self)
             one(UpdateCredentialsRequest.self); one(CancelAuthRequest.self); one(PrepareStartAuth.self); one(AuthAnswer.self)
             one(ValidateProfileRequest.self); one(SessionSummariesRequest.self)
-            one(PushEndpointsRequest.self)
+            one(PushEndpointsRequest.self); one(ArmStartRequest.self); one(ValidatorHello.self); one(ReadArchiveRequest.self)
         }
         for _ in 0..<300 {
             var d = seeds.randomElement(using: &rng)!
@@ -276,5 +340,67 @@ import Testing
     @Test func protocolKindRawValuesFollowDesign() {
         #expect(VPNProtocolKind.wireGuard.rawValue == "wg")
         #expect(VPNProtocolKind.openVPN.rawValue == "ovpn")
+    }
+}
+
+// MARK: - 2.0.2 validator wire (PLAN-2.0.2 §1.3)
+
+@Suite struct ValidatorWireTests {
+    @Test func limitsAndTimeouts() {
+        #expect(LPValidatorMethod.hello.requestLimit == 4 * 1024 && LPValidatorMethod.hello.replyLimit == 4 * 1024)
+        #expect(LPValidatorMethod.evaluateProfile.requestLimit == 300 * 1024 && LPValidatorMethod.evaluateProfile.replyLimit == 64 * 1024)
+        #expect(LPValidatorMethod.readArchive.requestLimit > ReadArchiveRequest.maxArchiveBytes)
+        #expect(LPValidatorMethod.readArchive.replyLimit > ReadArchiveReply.maxTotalBytes)
+        #expect(LPValidatorMethod.hello.timeout == .seconds(5) && LPValidatorMethod.hello.watchdog == nil)
+        #expect(LPValidatorMethod.evaluateProfile.watchdog == .seconds(10) && LPValidatorMethod.readArchive.watchdog == .seconds(25))
+        // Round 1 (Fable M1, Sonnet L5): every client timeout outlasts the service's watchdog, so the service's own answer
+        // (`.timeout`, then its exit) is what the client sees.
+        for m in LPValidatorMethod.allCases { if let w = m.watchdog { #expect(m.timeout == w + .seconds(2)) } }
+        #expect(ReadArchiveRequest.maxArchiveBytes == ZipCaps().maxArchiveBytes + 1)
+    }
+
+    /// Round 1 (Fable N2): the strings of a validation reply the app shows or stores have their own caps.
+    @Test func validateProfileReplyStringCaps() {
+        #expect(ValidateProfileReply(error: nil, staticChallenge: String(repeating: "c", count: 1024)).isWireValid)
+        #expect(!ValidateProfileReply(error: nil, staticChallenge: String(repeating: "c", count: 1025)).isWireValid)
+        #expect(!ValidateProfileReply(error: nil, rejectedCategory: String(repeating: "c", count: 257)).isWireValid)
+        // (`LPError` clips its detail to 512 characters itself; the reply's check stays as a second line.)
+    }
+
+    @Test func roundTrips() throws {
+        func rt<T: Codable & Equatable>(_ v: T) throws { #expect(try LPWire.decode(T.self, try LPWire.encode(v), max: 1 << 20) == v) }
+        try rt(ValidatorHello(build: "200025.123"))
+        let r = ReadArchiveReply(entries: [ArchiveEntry(name: "a.ovpn", bytes: Data("client".utf8))],
+                                 issues: [.symlink("l.ovpn"), .unsafePath("../x.ovpn"), .corrupt("c.conf"), .nameTooLong("n"), .moreSkipped(7)])
+        let back = try LPWire.decode(ReadArchiveReply.self, try LPWire.encode(r), max: 1 << 20)
+        #expect(back.entries == r.entries && back.issues == r.issues && back.archiveError == nil)
+        for e in [ZipArchiveError.tooLarge, .malformed("x"), .unsupportedMethod(9), .tooManyEntries(501), .duplicateName("d"), .checkUnavailable] {
+            #expect(try LPWire.decode(ReadArchiveReply.self, try LPWire.encode(ReadArchiveReply(archiveError: e)), max: 4096).archiveError == e)
+        }
+        try rt(ZipCaps(maxProfileEntries: 7))
+    }
+
+    @Test func readArchiveReplyRejectsUnsafeNamesAndOversizeEntries() throws {
+        func valid(_ r: ReadArchiveReply) -> Bool { r.isWireValid }
+        #expect(valid(ReadArchiveReply(entries: [ArchiveEntry(name: "a.ovpn", bytes: Data(count: ReadArchiveReply.maxEntryBytes))])))
+        #expect(!valid(ReadArchiveReply(entries: [ArchiveEntry(name: "a.ovpn", bytes: Data(count: ReadArchiveReply.maxEntryBytes + 1))])))
+        for bad in ["../a.ovpn", "/a.ovpn", "a\\b.ovpn", "C:a.ovpn", "", "a\u{7}.ovpn", String(repeating: "n", count: 256)] {
+            #expect(!valid(ReadArchiveReply(entries: [ArchiveEntry(name: bad, bytes: Data())])), "\(bad)")
+        }
+        let many = (0...ReadArchiveReply.maxEntries).map { ArchiveEntry(name: "\($0).ovpn", bytes: Data()) }
+        #expect(!valid(ReadArchiveReply(entries: many)))
+        #expect(!valid(ReadArchiveReply(issues: Array(repeating: .corrupt("x"), count: ReadArchiveReply.maxIssues + 1))))
+        #expect(!valid(ReadArchiveReply(entries: [ArchiveEntry(name: "a.ovpn", bytes: Data())], archiveError: .encrypted)))
+        let total = (0..<65).map { ArchiveEntry(name: "\($0).ovpn", bytes: Data(count: ReadArchiveReply.maxEntryBytes)) }
+        #expect(!valid(ReadArchiveReply(entries: total)))                   // 65 MiB > 64 MiB
+        let d = try LPWire.encode(ReadArchiveReply(entries: [ArchiveEntry(name: "../x", bytes: Data())]))
+        #expect(throws: LPError(.malformedRequest, detail: "limits ReadArchiveReply")) {
+            try LPWire.decode(ReadArchiveReply.self, d, max: LPValidatorMethod.readArchive.replyLimit)
+        }
+    }
+
+    @Test func helloBuildIsCapped() throws {
+        let d = try LPWire.encode(ValidatorHello(build: String(repeating: "9", count: 65)))
+        #expect(throws: LPError(.malformedRequest, detail: "limits ValidatorHello")) { try LPWire.decode(ValidatorHello.self, d, max: 4096) }
     }
 }

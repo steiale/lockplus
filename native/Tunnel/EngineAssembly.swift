@@ -67,7 +67,7 @@ final class TunnelEngineAssembly: Sendable {
     let backend: EngineServiceBackend<StrictSuspendingClock>
 
     private init() {
-        let secrets = TunnelSecretStore.make()
+        let secrets = TunnelSecretStore.make(backend: SecItemBackend())
         let validator = ExtensionPayloadValidator()
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
         controller = ProductionTunnelController(

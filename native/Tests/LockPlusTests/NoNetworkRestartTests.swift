@@ -491,7 +491,10 @@ struct NoNetworkRestartTests {
         let w = try await world()
         defer { w.h.dir.cleanup() }
         await w.h.env.connection.pause(minutes: 5)
-        await w.h.env.settings.updateDurably { $0.pausedState?.profileID = w.auto.id }   // the profile to reconnect
+        // The profile to reconnect, with its resume intent (round 1, Codex 3), as the GUI's own pause writes it.
+        let until = try #require(w.h.env.settings.value.autoConnect.pausedUntil)
+        let intent = await resumeIntent(w.auto.id, until: until, keychain: w.h.keychain, dir: w.h.dir.data)
+        await w.h.env.settings.updateDurably { $0.pausedState?.profileID = w.auto.id; $0.pausedState?.intent = intent }
         w.h.env.connection.connect(w.work.id)
         #expect(await eventually { w.h.managers.starts.count == 1 })
         w.net.change(to: Self.offline)
@@ -539,10 +542,12 @@ struct NoNetworkRestartTests {
 
     // MARK: Headless resume
 
-    func expiredPause(_ dir: TestDir, profile: UUID?, onDemand: [UUID], held: UUID) throws {
+    func expiredPause(_ dir: TestDir, profile: UUID?, onDemand: [UUID], held: UUID, keychain: InMemoryKeychain) async throws {
         var s = AppSettings()
-        s.autoConnect.pausedUntil = Date().addingTimeInterval(-5)
-        s.pausedState = PausedState(profileID: profile, onDemandEnabledIDs: onDemand, agentBuild: "1")
+        let until = ResumeIntent.wholeSeconds(Date().addingTimeInterval(-5))
+        s.autoConnect.pausedUntil = until
+        s.pausedState = PausedState(profileID: profile, onDemandEnabledIDs: onDemand, agentBuild: "1",
+                                    intent: await resumeIntent(profile, until: until, keychain: keychain, dir: dir.data))
         s.networkRestartHold = held
         try AtomicFile.saveJSON(s, to: dir.data.settings)
     }
@@ -553,7 +558,7 @@ struct NoNetworkRestartTests {
         defer { h.dir.cleanup() }
         let work = try await h.add("Work.conf", Harness.wgConf, killSwitch: true)
         let auto = try await h.add("Home NAS.conf", Harness.splitConf)
-        try expiredPause(h.dir, profile: nil, onDemand: [auto.id], held: work.id)
+        try await expiredPause(h.dir, profile: nil, onDemand: [auto.id], held: work.id, keychain: h.keychain)
         var stoppedFirst: [Bool] = []
         h.managers.onSetOnDemand = { [managers = h.managers] _, on in if on { stoppedFirst.append(managers.stops == [work.id]) } }
         let r = await HeadlessResume.perform(dir: h.dir.data, managers: h.managers, agent: ProbeResumeAgent(), keychain: h.keychain)
@@ -573,7 +578,7 @@ struct NoNetworkRestartTests {
         let auto = try await h.add("Home NAS.conf", Harness.splitConf)
         try await h.env.managers.loadAll()
         h.managers.entries[work.id]?.status = .connected
-        try expiredPause(h.dir, profile: work.id, onDemand: [auto.id], held: work.id)
+        try await expiredPause(h.dir, profile: work.id, onDemand: [auto.id], held: work.id, keychain: h.keychain)
         let r = await HeadlessResume.perform(dir: h.dir.data, managers: h.managers, agent: ProbeResumeAgent(), keychain: h.keychain)
         #expect(r == .resumed(restarted: work.id, onDemand: []))
         #expect(h.managers.starts.isEmpty)
@@ -591,7 +596,7 @@ struct NoNetworkRestartTests {
         defer { h.dir.cleanup() }
         let work = try await h.add("Work.conf", Harness.wgConf, killSwitch: true)
         let auto = try await h.add("Home NAS.conf", Harness.splitConf)
-        try expiredPause(h.dir, profile: work.id, onDemand: [auto.id], held: work.id)
+        try await expiredPause(h.dir, profile: work.id, onDemand: [auto.id], held: work.id, keychain: h.keychain)
         h.managers.startError = LPError(.extensionUnavailable)
         var stoppedFirst: [Bool] = []
         h.managers.onSetOnDemand = { [managers = h.managers] _, on in if on { stoppedFirst.append(managers.stops == [work.id]) } }
@@ -610,7 +615,7 @@ struct NoNetworkRestartTests {
         try await h.env.managers.loadAll()
         h.managers.entries[auto.id]?.onDemand = false
         h.managers.entries[work.id]?.status = .connecting
-        try expiredPause(h.dir, profile: nil, onDemand: [auto.id], held: work.id)
+        try await expiredPause(h.dir, profile: nil, onDemand: [auto.id], held: work.id, keychain: h.keychain)
         let agent = ProbeResumeAgent()
         let r = await HeadlessResume.perform(dir: h.dir.data, managers: h.managers, agent: agent, keychain: h.keychain)
         #expect(r == .networkRestartPending)
@@ -910,18 +915,22 @@ struct NoNetworkRestartTests {
     }
 
     /// Review fd65f25 nit 2 (f0c8c57 #4, LOW 1): nothing live or held when the pause's write begins; a session goes live
-    /// during it (a System Settings start): it is stopped and is the profile the pause's end reconnects.
-    @Test func aSessionBegunDuringThePausesWriteIsStoppedAndRecorded() async throws {
+    /// during it (a System Settings start): it is stopped. Round 6 (Fable r6 L1): it is the profile the pause's end
+    /// reconnects only if this run saw it connected; one still `.connecting` (a start made elsewhere, possibly refused)
+    /// is stopped unsigned.
+    @Test(arguments: [false, true]) func aSessionBegunDuringThePausesWriteIsStopped(connected: Bool) async throws {
         let w = try await world()
         defer { w.h.dir.cleanup() }
         #expect(!w.h.env.connection.isBusy)
         landWhen(w.h.env.settings, { $0.autoConnect.pausedUntil != nil }) { [managers = w.h.managers, work = w.work.id] in
             managers.emit(work, .connecting)
+            if connected { managers.emit(work, .connected) }
         }
         await w.h.env.connection.pause(minutes: 5)
         #expect(await eventually { w.h.managers.stops == [w.work.id] })
-        #expect(w.h.env.settings.value.pausedState?.profileID == w.work.id)
-        #expect(AtomicFile.loadJSON(AppSettings.self, from: w.h.dir.data.settings)?.pausedState?.profileID == w.work.id)
+        let expected = connected ? w.work.id : nil
+        #expect(w.h.env.settings.value.pausedState?.profileID == expected)
+        #expect(AtomicFile.loadJSON(AppSettings.self, from: w.h.dir.data.settings)?.pausedState?.profileID == expected)
     }
 
     /// #3: an earlier `.disconnecting` → `.invalid` (the manager kept) doesn't stop a later System Settings refusal from

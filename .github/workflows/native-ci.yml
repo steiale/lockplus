@@ -58,7 +58,7 @@ jobs:
       - name: Package tests (swift test)
         run: |
           rc=0   # every package runs and reports; the step fails if any failed
-          for p in Packages/LockPlusCore Packages/TunnelEngine Packages/OpenVPN3Shim Tests/TunnelAdapterTests; do
+          for p in Packages/LockPlusCore Packages/TunnelEngine Packages/OpenVPN3Shim Packages/ProfileValidator Tests/TunnelAdapterTests; do
             (cd $p && swift test --scratch-path $LP_BUILD_ROOT/spm/$(basename $p)) || { echo "::error::swift test: $p failed"; rc=1; }
           done
           exit $rc
@@ -73,7 +73,7 @@ jobs:
             rm -rf "$LP_BUILD_ROOT"/${plan%%:*}.xcresult
             xcodebuild test-without-building -testProductsPath "$LP_BUILD_ROOT"/${plan%%:*}.xctestproducts \
               -destination 'platform=macOS,arch=arm64' -resultBundlePath "$LP_BUILD_ROOT"/${plan%%:*}.xcresult
-            Tools/build/assert-test-count.sh "$LP_BUILD_ROOT"/${plan%%:*}.xcresult 1
+            Tools/build/assert-test-count.sh "$LP_BUILD_ROOT"/${plan%%:*}.xcresult
           done
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9   # v7.0.2
         with: { name: unit-xctestproducts, path: native/build/Unit.xctestproducts }
@@ -96,7 +96,7 @@ jobs:
       - run: |
           xcodebuild test-without-building -testProductsPath Unit.xctestproducts -destination 'platform=macOS,arch=arm64' \
             -resultBundlePath Unit.xcresult
-          native/Tools/build/assert-test-count.sh Unit.xcresult 1
+          native/Tools/build/assert-test-count.sh Unit.xcresult
 
   engine-support:
     # DESIGN §12.4: the OpenVPN directive table is generated from the S13 CSV; a drift between CSV and the committed

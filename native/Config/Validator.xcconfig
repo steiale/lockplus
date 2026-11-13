@@ -1,0 +1,21 @@
+// Config/Validator.xcconfig — target LockPlusValidator, the sandboxed, network-less XPC service embedded under
+// Contents/XPCServices (PLAN-2.0.2 §1.6). Its only entitlement is com.apple.security.app-sandbox: no restricted
+// entitlement, so no provisioning profile and no portal App ID.
+PRODUCT_BUNDLE_IDENTIFIER = $(LP_APP_ID).validator
+PRODUCT_NAME = LockPlusValidator
+PRODUCT_MODULE_NAME = LockPlusValidator
+INFOPLIST_FILE = Config/Info/LockPlusValidator-Info.plist
+CODE_SIGN_ENTITLEMENTS = Config/Entitlements/LockPlusValidator.entitlements
+ENABLE_APP_SANDBOX = YES
+ENABLE_HARDENED_RUNTIME = YES
+SKIP_INSTALL = YES
+LD_RUNPATH_SEARCH_PATHS = @executable_path/../Frameworks
+ENABLE_DEBUG_DYLIB = NO
+ENABLE_PREVIEWS = NO
+// The OpenSSL XCFramework is arm64-only (as in the extension, S14).
+ENABLE_POINTER_AUTHENTICATION = NO
+// Debug / FaultInjection: Apple Development, manual, NO profile. No restricted entitlement, so Xcode must not try to
+// register an App ID through automatic signing. (Release is unsigned in the archive and signed by sign-inside-out.sh.)
+CODE_SIGN_STYLE[config=Debug] = Manual
+CODE_SIGN_STYLE[config=FaultInjection] = Manual
+PROVISIONING_PROFILE_SPECIFIER =

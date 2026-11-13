@@ -46,6 +46,8 @@ struct AuthBroker {
         /// attempt inside the same pending start. false: the attempt is still running (`AUTH_PENDING`, or after
         /// Connected) and the answer goes to `adapter.provideAuth`.
         var restartsEngine: Bool
+        /// Round 6 (Codex r6 #1): the payload revision of the attempt that prompted; its answer belongs to that revision.
+        var revision: UInt64 = 0
     }
 
     private(set) var prepared: [ProfileKey: Prepared] = [:]    // at most one per (owner, profile)

@@ -37,6 +37,8 @@ import Observation
     func changePassword(_ profileID: ProfileItem.ID)
     func forgetPassword(_ profileID: ProfileItem.ID)
     func showPassword(_ profileID: ProfileItem.ID)
+    /// Round 2 (Fable L8): runs the file check of a "Not yet verified" profile again after it stopped retrying.
+    func checkAgain(_ profileID: ProfileItem.ID)
 
     // Import (§6.8)
     func importFiles(_ urls: [URL])

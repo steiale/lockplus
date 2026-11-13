@@ -16,6 +16,7 @@ struct LockPlusApp: App {
         Window("LockPlus", id: "main") {
             MainView()
                 .environment(delegate.env.ui)
+                .environment(\.selfTestStore, delegate.env.diagnostics)      // 2.0.2: the Connection Test (Diagnostics, hero)
                 .lpTypography()
                 .onAppear { delegate.mainWindowVisibility(true) }
                 .onDisappear { delegate.mainWindowVisibility(false) }
@@ -35,6 +36,8 @@ struct LockPlusApp: App {
                 .lpTypography()
         }
         .restorationBehavior(.disabled)
+        // A document open event must never spawn an empty editor window (item 4, E2E O7): the router opens "main".
+        .handlesExternalEvents(matching: [])
 
         // 4. Settings, AFTER the bridge.
         Settings {

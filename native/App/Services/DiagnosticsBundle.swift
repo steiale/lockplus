@@ -34,6 +34,8 @@ struct DiagnosticsInputs: Sendable {
     var crashReports: [(name: String, text: String)] = []
     /// §4.5 findings (JSON), when available.
     var legacy: String?
+    /// 2.0.2: the last connection self-test (`SelfTestReport.bundleText()`), when the user ran one this session.
+    var selfTest: String?
     /// SSIDs, profile names and saved user names: hashed wherever they appear.
     var sensitive: [String] = []
 }
@@ -112,6 +114,7 @@ enum DiagnosticsBundle {
         add("history-summary.json", json(historySummary(i.history)))
         for c in i.crashReports { add("crash/" + c.name, c.text) }
         if let legacy = i.legacy { add("legacy.json", legacy) }
+        if let selfTest = i.selfTest { add("selftest.txt", selfTest) }
         return out
     }
 

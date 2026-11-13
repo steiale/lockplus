@@ -18,7 +18,13 @@ EXTP="$NATIVE_ROOT/Config/Info/LockPlusTunnel-Info.plist"
 plutil -extract NSSystemExtensionUsageDescription raw -o - "$EXTP" >/dev/null || fail "extension Info.plist lacks NSSystemExtensionUsageDescription"
 [[ "$(plutil -extract NetworkExtension.NEMachServiceName raw -o - "$EXTP")" == '$(LP_APP_GROUP).tunnel.v$(CURRENT_PROJECT_VERSION)' ]] \
   || fail "NEMachServiceName source must be \$(LP_APP_GROUP).tunnel.v\$(CURRENT_PROJECT_VERSION)"
-ok "sources: $MKT ($BUILD)"
+# 2.0.2 (PLAN-2.0.2 §2): the app requirement's build floor is this build, in the Swift constant and in common.sh.
+SR="$NATIVE_ROOT/Packages/LockPlusCore/Sources/LPWire/SigningRequirements.swift"
+FLOOR_SWIFT=$(sed -nE 's/^ *public static let minimumAppBuild = "([^"]*)".*/\1/p' "$SR")
+[[ "$FLOOR_SWIFT" =~ ^[0-9]+$ ]] || fail "SigningRequirements.minimumAppBuild must be decimal digits: '$FLOOR_SWIFT'"
+[[ "$FLOOR_SWIFT" == "$BUILD" ]] || fail "SigningRequirements.minimumAppBuild $FLOOR_SWIFT != LP_BUILD_NUMBER $BUILD (bump both in the version commit)"
+[[ "$MIN_APP_BUILD" == "$BUILD" ]] || fail "common.sh MIN_APP_BUILD $MIN_APP_BUILD != LP_BUILD_NUMBER $BUILD"
+ok "sources: $MKT ($BUILD), app requirement floor $FLOOR_SWIFT"
 
 if [[ -n "$APP" ]]; then
   APP=$(resolve_app "$APP"); EXT=$(ext_of "$APP")

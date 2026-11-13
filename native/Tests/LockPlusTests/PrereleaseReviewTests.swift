@@ -196,7 +196,7 @@ struct PrereleaseReviewTests {
         sys.setFiles([LegacyAppDetector.helperPlist, LegacyAppDetector.pfWasEnabled])
         h.env.ui.gatedConnect(p.id)
         #expect(await eventually { h.env.ui.connection.connectGate == .warn(p.id) })
-        try await h.env.profiles.delete(p.id)
+        await h.env.profiles.delete(p.id)
         #expect(await eventually { h.env.ui.connection.connectGate == nil })
     }
 
@@ -249,7 +249,7 @@ struct PrereleaseReviewTests {
         // The user edits it (a new payload, so another digest).
         let edited = PreviewSeed.nasConf.replacingOccurrences(of: "Address = 10.9.0.2/32", with: "Address = 10.9.0.3/32")
         #expect(edited != PreviewSeed.nasConf)
-        let a = await ImportCoordinator.analyse(fileName: "home.conf", bytes: Array(edited.utf8), service: h.service, probe: NullProbe())
+        let a = await ImportCoordinator.analyse(fileName: "home.conf", bytes: Array(edited.utf8), validator: h.validator, probe: NullProbe())
         let d = try #require(h.env.importer.draft(a, name: "home", killSwitch: home.policy.killSwitch, allowLAN: false))
         _ = try await h.env.profiles.replacePayload(home.id, with: d)
         #expect(h.env.profiles.profile(home.id)?.payloadDigest != home.payloadDigest)

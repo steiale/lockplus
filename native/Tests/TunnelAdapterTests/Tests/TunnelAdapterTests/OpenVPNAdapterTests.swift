@@ -1,4 +1,5 @@
 import Foundation
+import LPOptionsParser
 import LPModel
 import LPParsing
 import LPWire
@@ -9,7 +10,8 @@ import Testing
 @testable import TunnelEngine
 import TunnelEngineTestSupport
 
-/// The [6] option adapter, the payload validator ([1]–[7]), validateProfile routing and the shim config mapping.
+/// The [6] option adapter, the extension's payload validator (2.0.2: provision = [1]–[5] + fixed point, start = + [6]),
+/// validateProfile answering busy and the shim config mapping.
 @Suite struct OpenVPNAdapterTests {
     static let ca = """
         <ca>
@@ -63,69 +65,77 @@ import TunnelEngineTestSupport
         #expect(throws: ShimOptionsParser.Refused.self) { try ShimOptionsParser().parse(canonical: "<ca>\nunterminated\n") }
     }
 
-    @Test func canonicalPayloadPassesAndReportsAuthNeeds() throws {
-        let p = SecretBytes(copying: Array(try Self.canonical().utf8))
-        try validator.validate(kind: .openVPN, payload: p)
-        let r = validator.evaluate(kind: .openVPN, payload: p, disableClientCert: nil)
-        #expect(r.error == nil && !r.autologin && r.staticChallenge == nil && !r.privateKeyPasswordRequired)
+    func code(_ body: () throws(LPTunnelError) -> Void) -> LPErrorCode? {
+        do throws(LPTunnelError) { try body(); return nil } catch { return error.code }
+    }
+    func provision(_ text: String, _ kind: VPNProtocolKind = .openVPN) -> LPErrorCode? {
+        code { () throws(LPTunnelError) in try validator.validateForProvision(kind: kind, payload: .text(text)) }
+    }
+    func start(_ text: String, _ kind: VPNProtocolKind = .openVPN) -> LPErrorCode? {
+        code { () throws(LPTunnelError) in try validator.validateForStart(kind: kind, payload: .text(text)) }
     }
 
-    @Test func staticChallengeIsReported() throws {
-        let p = SecretBytes(copying: Array(try Self.canonical("static-challenge \"Enter PIN\" 1").utf8))
-        let r = validator.evaluate(kind: .openVPN, payload: p, disableClientCert: true)
-        #expect(r.error == nil && r.staticChallenge == "Enter PIN" && r.staticChallengeEcho)
+    @Test func canonicalPayloadPassesProvisionAndStart() throws {
+        let text = try Self.canonical()
+        #expect(provision(text) == nil)
+        #expect(start(text) == nil)
+        let sc = try Self.canonical("static-challenge \"Enter PIN\" 1")
+        #expect(provision(sc) == nil && start(sc) == nil)
+    }
+
+    /// The raw profile is not what the normaliser emits (it needs the floors): the extension refuses it at provision, so a
+    /// payload the app never normalised (and never compared with openvpn3) is not accepted on the strength of parsers alone.
+    @Test func aPayloadThatIsNotACanonicalFixedPointIsRefusedAtProvisionAndStart() {
+        #expect(provision(Self.raw()) == .profileInvalid)
+        #expect(start(Self.raw()) == .profileInvalid)
     }
 
     @Test func inlineCredentialsInThePayloadAreRejected() throws {
         let text = try Self.canonical() + "<auth-user-pass>\nalice\nhunter2\n</auth-user-pass>\n"
-        #expect(throws: LPTunnelError.self) { try validator.validate(kind: .openVPN, payload: .text(text)) }
-        let r = validator.evaluate(kind: .openVPN, payload: .text(text), disableClientCert: nil)
-        #expect(r.error != nil && r.error?.detail?.contains("hunter2") == false)
+        for c in [provision(text), start(text)] { #expect(c == .profileInvalid) }
+        let e: LPTunnelError? = { do throws(LPTunnelError) { try validator.validateForProvision(kind: .openVPN, payload: .text(text)); return nil } catch { return error } }()
+        #expect(e?.detail?.contains("hunter2") == false)
     }
 
     @Test func forbiddenDirectiveIsRejected() throws {
         let text = try Self.canonical() + "up \"/bin/sh\"\n"
-        let r = validator.evaluate(kind: .openVPN, payload: .text(text), disableClientCert: nil)
-        #expect(r.error?.code == .unsupportedDirective)
-        #expect(r.error?.detail?.contains("/bin/sh") == false)
+        #expect(provision(text) == .unsupportedDirective)
+        let e: LPTunnelError? = { do throws(LPTunnelError) { try validator.validateForProvision(kind: .openVPN, payload: .text(text)); return nil } catch { return error } }()
+        #expect(e?.detail?.contains("/bin/sh") == false)
     }
 
     @Test func legacyCipherIsRejectedAsLegacyCrypto() {
-        let r = validator.evaluate(kind: .openVPN, payload: .text(Self.raw("cipher BF-CBC")), disableClientCert: nil)
-        #expect(r.error?.code == .legacyCryptoUnavailable)
+        #expect(provision(Self.raw("cipher BF-CBC")) == .legacyCryptoUnavailable)
     }
 
-    @Test func nonCanonicalButParsablePayloadStillNeedsBothParsersToAgree() throws {
-        // A payload whose bytes tokenize differently than openvpn3 parses them must be refused, even if
-        // re-normalizing it would produce a clean canonical text.
-        let r = validator.evaluate(kind: .openVPN, payload: .text(try Self.canonical() + "setenv \"A\" \"b c\"\\\n"), disableClientCert: nil)
-        #expect(r.error != nil)
+    @Test func nonCanonicalButParsablePayloadIsRefused() throws {
+        // A payload whose bytes tokenize differently than openvpn3 parses them is never accepted.
+        let text = try Self.canonical() + "setenv \"A\" \"b c\"\\\n"
+        #expect(provision(text) != nil)
+        #expect(start(text) != nil)
     }
 
     @Test func wireGuardPayloads() {
         let ok = WireGuardSessionTests.conf
-        #expect(validator.evaluate(kind: .wireGuard, payload: .text(ok), disableClientCert: nil).error == nil)
-        let bad = validator.evaluate(kind: .wireGuard, payload: .text("[Interface]\nPrivateKey = x\n"), disableClientCert: nil)
-        #expect(bad.error != nil && bad.error?.detail?.contains("x\n") == false)
+        #expect(provision(ok, .wireGuard) == nil && start(ok, .wireGuard) == nil)
+        #expect(provision("[Interface]\nPrivateKey = x\n", .wireGuard) != nil)
     }
 
     @Test func engineCategoryNeverQuotesArguments() {
-        #expect(ExtensionPayloadValidator.category("UNUSED_OPTIONS: secret-arg here") == "UNUSED_OPTIONS")
-        #expect(ExtensionPayloadValidator.category("") == "rejected by openvpn3")
+        #expect(ProfileCheckRules.category("UNUSED_OPTIONS: secret-arg here") == "UNUSED_OPTIONS")
+        #expect(ProfileCheckRules.category("") == "rejected by openvpn3")
     }
 
-    /// validateProfile is answered by EngineServiceBackend with the validator's [7a] fields (simplification 5: the
-    /// router is gone); other methods are served by the same backend.
-    @Test func backendAnswersValidateProfileWithEngineFields() async throws {
+    /// 2.0.2: validateProfile is answered busy (evaluation moved to the app's validator service); other methods are
+    /// served by the same backend.
+    @Test func backendAnswersValidateProfileBusy() async throws {
         let controller = TunnelController(host: FakeHost(), secrets: InMemorySecretStore(), stateStore: InMemoryTunnelStateStore(),
                                           adapters: FakeAdapterFactory(), validator: FakeValidator(), clock: StrictSuspendingClock())
         let backend = EngineServiceBackend(controller: controller, secrets: InMemorySecretStore(), validator: validator)
         let peer = PeerContext(uid: 501, pid: 1)
         let text = try Self.canonical("static-challenge \"Code\" 0")
         let req = try LPWire.encode(ValidateProfileRequest(kind: .openVPN, payload: Data(text.utf8), disableClientCert: true))
-        let data = try #require(try await backend.handle(.validateProfile, request: req, peer: peer).get())
-        let reply = try LPWire.decode(ValidateProfileReply.self, data, max: 1 << 16)
-        #expect(reply.isValid && reply.staticChallenge == "Code" && !reply.staticChallengeEcho && !reply.autologin)
+        if case .failure(let e) = await backend.handle(.validateProfile, request: req, peer: peer) { #expect(e.code == .extensionBusy) } else { Issue.record("answered") }
         let list = try #require(try await backend.handle(.listProvisioned, request: try LPWire.encode(EmptyRequest()), peer: peer).get())
         #expect(try LPWire.decode(ListProvisionedReply.self, list, max: 1 << 16).entries.isEmpty)
     }

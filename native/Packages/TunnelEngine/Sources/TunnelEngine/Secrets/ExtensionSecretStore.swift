@@ -33,6 +33,11 @@ public protocol ExtensionSecretStore: Sendable {
     func get(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t) async throws(LPError) -> SecretBytes?
     /// The index row of one item (metadata only), nil when absent.
     func entry(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t) async throws(LPError) -> ProvisionIndexEntry?
+    /// Round 6 (Codex r6 #1): the item's bytes and its index row from ONE read, so the revision is that of these bytes.
+    func load(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t) async throws(LPError) -> (entry: ProvisionIndexEntry, bytes: SecretBytes)?
+    /// Round 6 (Codex r6 #2): writes `id`'s `.credential` (tagged `revision`) only while its stored payload is at
+    /// `revision`, as one store operation (nothing can provision between the check and the write). False: not written.
+    func putCredential(_ id: UUID, ownerUID: uid_t, ifPayloadRevision revision: UInt64, _ bytes: SecretBytes) async throws(LPError) -> Bool
     func delete(_ kind: SecretKind, _ id: UUID, ownerUID: uid_t) async throws(LPError)
     func deleteAll(ownerUID: uid_t) async throws(LPError)
     /// `ownerUID`'s rows only.

@@ -21,6 +21,7 @@ final class Harness: Sendable {
     let state: InMemoryTunnelStateStore
     let factory = FakeAdapterFactory()
     let sink = FakeEventSink()
+    let validator: FakeValidator
     let paths = FakePathSource()
     let interfaceCheck: FakeInterfaceCheck
     let controller: TestController
@@ -36,20 +37,25 @@ final class Harness: Sendable {
     /// `enforceRoutes`) says otherwise.
     init(pid: UUID = UUID(), kind: VPNProtocolKind = .openVPN, killSwitch: Bool = false, routeProtection: Bool = false,
          onDemandRules: Bool = false,
-         rejectPayload: Bool = false, flaggedInterface: String? = nil, dataPlane: DataPlane = .utunFD,
+         rejectPayload: Bool = false, authorisation: Bool = false, flaggedInterface: String? = nil, dataPlane: DataPlane = .utunFD,
          state: (UUID) -> PersistedTunnelState = { _ in .init() }, routed: Bool = false,
+         bootSession: String? = BootSession.current(),
          configure: (inout ControllerConfig) -> Void = { _ in }) {
         self.pid = pid; self.kind = kind; self.onDemandRules = onDemandRules
         let state = state(pid)
         policy = NetworkPolicy(killSwitch: killSwitch)
         includeAllNetworks = killSwitch && !routeProtection
         self.state = InMemoryTunnelStateStore(state)
-        var cfg = ControllerConfig(); cfg.dataPlane = dataPlane; configure(&cfg)
+        var cfg = ControllerConfig(); cfg.dataPlane = dataPlane
+        // The 2.0.1 start-guard suites predate the owner-authorisation table (2.0.2); `authorisation: true` turns it on.
+        cfg.enforceStartAuthorisation = authorisation
+        configure(&cfg)
         interfaceCheck = FakeInterfaceCheck(flaggedInterface)
+        validator = FakeValidator(reject: rejectPayload)
         controller = TestController(host: routed ? router : host, secrets: secrets, stateStore: self.state, adapters: factory,
-                                    validator: FakeValidator(reject: rejectPayload), clock: clock,
+                                    validator: validator, clock: clock,
                                     wallClock: wall.function, rng: SplitMix64(seed: 1), pathSource: paths,
-                                    endpointCheck: interfaceCheck, sink: sink, config: cfg)
+                                    endpointCheck: interfaceCheck, sink: sink, config: cfg, bootSession: bootSession)
     }
 
     func provision(revision: UInt64 = 1, password: String? = "pw", payload: String? = nil) async {
@@ -75,13 +81,19 @@ final class Harness: Sendable {
     }
 
     func start(manual: Bool = true, endpoints: [String: [String]] = [:], revision: UInt64 = 1,
-               dataPlaneOverride: DataPlane? = nil) -> Task<Result<Void, LPTunnelError>, Never> {
-        let req = StartRequest(options: StartOptions(isManual: manual, endpoints: endpoints), configuration: config(revision: revision),
+               dataPlaneOverride: DataPlane? = nil, nonce: UUID? = nil) -> Task<Result<Void, LPTunnelError>, Never> {
+        let req = StartRequest(options: StartOptions(isManual: manual, endpoints: endpoints, nonce: nonce), configuration: config(revision: revision),
                                dataPlaneOverride: dataPlaneOverride)
         let c = controller
         return Task {
             do throws(LPTunnelError) { try await c.start(req); return .success(()) } catch { return .failure(error) }
         }
+    }
+
+    /// 2.0.2: `armStart` as the owner's own connection, then the manual start carrying that nonce.
+    func armedStart(nonce: UUID = UUID(), as uid: uid_t? = nil, endpoints: [String: [String]] = [:]) async -> (UUID, Task<Result<Void, LPTunnelError>, Never>) {
+        _ = await controller.armStart(profileID: pid, ownerUID: uid ?? owner, nonce: nonce)
+        return (nonce, start(endpoints: endpoints, nonce: nonce))
     }
 
     /// The n-th adapter once its `start` was called.

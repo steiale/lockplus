@@ -1,6 +1,6 @@
 // Config/Version.xcconfig — the ONLY version source (DESIGN §2.6). Release bumps both; dev builds stamp
 // CFBundleVersion only (Debug.xcconfig). LP_BUILD_NUMBER is an integer, strictly increasing per release.
-LP_MARKETING_VERSION = 2.0.1
-LP_BUILD_NUMBER = 200025
+LP_MARKETING_VERSION = 2.0.2
+LP_BUILD_NUMBER = 200027
 MARKETING_VERSION = $(LP_MARKETING_VERSION)
 CURRENT_PROJECT_VERSION = $(LP_BUILD_NUMBER)

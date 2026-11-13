@@ -13,10 +13,13 @@ struct ResumeAgentTests {
     func write(_ s: AppSettings, _ dir: TestDir) throws { try AtomicFile.saveJSON(s, to: dir.data.settings) }
     func read(_ dir: TestDir) -> AppSettings? { AtomicFile.loadJSON(AppSettings.self, from: dir.data.settings) }
 
-    func paused(until: Date, profile: UUID?, onDemand: [UUID]) -> AppSettings {
+    /// `signed`: the harness whose keychain signs the record's resume intent (round 1, Codex 3); nil = an unsigned record.
+    func paused(until: Date, profile: UUID?, onDemand: [UUID], signed h: Harness? = nil) async -> AppSettings {
+        let until = ResumeIntent.wholeSeconds(until)
         var s = AppSettings()
         s.autoConnect.pausedUntil = until
         s.pausedState = PausedState(profileID: profile, onDemandEnabledIDs: onDemand, agentBuild: "1")
+        if let h { s.pausedState?.intent = await resumeIntent(profile, until: until, keychain: h.keychain, dir: h.dir.data) }
         return s
     }
 
@@ -25,7 +28,7 @@ struct ResumeAgentTests {
         defer { dir.cleanup() }
         let gui = try #require(InstanceLock.tryAcquire(at: dir.data.instanceLock))
         let agent = InertResumeAgent()
-        let r = await HeadlessResume.perform(dir: dir.data, managers: FakeVPNManager(), agent: agent)
+        let r = await HeadlessResume.perform(dir: dir.data, managers: FakeVPNManager(), agent: agent, keychain: InMemoryKeychain())
         #expect(r == .guiOwnsExpiry)
         #expect(agent.calls.isEmpty)
         withExtendedLifetime(gui) {}
@@ -34,9 +37,9 @@ struct ResumeAgentTests {
     @Test func aFuturePauseIsLeftAlone() async throws {
         let dir = TestDir()
         defer { dir.cleanup() }
-        try write(paused(until: Date().addingTimeInterval(600), profile: nil, onDemand: []), dir)
+        try write(await paused(until: Date().addingTimeInterval(600), profile: nil, onDemand: []), dir)
         let agent = InertResumeAgent()
-        #expect(await HeadlessResume.perform(dir: dir.data, managers: FakeVPNManager(), agent: agent) == .notExpired)
+        #expect(await HeadlessResume.perform(dir: dir.data, managers: FakeVPNManager(), agent: agent, keychain: InMemoryKeychain()) == .notExpired)
         #expect(agent.calls.isEmpty)
         #expect(read(dir)?.autoConnect.pausedUntil != nil)
     }
@@ -45,7 +48,7 @@ struct ResumeAgentTests {
         let dir = TestDir()
         defer { dir.cleanup() }
         let agent = InertResumeAgent()
-        #expect(await HeadlessResume.perform(dir: dir.data, managers: FakeVPNManager(), agent: agent) == .nothingPaused)
+        #expect(await HeadlessResume.perform(dir: dir.data, managers: FakeVPNManager(), agent: agent, keychain: InMemoryKeychain()) == .nothingPaused)
         #expect(agent.calls == ["unregister"])
     }
 
@@ -56,7 +59,7 @@ struct ResumeAgentTests {
         let p = try await h.add("Work.conf", Harness.wgConf)
         try await h.env.managers.save(ManagerConfiguration(profile: p, onDemand: nil))
         let stranger = UUID()                                   // a manager that no longer exists is skipped
-        try write(paused(until: Date().addingTimeInterval(-5), profile: p.id, onDemand: [p.id, stranger]), dir)
+        try write(await paused(until: Date().addingTimeInterval(-5), profile: p.id, onDemand: [p.id, stranger], signed: h), dir)
         let agent = ProbeResumeAgent()
         // At the moment of unregister (which kills the agent process) the restore and the durable write are done.
         agent.probe = { [h] in
@@ -80,14 +83,14 @@ struct ResumeAgentTests {
         let dir = h.dir
         let work = try await h.add("Work.conf", Harness.wgConf)
         let auto = try await h.add("Home NAS.conf", Harness.splitConf)
-        try write(paused(until: Date().addingTimeInterval(-5), profile: work.id, onDemand: [auto.id]), dir)
+        try write(await paused(until: Date().addingTimeInterval(-5), profile: work.id, onDemand: [auto.id], signed: h), dir)
         let r = await HeadlessResume.perform(dir: dir.data, managers: h.managers, agent: ProbeResumeAgent(), keychain: h.keychain)
         #expect(r == .resumed(restarted: work.id, onDemand: []))
         #expect(h.managers.onDemandAtStart == [[]])
         #expect(h.managers.entries[auto.id]?.onDemand == false)
         #expect(read(dir)?.onDemandPausedByStart == [auto.id])           // owed to the GUI
 
-        try write(paused(until: Date().addingTimeInterval(-5), profile: work.id, onDemand: [auto.id]), dir)
+        try write(await paused(until: Date().addingTimeInterval(-5), profile: work.id, onDemand: [auto.id], signed: h), dir)
         h.managers.startError = LPError(.extensionUnavailable)
         let failed = await HeadlessResume.perform(dir: dir.data, managers: h.managers, agent: ProbeResumeAgent(), keychain: h.keychain)
         #expect(failed == .resumed(restarted: nil, onDemand: [auto.id]))
@@ -105,7 +108,7 @@ struct ResumeAgentTests {
         let auto = try await h.add("Home NAS.conf", Harness.splitConf)
         h.managers.entries[work.id]?.cfg.flags.includeAllNetworks = false      // nehelper dropped it
         h.managers.dropIncludeAllNetworksOnSave = true                          // and keeps dropping it
-        try write(paused(until: Date().addingTimeInterval(-5), profile: work.id, onDemand: [auto.id]), dir)
+        try write(await paused(until: Date().addingTimeInterval(-5), profile: work.id, onDemand: [auto.id], signed: h), dir)
         let agent = ProbeResumeAgent()
         let r = await HeadlessResume.perform(dir: dir.data, managers: h.managers, agent: agent, keychain: h.keychain)
         #expect(r == .resumed(restarted: nil, onDemand: [auto.id]))
@@ -117,7 +120,7 @@ struct ResumeAgentTests {
         h.managers.dropIncludeAllNetworksOnSave = false
         h.managers.entries[work.id]?.cfg.flags.includeAllNetworks = false
         h.managers.entries[auto.id]?.onDemand = false
-        try write(paused(until: Date().addingTimeInterval(-5), profile: work.id, onDemand: [auto.id]), dir)
+        try write(await paused(until: Date().addingTimeInterval(-5), profile: work.id, onDemand: [auto.id], signed: h), dir)
         let ok = await HeadlessResume.perform(dir: dir.data, managers: h.managers, agent: agent, keychain: h.keychain)
         #expect(ok == .resumed(restarted: work.id, onDemand: []))
         #expect(h.managers.entries[work.id]?.cfg.flags.includeAllNetworks == true)
@@ -125,7 +128,7 @@ struct ResumeAgentTests {
 
         // Unreadable profiles (another keychain: the metadata can't be opened): nothing starts.
         h.managers.starts.removeAll()
-        try write(paused(until: Date().addingTimeInterval(-5), profile: work.id, onDemand: [auto.id]), dir)
+        try write(await paused(until: Date().addingTimeInterval(-5), profile: work.id, onDemand: [auto.id], signed: h), dir)
         let blind = await HeadlessResume.perform(dir: dir.data, managers: h.managers, agent: agent, keychain: InMemoryKeychain())
         #expect(blind == .resumed(restarted: nil, onDemand: [auto.id]))
         #expect(h.managers.starts.isEmpty)

@@ -13,20 +13,14 @@ public protocol TunnelEventSink: Sendable {
     func promptResolved(promptID: UUID, profileID: UUID, ownerUID: uid_t)
 }
 
-/// Engine-side re-validation of the provisioned payload (§8.1 [1]–[6], §9.1). The Tunnel target binds LPParsing.
+/// Extension-side re-validation of a payload (§8.1, §9.1). 2.0.2 (PLAN §1): the extension, which runs as root, no longer
+/// evaluates profiles; the memory-unsafe checks ([6] on the payload, [7] `eval_config`) belong to the app's validator
+/// service (`LPEngineCheck`). The Tunnel target binds LPParsing.
 public protocol PayloadValidator: Sendable {
-    func validate(kind: VPNProtocolKind, payload: SecretBytes) throws(LPTunnelError)
-    /// The `validateProfile` verdict (§8.1 [7a] fields included). `disableClientCert` nil = derived from the payload.
-    func evaluate(kind: VPNProtocolKind, payload: SecretBytes, disableClientCert: Bool?) -> ValidateProfileReply
-}
-
-extension PayloadValidator {
-    /// Validators without [7a] facts: the verdict is `validate`'s.
-    public func evaluate(kind: VPNProtocolKind, payload: SecretBytes, disableClientCert: Bool?) -> ValidateProfileReply {
-        do throws(LPTunnelError) { try validate(kind: kind, payload: payload); return ValidateProfileReply(error: nil) } catch {
-            return ValidateProfileReply(error: LPError(error.code, detail: error.detail))
-        }
-    }
+    /// §6.4 step 2: memory-safe checks only. Swift [1]–[5] and the canonical fixed point; no openvpn3, no OpenSSL.
+    func validateForProvision(kind: VPNProtocolKind, payload: SecretBytes) throws(LPTunnelError)
+    /// §8.1: [1]–[5] + [6] on the session's own payload, right before the session's engine parses it.
+    func validateForStart(kind: VPNProtocolKind, payload: SecretBytes) throws(LPTunnelError)
 }
 
 public struct ControllerConfig: Sendable {
@@ -52,6 +46,9 @@ public struct ControllerConfig: Sendable {
     /// Residual 2 (review 2026-10-30): immediate retries of a pending start when the device ARRIVES at a network, per
     /// session. Past it a retry waits for its own schedule (hold backoff, connect deadline).
     public var maxArrivalRetriesPerSession = 10
+    /// 2.0.2 (PLAN §3): the owner-authorisation table. `package`: only this package's tests can switch it off (the
+    /// 2.0.1 start-guard suites predate it); the Tunnel target cannot even name it.
+    package var enforceStartAuthorisation = true
     public init() {}
 }
 
@@ -122,6 +119,9 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
         /// The answer the NEXT engine attempt of this start uses (a `prepareStartAuth` answer, or an in-start answer
         /// with the challenge's cookie and carried base credentials). Handed to exactly one attempt.
         var answer: StashBinding?
+        /// Round 6 (Codex r6 #1): the payload revision of the prompt `answer` answers (nil: a prepared answer, any). An
+        /// attempt that loads another revision drops the answer (its cookie and carried credentials are that server's).
+        var answerRevision: UInt64?
         var lastSpec: TunnelSettingsSpec?
         var flaggedInterface: String?
         /// hostname → IPs for this session (the start's own resolution over the cache, §9.3).
@@ -155,8 +155,15 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
         var authDeadlinePassedAsleep = false
         /// T15: the stored username, offered as `savedUsername` in this session's prompts (not secret, ≤ 512 B).
         var savedUsername: String?
+        /// Round 5 (Fable r5 N2, Codex r5 #6): the payload revision the current attempt loaded (the configuration's until
+        /// the first load). A commit is new to this attempt only above it, and a prompt and its answer belong to it.
+        var loadedRevision: UInt64
+        /// Round 5 (Codex r5 #6): the prompt whose before-Connected answer is being applied (across the save's await);
+        /// a commit meanwhile clears it and starts a fresh attempt, and the answer is then stale.
+        var answerInFlight: UUID?
         init(config: ProviderConfiguration?, options: StartOptions, owner: ProviderLease?, dataPlane: DataPlane, backoff: Backoff) {
             self.config = config; self.options = options; self.owner = owner; self.dataPlane = dataPlane; self.backoff = backoff
+            self.loadedRevision = config?.revision ?? 0
         }
         var key: ProfileKey? { config.map(ProfileKey.init) }
         var c16: Bool { !options.isManual || (config?.hasOnDemandRules ?? false) }
@@ -217,15 +224,30 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
     /// preemption's teardown, or tearing a stale session down), by start: its lease, its key and its configuration's
     /// revision. `profileRemoved`, `secretsWiped` and a higher revision's provision invalidate it (the error it ends
     /// with), and it is checked after every suspension, before admission: it never begins on a removed or changed profile.
-    /// `lease` identifies the reservation holder (left out of a revision change, round 6). `staleRevision`: that holder
-    /// was left out of one (round 7, Fable L1): it may only proceed into the slot its preemption freed, never wait.
+    /// Round 4 (Fable L1 = Codex r4 #1): `killSwitch` (`includeAllNetworks` or the profile's kill switch): such a start is
+    /// NEVER invalidated by a commit, in any guard wait (a duplicate, a `.stopping` incumbent, a stale session's teardown).
+    /// A failed protected start is open (E14c), and it may be NE's authorised replay that nothing starts again; it goes on
+    /// and loads the committed payload (`runStarting` accepts a configuration older than the payload).
     private struct GuardedStart {
-        let lease: ProviderLease?; let key: ProfileKey?; let revision: UInt64
+        let lease: ProviderLease?; let key: ProfileKey?; let revision: UInt64; let killSwitch: Bool
         var invalidated: LPTunnelError?
-        var staleRevision = false
     }
+    /// Round 3 (Fable N1): a counter bumped whenever a user's act ends a profile's record (the user's stop of the live
+    /// session, a removed configuration, `profileRemoved`, `secretsWiped`), and when each key and owner last had one. A
+    /// replay decided before such an end is refused (and its record never put back) once the end is seen.
+    private var userClearSeq: UInt64 = 0
+    private var userClearedAt: [ProfileKey: UInt64] = [:]
+    private var ownerClearedAt: [uid_t: UInt64] = [:]
+    /// Tests (round 4, Fable N3): how many user-clear marks are held (none while no start is in the guard).
+    var userClearMarkCount: Int { userClearedAt.count + ownerClearedAt.count }
+    /// Round 3 (Codex r3 #8): the pages of a paginated keep set received so far, per owner (one batch at a time).
+    private var revokePages: [uid_t: (batch: UUID, count: Int, pages: [Int: Set<UUID>])] = [:]
     private var guardedStarts: [UInt64: GuardedStart] = [:]
     private var guardedSeq: UInt64 = 0
+    /// 2.0.2 (PLAN §3): pending arms (memory only); the persisted authorisations live in `persisted.authorisedStarts`.
+    private var arms = StartArms()
+    /// Round 2 (Fable L2): this boot session; every record carries it, and one of another boot is dropped at load.
+    private let bootSession: String?
 
     public init(host: any ProviderHost, secrets: any ExtensionSecretStore, stateStore: any TunnelStateStore,
                 adapters: any TunnelAdapterFactory, validator: (any PayloadValidator)?, clock: C,
@@ -233,12 +255,22 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
                 rng: any RandomNumberGenerator = SystemRandomNumberGenerator(),
                 pathSource: (any PathSource)? = nil, endpointCheck: (any EndpointInterfaceCheck)? = nil,
                 sink: (any TunnelEventSink)? = nil, config: ControllerConfig = ControllerConfig(),
-                providers: ProviderInstances = ProviderInstances()) {
+                providers: ProviderInstances = ProviderInstances(), bootSession: String? = BootSession.current()) {
         self.host = host; self.secrets = secrets; self.stateStore = stateStore; self.adapters = adapters
         self.validator = validator; self.clock = clock; self.wallClock = wallClock
         self.rng = rng; self.pathSource = pathSource; self.endpointCheck = endpointCheck; self.sink = sink
         self.config = config; self.providers = providers
-        persisted = stateStore.load()
+        self.bootSession = bootSession
+        var loaded = stateStore.load()
+        // Round 2 (Fable L2): NE never restarts a session of an earlier boot; such a record would only be a standing
+        // authorisation for an outside start. Round 3 (Fable N2): only when this boot's value could be read; with none,
+        // nothing is dropped (dropping every record would refuse NE's restart of the running session).
+        let stale = bootSession.map { boot in loaded.authorisedStarts.filter { $0.value.boot != boot } } ?? [:]
+        if !stale.isEmpty {
+            for k in stale.keys { loaded.authorisedStarts[k] = nil }
+            stateStore.save(loaded)
+        }
+        persisted = loaded
     }
 
     // MARK: - startTunnel
@@ -263,6 +295,29 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
     /// and says whether it still exists; it runs only for an accepted start, on the actor, with no suspension between
     /// the last check and the new session.
     public func start(_ req: StartRequest, owner: ProviderLease? = nil, bind: @Sendable () -> Bool = { true }) async throws(LPTunnelError) {
+        // 2.0.2 (PLAN §3.1): who may start this profile, decided FIRST: before the latch, the guard loop (a refused start
+        // never reaches the kill-switch priority rule), any suspension, and any payload or credential read. The decision
+        // and (for an armed start) the consumption of its arm happen here, synchronously on the actor. A start with no
+        // parseable configuration has no profile to authorise: it reads nothing and ends in `runStarting` (profileInvalid),
+        // and keeps the 2.0.1 behaviour that its protocol flags still count in the guard (re-check N3).
+        // Round 1 (Fable H1): what to record once the start is admitted: an armed start's nonce, or an unattended
+        // admission. Round 2 (L1): a replay puts back the record it matched if a revoke removed it meanwhile.
+        var admission: Admission?
+        let decidedAt = userClearSeq
+        if config.enforceStartAuthorisation, let cfg = req.configuration {
+            let now = wallClock()
+            let k = ProfileKey(cfg)
+            switch arms.decide(k, options: req.options, hasOnDemandRules: cfg.hasOnDemandRules,
+                               authorised: persisted.authorisedStarts, now: now) {
+            case .armed(let n): admission = .armed(n)
+            case .unattended: admission = .unattended
+            case .replay(let rec): admission = .replay(rec)
+            case .refused:
+                let e = LPTunnelError(.startNotAuthorised, detail: "start not authorised by the profile's owner")
+                recordRefusal(e, k, sameProfile: false, unauthorised: true)
+                throw e
+            }
+        }
         // Row idle → starting, FIRST: an on-demand start against a latch does no credential or network I/O. Without
         // the flag it fails at once; with `includeAllNetworks` it is held (a failed start would be open, E14c).
         if let l = activeLatch(req, at: wallClock()) {
@@ -274,14 +329,21 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
         var notedWait = false
         guardedSeq &+= 1
         let gid = guardedSeq
-        guardedStarts[gid] = GuardedStart(lease: owner, key: key, revision: req.configuration?.revision ?? 0, invalidated: nil)
-        // Round 7 (Fable L1): an exempted holder of an old revision that would wait (its preemption was vetoed) ends.
-        func staleHolder() -> LPTunnelError? {
-            guardedStarts[gid]?.staleRevision == true ? .of(.startCancelled, "profile changed") : nil
+        guardedStarts[gid] = GuardedStart(lease: owner, key: key, revision: req.configuration?.revision ?? 0,
+                                          killSwitch: req.includeAllNetworks || req.configuration?.policy.killSwitch == true)
+        // Round 3 (Fable N1): a replay whose record a user's act ended while it waited is no longer NE's restart of a
+        // session the user wants: refused (and its record not put back).
+        func replayEndedByUser() -> LPTunnelError? {
+            guard case .replay? = admission, let key, userClearedSince(decidedAt, key) else { return nil }
+            let e = LPTunnelError(.startNotAuthorised, detail: "the owner stopped the profile while this start waited")
+            recordRefusal(e, key, sameProfile: false, unauthorised: true)
+            return e
         }
         // Codex final 3: a reservation this start took for a preemption ends with the start (accepted or not).
         defer {
             guardedStarts[gid] = nil
+            // Round 4 (Fable N3): the user-clear marks matter only to starts in the guard; none left, none kept.
+            if guardedStarts.isEmpty { userClearedAt = [:]; ownerClearedAt = [:] }
             if let owner, reservation?.lease == owner { reservation = nil; wakeWaiters() }
         }
         while true {
@@ -289,6 +351,7 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
             if let owner, !providers.isCurrent(owner) { throw abandoned() }
             // Round 5 (Codex 2): its profile was removed, wiped or changed while it waited.
             if let e = guardedStarts[gid]?.invalidated { throw e }
+            if let e = replayEndedByUser() { throw e }
             // Phase 0 (2026-11-10, 26.6.2 and 27.2): macOS DOES start a second LockPlus configuration while one runs,
             // in this same process. Displacing the running session black-holed it while NE still reported it Connected.
             // A loop: after each `await` the state is checked again from the top (a session or reservation may be a
@@ -299,7 +362,6 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
             if let r = reservation, r.lease.token != owner?.token, providers.isCurrent(r.lease) {
                 switch verdict(killSwitchStart: killSwitchStart, key: key, incumbentKey: r.key, incumbentIncludeAllNetworks: true) {
                 case .wait:
-                    if let e = staleHolder() { throw e }
                     await waitForChange(); continue
                 case .refuse, .preempt: throw refuse(key, sameProfile: key != nil && r.key == key)
                 }
@@ -325,14 +387,13 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
                     await endForReplacement(LPTunnelError(.supersededByKillSwitch, detail: "another LockPlus profile with the kill switch took over"),
                                             reasonText: "superseded by a kill-switch profile")
                     if session != nil {                                     // vetoed: the session was kept
-                        // (A stale holder ends at its next `.wait`, round 7; round 9, Fable N3: no check needed here.)
-                        // Round 8 (Fable L1): the reservation goes back, so this start is a plain waiter from here on
-                        // (a later revision invalidates it like any other).
+                        // Round 8 (Fable L1): the reservation goes back, so this start is a plain waiter from here on.
+                        // Round 4 (2.0.2, Fable L1): a kill-switch start, so no later revision ends it (it waits and
+                        // then loads the committed payload).
                         if let owner, reservation?.lease == owner { reservation = nil; wakeWaiters() }
                     }
                     continue
                 case .wait:
-                    if let e = staleHolder() { throw e }
                     // Final review M1: a duplicate kill-switch configuration of the running kill-switch profile waits,
                     // pending (blocked, so closed: E14a), bound to nothing and with no I/O, until that session ends or
                     // its instance stops; its own stop ends the wait. An instance NE abandoned keeps it waiting: closed.
@@ -349,12 +410,18 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
             await stop(reason: .superseded)
         }
         if let owner, !providers.isCurrent(owner) { throw abandoned() }
-        // (No invalidation check here: the loop's check runs after its last suspension.)
+        // (No invalidation check here: the loop's checks run after its last suspension.)
         // Round 5 (Codex 5): the latch as persisted NOW, after every wait (credentials updated meanwhile clear it; one
         // installed meanwhile counts), with nothing suspending between this read and the new session.
         let latched = activeLatch(req, at: wallClock())
         if let l = latched, !req.includeAllNetworks { throw LPTunnelError(l.code, detail: "start latched") }
         guard bind() else { throw LPTunnelError(.startCancelled, detail: "provider gone") }
+        // The authorisation is recorded only for a start that is admitted (no suspension since the last check): an armed
+        // start the guard refused or a removal cancelled must not overwrite the record NE's replay of the RUNNING session
+        // of the same profile still needs.
+        if let a = admission, let cfg = req.configuration {
+            recordAuthorisation(ProfileKey(cfg), a, killSwitch: req.includeAllNetworks || cfg.policy.killSwitch)
+        }
         let result: Result<Void, LPTunnelError> = await withCheckedContinuation { k in
             if let owner, reservation?.lease == owner { reservation = nil }
             beginStart(req, k, owner: owner, latched: latched)
@@ -446,7 +513,20 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
     #endif
 
     /// A provider instance was freed, or a provider's protection changed (`ProviderSeat`): waiting starts re-check.
-    public func recheckWaitingStarts() { wakeWaiters() }
+    public func recheckWaitingStarts() {
+        noteLiveKillSwitch()
+        wakeWaiters()
+    }
+
+    /// Round 3 (Fable N3): the running session's record says `killSwitch` as soon as its live flags (or start-time
+    /// flags) say so, saved at once: a crash before an orderly end must not leave the admission-time value (a record
+    /// without the flag is revocable, and NE restarts a session protected by its live flags).
+    private func noteLiveKillSwitch() {
+        guard let s = session, let key = s.key, let rec = persisted.authorisedStarts[key], !rec.killSwitch,
+              holdProtection(s).killSwitch else { return }
+        persisted.authorisedStarts[key]?.killSwitch = true
+        save()
+    }
 
     private func abandoned() -> LPTunnelError {
         engineLog.notice("start abandoned: its provider was stopped meanwhile")
@@ -510,11 +590,14 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
         let previousError = key.flatMap { persisted.lastErrors[$0] }
         if let key { persisted.lastErrors[key] = .init(error: e.asLPError, at: wallClock()) }
         let previousSessions = persisted.sessions          // round 5 (Fable N2): the append may trim the oldest
+        let previousAuthorisation = s.key.flatMap { persisted.authorisedStarts[$0] }
+        let dropped = dropAuthorisationOfEnding(s)
         let written = appendSummary(s, reason: reasonText)
-        if key != nil, !written { save() }
+        if key != nil || dropped, !written { save() }
         if keepIf(s) {                                      // protected during the I/O: kept, the end withdrawn
             if written { persisted.sessions = previousSessions }
             if let key { persisted.lastErrors[key] = previousError }
+            if dropped, let k = s.key { persisted.authorisedStarts[k] = previousAuthorisation }
             save()
             holdEnding(holdCode)
             return false
@@ -577,15 +660,15 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
             // ever reads that uid's item. The ownerUID/id comparison below is a consistency check on the store's
             // answer, NOT a security boundary. `providerConfiguration.ownerUID` is app-asserted, and S2 E13 showed
             // another local user can start our configuration: accepted for v2.0 (§1.3 A2, §20).
-            let found = try await secrets.entry(.payload, pid, ownerUID: cfg.ownerUID)
+            // Round 6 (Codex r6 #1): the payload and its revision from one read.
+            let found = try await secrets.load(.payload, pid, ownerUID: cfg.ownerUID)
             guard current(ep, .starting) else { return }
-            guard let entry = found, entry.ownerUID == cfg.ownerUID, entry.id == pid else {
+            guard let (entry, bytes) = found, entry.ownerUID == cfg.ownerUID, entry.id == pid else {
                 throw LPError(.profileNotProvisioned)
             }
             if cfg.revision > entry.revision { throw LPError(.profileRevisionStale) }
-            payload = try await secrets.get(.payload, pid, ownerUID: entry.ownerUID)
-            guard current(ep, .starting) else { return }
-            if payload == nil { throw LPError(.profileNotProvisioned) }
+            s.loadedRevision = entry.revision
+            payload = bytes
             // C16 resend guard: no STORED credentials within 60 s of an AUTH_FAILED (an answer is fresh input).
             let guarded = persisted.authFailedAt[key].map { wallClock().timeIntervalSince($0) < config.resendGuard } ?? false
             if let c = try await secrets.get(.credential, pid, ownerUID: entry.ownerUID), var d = CredentialCodec.decode(c) {
@@ -599,7 +682,7 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
             beforeConnectedFailure(LPTunnelError(error.code, detail: error.detail), ep); return
         }
         do throws(LPTunnelError) {
-            try validator?.validate(kind: cfg.kind, payload: payload!)
+            try validator?.validateForStart(kind: cfg.kind, payload: payload!)
         } catch {
             beforeConnectedFailure(error.code == .profileInvalid ? error : .of(.profileInvalid, error.detail), ep); return
         }
@@ -624,8 +707,11 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
             for await ev in stream { await self?.handle(ev) }
         }
         if s.dataPlane == .packetFlow && pump == nil { pump = PacketFlowPump(flow: host.packetFlow) }
-        let binding = s.answer
-        s.answer = nil
+        // Round 6 (Codex r6 #1): an answer to another revision's prompt is never used (the server prompts again).
+        let sameRevision = s.answerRevision.map { $0 == s.loadedRevision } ?? true
+        let binding = sameRevision ? s.answer : nil
+        if binding == nil, s.answer != nil { engineLog.notice("answer of another payload revision dropped") }
+        s.answer = nil; s.answerRevision = nil
         s.answerAttempt = binding != nil
         let req = AdapterStart(profileID: pid, payload: payload!, credentials: creds, stash: binding, policy: cfg.policy,
                                connectTimeout: cfg.kind == .wireGuard ? config.wgConnectDeadline : config.ovpnConnectDeadline,
@@ -656,6 +742,7 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
         s.attempt = 0; s.nextRetryAt = nil; s.backoff.reset()
         s.sessionID = UUID()
         s.connectedAt = wallClock()
+        noteLiveKillSwitch()
         phase = .connected
         completeStart(.success(()))
         if let key = s.key {
@@ -756,7 +843,7 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
         let p = AuthPrompt(promptID: UUID(), profileID: cfg.profileID, kind: ch.kind, challengeText: ch.challengeText, echo: ch.echo,
                            lockedUsername: ch.lockedUsername, reason: ch.reason, savedUsername: Self.offered(ch.kind, s.savedUsername),
                            nextStart: false, expiresAt: now.addingTimeInterval(ttl))
-        broker.live = .init(prompt: p, ownerUID: cfg.ownerUID, beforeConnected: true, challenge: ch, restartsEngine: true)
+        broker.live = .init(prompt: p, ownerUID: cfg.ownerUID, beforeConnected: true, challenge: ch, restartsEngine: true, revision: s.loadedRevision)
         phase = .awaitingAuth(beforeConnected: true)
         arm(.authDeadline, after: .seconds(ttl)) { $0.authDeadlineFired() }
         sink?.authRequired(p, ownerUID: cfg.ownerUID)
@@ -837,7 +924,7 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
             let p = AuthPrompt(promptID: UUID(), profileID: cfg.profileID, kind: ch.kind, challengeText: ch.challengeText, echo: ch.echo,
                                lockedUsername: ch.lockedUsername, reason: ch.reason, savedUsername: Self.offered(ch.kind, s.savedUsername),
                                nextStart: false, expiresAt: now.addingTimeInterval(config.authDeadline.seconds))
-            broker.live = .init(prompt: p, ownerUID: cfg.ownerUID, beforeConnected: true, challenge: ch, restartsEngine: false)
+            broker.live = .init(prompt: p, ownerUID: cfg.ownerUID, beforeConnected: true, challenge: ch, restartsEngine: false, revision: s.loadedRevision)
             phase = .awaitingAuth(beforeConnected: true)
             arm(.authDeadline, after: config.authDeadline) { $0.authDeadlineFired() }
             sink?.authRequired(p, ownerUID: cfg.ownerUID)
@@ -856,7 +943,7 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
         let p = AuthPrompt(promptID: UUID(), profileID: cfg.profileID, kind: ch.kind, challengeText: ch.challengeText, echo: ch.echo,
                            lockedUsername: ch.lockedUsername, reason: ch.reason, savedUsername: Self.offered(ch.kind, s.savedUsername),
                            nextStart: false, expiresAt: now.addingTimeInterval(config.authDeadline.seconds))
-        broker.live = .init(prompt: p, ownerUID: cfg.ownerUID, beforeConnected: false, challenge: ch, restartsEngine: false)
+        broker.live = .init(prompt: p, ownerUID: cfg.ownerUID, beforeConnected: false, challenge: ch, restartsEngine: false, revision: s.loadedRevision)
         phase = .awaitingAuth(beforeConnected: false)
         arm(.authDeadline, after: config.authDeadline) { $0.authDeadlineFired() }
         sink?.authRequired(p, ownerUID: cfg.ownerUID)
@@ -1275,7 +1362,136 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
             for t in Array(teardowns.values) { await t.value }
             return
         }
+        // 2.0.2 (PLAN §3.1): only the user's stop and a removed configuration end the authorisation of the session being
+        // stopped (a stop that landed on another live instance's session returned above). providerFailed, noNetwork, sleep,
+        // appUpdate and every other end keep it for a kill-switch session: NE's own restart of the session must still be
+        // honoured (any other session's record goes when it ends, round 1 L5: `dropAuthorisationOfEnding`).
+        if reason == .userInitiated || reason == .configurationRemoved, let key = session?.key {
+            noteUserClear(key)
+            clearAuthorisation(key)
+        }
         await stopSession(reasonText: reason == .userInitiated ? "user" : reason == .sleep ? "sleep" : "\(reason)", startError: nil)
+    }
+
+    // MARK: - start authorisation (2.0.2, PLAN §3)
+
+    /// `armStart` over XPC: the caller (kernel-reported `ownerUID`, already checked to have `profileID` provisioned in its
+    /// own namespace) announces the manual start it is about to make. Returns when the arm expires.
+    public func armStart(profileID: UUID, ownerUID: uid_t, nonce: UUID) -> Date {
+        arms.arm(ProfileKey(ownerUID: ownerUID, profileID: profileID), nonce: nonce, now: wallClock())
+    }
+
+    /// Round 1 (Codex 4), round 2 (Fable L1, L3; Codex r2 #2): the owner's unattended-start consent now stands only for
+    /// `keep` (the profiles with an Auto-Connect or Stay Connected plan, and those the app sees starting, running or
+    /// awaiting NE's restart). Consent for NEW unattended sessions is the configuration's on-demand rules (row 3); this
+    /// withdraws what is left over: the `unattended` fact of a record whose session NE never restarts (no kill switch,
+    /// e.g. one whose process died before its end could drop the record; a record left with no nonce goes). Never
+    /// touched: a kill-switch session's record (NE's own restart after a crash, `noNetwork` or `providerFailed` must
+    /// still be admitted, the plan's stop condition; such a record ends with the user's stop, a removal, a wipe or the
+    /// next boot), the running session's, a profile with a start in the guard, and armed nonces (L4).
+    public func revokeUnattended(keeping keep: Set<UUID>, ownerUID: uid_t) {
+        revokePages[ownerUID] = nil                   // a single-page request supersedes a partial batch
+        applyRevoke(keeping: keep, ownerUID: ownerUID)
+    }
+
+    /// Round 3 (Codex r3 #8): one page of a keep set sent in `count` pages of `batch`. The union is applied only once
+    /// every page of the same batch arrived; a page of another batch starts over (only the newest batch counts).
+    public func revokeUnattendedPage(batch: UUID, page: Int, count: Int, keeping keep: Set<UUID>, ownerUID: uid_t) {
+        guard count > 1 else { revokeUnattended(keeping: keep, ownerUID: ownerUID); return }
+        guard (0..<count).contains(page) else { return }
+        var b = revokePages[ownerUID].flatMap { $0.batch == batch && $0.count == count ? $0 : nil } ?? (batch: batch, count: count, pages: [:])
+        b.pages[page] = keep
+        guard b.pages.count == count else { revokePages[ownerUID] = b; return }
+        revokePages[ownerUID] = nil
+        applyRevoke(keeping: b.pages.values.reduce(into: Set<UUID>()) { $0.formUnion($1) }, ownerUID: ownerUID)
+    }
+
+    private func noteUserClear(_ key: ProfileKey) {
+        guard !guardedStarts.isEmpty else { return }     // round 4 (Fable N3): only a start in the guard reads it
+        userClearSeq &+= 1
+        userClearedAt[key] = userClearSeq
+    }
+
+    private func userClearedSince(_ seq: UInt64, _ key: ProfileKey) -> Bool {
+        (userClearedAt[key] ?? 0) > seq || (ownerClearedAt[key.ownerUID] ?? 0) > seq
+    }
+
+    private func applyRevoke(keeping keep: Set<UUID>, ownerUID: uid_t) {
+        let live = session?.key
+        let guarded = Set(guardedStarts.values.compactMap(\.key))
+        var changed = false
+        for (key, rec) in persisted.authorisedStarts where key.ownerUID == ownerUID && rec.isUnattended && !rec.killSwitch {
+            guard !keep.contains(key.profileID), key != live, !guarded.contains(key) else { continue }
+            if rec.nonce == nil { persisted.authorisedStarts[key] = nil } else { persisted.authorisedStarts[key]?.unattended = false }
+            changed = true
+        }
+        if changed { save() }
+    }
+
+    /// What an admitted start records (round 2, L4: merged into the existing record of this boot, never overwriting the
+    /// other fact).
+    enum Admission: Sendable, Equatable {
+        case armed(UUID)
+        case unattended
+        case replay(AuthorisedStart)
+    }
+
+    /// Past `maxAuthorisedStarts` the oldest record goes, never the one just admitted nor the running session's (round 1,
+    /// Fable L5: a long-running session is the oldest, and its NE restart needs its record).
+    private func recordAuthorisation(_ key: ProfileKey, _ admission: Admission, killSwitch: Bool) {
+        let now = wallClock()
+        let existing = persisted.authorisedStarts[key].flatMap { $0.boot == bootSession ? $0 : nil }
+        switch admission {
+        case .armed(let n):
+            persisted.authorisedStarts[key] = AuthorisedStart(nonce: n, at: now, unattended: existing?.unattended ?? false, boot: bootSession,
+                                                              killSwitch: killSwitch)
+        case .unattended:
+            persisted.authorisedStarts[key] = AuthorisedStart(nonce: existing?.nonce, at: now, unattended: true, boot: bootSession,
+                                                              killSwitch: killSwitch)
+        case .replay(let matched):
+            // The record NE's restart matched is the one that stays; a revoke during the guard wait removed nothing for good.
+            // Round 3 (Fable N1): never one a user's act ended (the start is refused before admission then).
+            guard existing == nil else { return }
+            persisted.authorisedStarts[key] = matched
+        }
+        if persisted.authorisedStarts.count > PersistedTunnelState.maxAuthorisedStarts,
+           let victim = Self.evictionCandidate(persisted.authorisedStarts, admitted: key, live: session?.key) {
+            persisted.authorisedStarts[victim] = nil
+        }
+        save()
+    }
+
+    /// Round 4 (Codex r4, FIX3 refusal path 2): which record makes room past the cap. Never the one just admitted nor the
+    /// running session's. A record without a kill switch first (NE never restarts such a session), oldest first; then a
+    /// kill-switch record of the ADMITTING owner (another local user filling the table pushes out only their own); a
+    /// kill-switch record of another owner only when nothing else is left (that needs 256 kill-switch records of one
+    /// boot).
+    static func evictionCandidate(_ records: [ProfileKey: AuthorisedStart], admitted: ProfileKey, live: ProfileKey?) -> ProfileKey? {
+        let others = records.filter { $0.key != admitted && $0.key != live }
+        func oldest(_ m: [ProfileKey: AuthorisedStart]) -> ProfileKey? { m.min { $0.value.at < $1.value.at }?.key }
+        return oldest(others.filter { !$0.value.killSwitch })
+            ?? oldest(others.filter { $0.key.ownerUID == admitted.ownerUID })
+            ?? oldest(others)
+    }
+
+    /// Round 1 (Fable L5): NE restarts only a session with a kill switch (E2E-4); the record of any other session that
+    /// ends goes with it, which also keeps the replay surface small. In memory: the caller's next save carries it.
+    /// Returns whether a record was dropped. Protection as `holdProtection` reads it (start-time or live flags): a
+    /// session either says is protected keeps its record.
+    private func dropAuthorisationOfEnding(_ s: Session) -> Bool {
+        guard let key = s.key else { return false }
+        if holdProtection(s).killSwitch {
+            // Round 2 (Codex r2 #2): protected by its live flags at its end: NE restarts it, so never revocable.
+            persisted.authorisedStarts[key]?.killSwitch = true
+            return false
+        }
+        return persisted.authorisedStarts.removeValue(forKey: key) != nil
+    }
+
+    /// Drops the persisted authorisation only; a pending arm is the NEXT start's and survives (a late stop of the old
+    /// session must not burn it).
+    private func clearAuthorisation(_ key: ProfileKey) {
+        if persisted.authorisedStarts.removeValue(forKey: key) != nil { save() }
     }
 
     /// `stop`'s body. `startError`: what a pending start completes with (default: the held error, else `.startCancelled`).
@@ -1302,7 +1518,7 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
     private func completeStart(_ r: Result<Void, LPTunnelError>) {
         guard let s = session, let k = s.startGate else { return }
         s.startGate = nil
-        s.answer = nil                            // an unused answer never outlives its start
+        s.answer = nil; s.answerRevision = nil    // an unused answer never outlives its start
         cancel(.heldRetry)
         k.resume(returning: r)
     }
@@ -1352,7 +1568,8 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
 
     private func endSession(reason: String) {
         guard let s = session else { return }
-        _ = appendSummary(s, reason: reason)
+        let dropped = dropAuthorisationOfEnding(s)
+        if !appendSummary(s, reason: reason), dropped { save() }
         forgetSession()
     }
 
@@ -1371,7 +1588,7 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
     private func forgetSession() {
         guard let s = session else { return }
         cancelAllTimers()
-        s.answer = nil
+        s.answer = nil; s.answerRevision = nil
         resolveLivePrompt()
         session = nil
         phase = .idle
@@ -1412,18 +1629,19 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
     /// Review L3: a refusal's error is always current in memory (the app's freshness check reads it through the
     /// snapshot), but repeated refusals of one profile (NE retrying an on-demand start) reach the disk at most once a
     /// minute, and are logged at notice level only then.
-    private func recordRefusal(_ e: LPTunnelError, _ key: ProfileKey, sameProfile: Bool) {
+    private func recordRefusal(_ e: LPTunnelError, _ key: ProfileKey, sameProfile: Bool, unauthorised: Bool = false) {
         let now = wallClock()
         persisted.lastErrors[key] = .init(error: e.asLPError, at: now)
+        let what = unauthorised ? "start not authorised by the profile's owner" : "another provider instance owns the running session"
         if let at = refusalSavedAt[key], now.timeIntervalSince(at) < 60, at <= now {
-            engineLog.debug("start refused again: another provider instance owns the running session")
+            engineLog.debug("start refused again: \(what, privacy: .public)")
             return
         }
         if sameProfile {
             // Codex final 6: throttled with the refusal (once a minute per profile), not per start.
             engineLog.fault("start of the running session's own profile from another live provider instance (a duplicate configuration, or an instance NE never stopped): refused")
         }
-        engineLog.notice("start refused: another provider instance owns the running session")
+        engineLog.notice("start refused: \(what, privacy: .public)")
         refusalSavedAt = refusalSavedAt.filter { now.timeIntervalSince($0.value) < 60 }   // re-check N4: bounded
         refusalSavedAt[key] = now
         save()
@@ -1570,12 +1788,17 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
                 broker.live = nil
                 cancel(.authDeadline)
                 sink?.promptResolved(promptID: promptID, profileID: l.prompt.profileID, ownerUID: l.ownerUID)
-                if answer.save, let key = s.key { await saveAnswer(answer, key) }
-                guard session === s, phase == .awaitingAuth(beforeConnected: true), s.isWaitingBeforeConnected else {
+                s.answerInFlight = promptID
+                let rev = l.revision
+                if answer.save, let key = s.key { await saveAnswer(answer, key, revision: rev) }
+                guard session === s, s.answerInFlight == promptID, phase == .awaitingAuth(beforeConnected: true),
+                      s.isWaitingBeforeConnected else {
                     throw LPError(.staleAnswer)
                 }
+                s.answerInFlight = nil
                 s.answer = StashBinding(promptID: promptID, answer: answer, carriedUsername: l.challenge.carriedUsername,
                                         carriedPassword: l.challenge.carriedPassword, cookie: l.challenge.cookie)
+                s.answerRevision = rev
                 phase = .starting
                 let ep = epoch
                 s.startTask = Task { await self.runStarting(ep) }
@@ -1584,8 +1807,13 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
             guard let a = s.adapter else { throw LPError(.staleAnswer) }
             broker.live = nil
             sink?.promptResolved(promptID: promptID, profileID: l.prompt.profileID, ownerUID: l.ownerUID)
-            if answer.save, let key = s.key { await saveAnswer(answer, key) }
-            guard session === s, let a2 = s.adapter, a2 === a else { throw LPError(.staleAnswer) }
+            if l.beforeConnected { s.answerInFlight = promptID }
+            let rev = l.revision
+            if answer.save, let key = s.key { await saveAnswer(answer, key, revision: rev) }
+            guard session === s, let a2 = s.adapter, a2 === a, !l.beforeConnected || s.answerInFlight == promptID else {
+                throw LPError(.staleAnswer)
+            }
+            s.answerInFlight = nil
             cancel(.authDeadline)
             if l.beforeConnected {
                 phase = .connecting
@@ -1609,13 +1837,17 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
 
     /// "Save" persists the username and BASE password only (never a response/OTP).
     /// L2: written only into a namespace that holds this profile's payload, under that entry's owner and revision.
-    private func saveAnswer(_ a: AuthAnswerSecrets, _ key: ProfileKey) async {
-        guard let p = try? await secrets.entry(.payload, key.profileID, ownerUID: key.ownerUID), p.ownerUID == key.ownerUID else { return }
+    /// Round 5 (Codex r5 #6): `revision`: the payload revision the prompt's attempt loaded (nil: a prepared prompt, any).
+    /// Round 6 (Codex r6 #2 = Fable r6 N1): the write is conditional in the store on the payload still being at that
+    /// revision, so a newer revision provisioned before or during the save always keeps its own credentials.
+    private func saveAnswer(_ a: AuthAnswerSecrets, _ key: ProfileKey, revision: UInt64? = nil) async {
+        guard let p = try? await secrets.entry(.payload, key.profileID, ownerUID: key.ownerUID), p.ownerUID == key.ownerUID,
+              revision.map({ $0 == p.revision }) ?? true else { return }
         var c = (try? await secrets.get(.credential, p.id, ownerUID: p.ownerUID)).flatMap { $0.flatMap(CredentialCodec.decode) }
             ?? CredentialSecrets()
         if let u = a.username { c.username = u }
         if let pw = a.password { c.password = pw }
-        try? await secrets.put(.credential, p.id, ownerUID: p.ownerUID, revision: p.revision, CredentialCodec.encode(c))
+        _ = try? await secrets.putCredential(p.id, ownerUID: p.ownerUID, ifPayloadRevision: p.revision, CredentialCodec.encode(c))
     }
 
     public func cancelAuth(promptID: UUID, callerUID: uid_t) throws(LPError) {
@@ -1713,11 +1945,14 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
     }
 
     /// A provision with a higher revision clears the latch, drops the prepared answer and ends a waiting start (of that
-    /// owner's profile only).
+    /// owner's profile only). It keeps the start authorisation (round 1, Fable H1a).
     public func profileProvisioned(_ pid: UUID, ownerUID: uid_t, revision: UInt64) {
         let key = ProfileKey(ownerUID: ownerUID, profileID: pid)
         if let l = persisted.latches[key]?.latch, revision > l.revision { clearLatch(key) }
         broker.dropPrepared(key)
+        // Round 1 (Fable H1a): the authorisation is NOT cleared here. It belongs to the session, which a provision does not
+        // end ("Save Only" keeps a connected session up on the old payload); NE's restart of that session replays its
+        // options and must be honoured. The user's stop, a removal and a wipe still clear it; the next armed start replaces it.
         payloadCommitted(pid, ownerUID: ownerUID, revision: revision)
     }
 
@@ -1726,15 +1961,64 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
     /// start in the guard of an OLDER revision end. Round 6 (Fable L3): not the start holding the reservation of a
     /// preemption already decided (its teardown can't be undone): it proceeds on the new payload (`runStarting` accepts
     /// a configuration older than the payload).
+    ///
+    /// Round 3 (Codex r3 #1, HIGH): the waiting start of a session with a kill switch (start-time or live flags) is NEVER
+    /// ended by a commit. A failed protected start is open (E14c), and this one may be NE's authorised replay that no app
+    /// will start again (a verified Save Only revision provisioned in the background while NE restarts the old one). It
+    /// goes on: an attempt in flight finishes on the payload it loaded; a hold retries at its own time (or when new
+    /// credentials arrive, `credentialsUpdated`) and loads the committed payload under the configuration NE started with,
+    /// exactly as NE's restart after a Save Only does (`runStarting` accepts a configuration older than the payload).
+    ///
+    /// Round 4 (2.0.2, Fable L1 = Codex r4 #1): the same for a kill-switch start still in the GUARD, in every wait (a
+    /// duplicate beside its running profile, a `.stopping` incumbent of any profile, a stale session's teardown after NE
+    /// stopped the old instance): it is never invalidated by a commit and, once admitted, loads the committed payload. A
+    /// start without a kill switch in the guard of an older revision still ends (the app starts the new revision; a
+    /// failed split start is not open). Fable N2: a kept start at a live before-Connected prompt gets a fresh attempt on
+    /// the new revision (the prompt is resolved, its carried credentials and challenge cookie of the old revision's server
+    /// are never sent), and prompts again if the server asks.
+    ///
+    /// Round 5 (Fable r5 N2, Codex r5 #6), kill-switch starts only: "newer" means above the revision the current attempt
+    /// LOADED (not the one NE started with), so a second commit of that revision (a same-revision retry, a reconcile)
+    /// keeps its prompt; an answer being applied across its save counts as a live prompt (it is dropped and the fresh
+    /// attempt prompts again). Round 6 (Fable r6 L2): a start without a kill switch still compares with the revision NE
+    /// started it under (round 6 Codex M2), so a same-revision retry ends a start of the old configuration even when it
+    /// already loaded the new payload (possibly beside the old revision's credentials).
     public func payloadCommitted(_ pid: UUID, ownerUID: uid_t, revision: UInt64) {
         let key = ProfileKey(ownerUID: ownerUID, profileID: pid)
-        if let cfg = session?.config, ProfileKey(cfg) == key, revision > cfg.revision { endWaitingStart(key, reason: "profile changed") }
-        let holder = reservation?.lease
-        let isHolder: (GuardedStart) -> Bool = { $0.lease != nil && $0.lease == holder }
-        for (id, g) in guardedStarts where g.key == key && revision > g.revision && isHolder(g) { guardedStarts[id]?.staleRevision = true }
-        invalidateGuardedStarts(.of(.startCancelled, "profile changed")) {
-            $0.key == key && revision > $0.revision && !isHolder($0)
+        if let s = session, s.key == key, s.isWaitingBeforeConnected {
+            if holdProtection(s).killSwitch {
+                if revision > s.loadedRevision {
+                    engineLog.notice("profile changed during a kill-switch start: the start goes on (revision \(revision) is used by its next attempt)")
+                    restartAttemptAtLivePrompt(s)
+                }
+            } else if revision > (s.config?.revision ?? 0) {
+                endWaitingStart(key, reason: "profile changed")
+            }
         }
+        invalidateGuardedStarts(.of(.startCancelled, "profile changed")) {
+            $0.key == key && revision > $0.revision && !$0.killSwitch
+        }
+    }
+
+    /// Fable N2 (round 4): a kill-switch start kept across a commit while its before-Connected prompt is live (or its
+    /// answer is stashed for the next attempt, or, round 5 Codex r5 #6, is being applied across the save's await): the
+    /// prompt is resolved and the answer dropped (both belong to the old revision's server), and a fresh attempt starts
+    /// now on the committed payload.
+    private func restartAttemptAtLivePrompt(_ s: Session) {
+        let live = broker.live.flatMap { $0.beforeConnected && $0.ownerUID == s.key?.ownerUID && $0.prompt.profileID == s.key?.profileID ? $0 : nil }
+        guard live != nil || s.answer != nil || s.answerInFlight != nil else { return }
+        if let l = live {
+            broker.live = nil
+            sink?.promptResolved(promptID: l.prompt.promptID, profileID: l.prompt.profileID, ownerUID: l.ownerUID)
+        }
+        s.answer = nil; s.answerRevision = nil; s.answerInFlight = nil
+        cancel(.authDeadline)
+        s.startTask?.cancel()
+        teardownAdapter()
+        cancel(.connect); cancel(.heldRetry)
+        phase = .starting
+        let ep = epoch
+        s.startTask = Task { await self.runStarting(ep) }
     }
     /// New credentials: the latch and the resend guard go; a before-Connected hold retries now (they may fix it).
     public func credentialsUpdated(_ pid: UUID, ownerUID: uid_t) {
@@ -1749,7 +2033,9 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
         let key = ProfileKey(ownerUID: ownerUID, profileID: pid)
         endWaitingStart(key, reason: "profile removed")
         invalidateGuardedStarts(.of(.startCancelled, "profile removed")) { $0.key == key }
-        clearLatch(key); broker.dropPrepared(key)
+        noteUserClear(key)
+        clearLatch(key); broker.dropPrepared(key); arms.drop(key)
+        persisted.authorisedStarts[key] = nil
         persisted.lastErrors[key] = nil; persisted.endpointHosts[key] = nil; persisted.authFailedAt[key] = nil; save()
     }
     /// `wipeAllSecrets` (L1): the caller's latches, resend guards, last errors, cached endpoints, session-ring
@@ -1757,11 +2043,17 @@ public actor TunnelController<C: Clock> where C.Duration == Duration {
     public func secretsWiped(ownerUID: uid_t) {
         if let key = session?.key, key.ownerUID == ownerUID { endWaitingStart(key, reason: "secrets wiped") }
         invalidateGuardedStarts(.of(.startCancelled, "secrets wiped")) { $0.key?.ownerUID == ownerUID }
+        if !guardedStarts.isEmpty {
+            userClearSeq &+= 1
+            ownerClearedAt[ownerUID] = userClearSeq
+        }
         persisted.latches = persisted.latches.filter { $0.key.ownerUID != ownerUID }
         persisted.authFailedAt = persisted.authFailedAt.filter { $0.key.ownerUID != ownerUID }
         persisted.lastErrors = persisted.lastErrors.filter { $0.key.ownerUID != ownerUID }
         persisted.endpointHosts = persisted.endpointHosts.filter { $0.key.ownerUID != ownerUID }
         persisted.sessions.removeAll { $0.ownerUID == ownerUID }
+        persisted.authorisedStarts = persisted.authorisedStarts.filter { $0.key.ownerUID != ownerUID }
+        arms.drop(ownerUID: ownerUID)
         save()
         broker.dropPrepared(ownerUID: ownerUID)
     }

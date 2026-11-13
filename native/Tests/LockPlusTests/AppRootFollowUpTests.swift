@@ -71,9 +71,8 @@ struct AppRootFollowUpTests {
     }
 
     @Test func notYetVerifiedAndRebootReadiness() async throws {
-        let h = Harness()
+        let h = Harness(validator: FakeProfileValidator(.fails(LPError(.extensionUnavailable))))   // the validator service is down
         defer { h.dir.cleanup() }
-        h.service.state.withLock { $0.failAll = LPError(.extensionUnavailable) }
         let p = try await h.add("Office.ovpn", PreviewSeed.officeOvpn)
         let item = UIMapping.item(p, credentials: nil, autoProfileID: nil, snapshot: nil, history: [])
         #expect(item.notYetVerified)

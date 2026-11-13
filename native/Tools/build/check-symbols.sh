@@ -6,10 +6,12 @@
 # _fork/_vfork and no /sbin/route|ifconfig strings. `_execve` alone is allowed, and only when `nm -A -u` attributes it
 # exclusively to libwg-go.a members (Go's runtime/syscall; present before our patches). libwg-go.a export count == WG_EXPORT_COUNT.
 # (The "ifconfig" word alone is openvpn3's option text, so the string check is on the tool paths.)
-# Usage: check-symbols.sh <derivedDataPath or archive DerivedData> [extension-binary]
+# 2.0.2: the optional third argument is the validator service binary: no forbidden imports at all (no _execve either: it
+# links no libwg-go), no wg* exports, no NetworkExtension.
+# Usage: check-symbols.sh <derivedDataPath or archive DerivedData> [extension-binary] [validator-binary]
 set -euo pipefail
 source "${0:A:h:h}/release/common.sh"
-DD=${1:?usage: check-symbols.sh <derivedDataPath> [extension-binary]}; EXT=${2:-}
+DD=${1:?usage: check-symbols.sh <derivedDataPath> [extension-binary] [validator-binary]}; EXT=${2:-}; VAL=${3:-}
 source "${0:A:h:h}/bootstrap/pins.sh"   # WG_EXPORT_COUNT
 OUT="$LP_BUILD_ROOT/symbols"; rm -rf "$OUT"; mkdir -p "$OUT"
 # Active arch only (arm64): Xcode keeps x86_64 intermediates next to the arm64 ones; never sample "the first" object.
@@ -90,8 +92,19 @@ if [[ -n "$EXT" ]]; then
   ok "extension: only _execve (libwg-go), no /sbin/route or ifconfig strings"
 fi
 
+if [[ -n "$VAL" ]]; then
+  [[ -f "$VAL" ]] || fail "validator binary not found: $VAL"
+  vu=$(nm -u "$VAL" 2>/dev/null | awk -v re="^$FORBID_RE\$" '$NF ~ re {print $NF}' | sort -u || true)
+  [[ -z "$vu" ]] || fail "validator imports forbidden symbols: $(print -r -- $vu)"
+  vd=$(nm -gU "$VAL" 2>/dev/null | grep -E ' T _wg' || true)
+  [[ -z "$vd" ]] || fail "validator exports WireGuard Go symbols"
+  vs=$(strings -a "$VAL"); [[ -n "$vs" ]] || fail "strings produced no output for $VAL"
+  ! grep -Eq '/sbin/route|/sbin/ifconfig|/usr/sbin/route' <<<"$vs" || fail "validator contains /sbin/route or ifconfig strings"
+  ok "validator: no _system/_popen/_exec*/_posix_spawn*/_fork/_vfork, no libwg-go, no route/ifconfig strings"
+fi
+
 # --- ZIPFoundation is app-only (DESIGN §2.2, draft 9.1) ------------------------------------------------------------------
-step "ZIPFoundation never in the extension (§2.2)"
+step "ZIPFoundation never in the extension (§2.2; the app writes archives, the validator service reads them)"
 EXTS=(${(f)"$(allfind -type f -path '*.systemextension/Contents/MacOS/*')"}); [[ -n "$EXT" ]] && EXTS+=("$EXT")
 nx=0
 for x in "${EXTS[@]}"; do

@@ -277,8 +277,9 @@ struct OnDemandPause3Tests {
         let work = try await h.add("Work.conf", Harness.wgConf)
         let auto = try await h.add("Home NAS.conf", Harness.splitConf)
         var s = AppSettings()
-        s.autoConnect.pausedUntil = Date().addingTimeInterval(-5)
-        s.pausedState = PausedState(profileID: work.id, onDemandEnabledIDs: [work.id, auto.id], agentBuild: "1")
+        s.autoConnect.pausedUntil = ResumeIntent.wholeSeconds(Date().addingTimeInterval(-5))
+        s.pausedState = PausedState(profileID: work.id, onDemandEnabledIDs: [work.id, auto.id], agentBuild: "1",
+                                   intent: await resumeIntent(work.id, until: s.autoConnect.pausedUntil!, keychain: h.keychain, dir: h.dir.data))
         try AtomicFile.saveJSON(s, to: h.dir.data.settings)
         let dir = h.dir.data
         var recordAtStart: [UUID]?
@@ -290,16 +291,18 @@ struct OnDemandPause3Tests {
 
     /// The settle is capped by what is left of the watchdog's budget (less the 1 s reserve): with a 1.6 s budget about
     /// 0.6 s is left when the settle begins, so the settle (1 s, on a fake clock) sleeps only the remainder, doesn't
-    /// settle, and nothing starts; everything paused comes back and the pause is cleared (the run never ends in the
-    /// watchdog's exit). Review 4 (§5): the old version used a budget below the reserve, so it only tested `cap > 0`.
+    /// settle, and nothing starts (the run never ends in the watchdog's exit). Review 4 (§5): the old version used a
+    /// budget below the reserve, so it only tested `cap > 0`. 2.0.2 RC review (Fable M1): out of time is retried, not a
+    /// failure: the pause stays for the next run.
     @Test func theHeadlessSettleFitsTheBudget() async throws {
         let h = Harness()
         defer { h.dir.cleanup() }
         let work = try await h.add("Work.conf", Harness.wgConf, killSwitch: false)
         let auto = try await h.add("Home NAS.conf", Harness.splitConf)
         var s = AppSettings()
-        s.autoConnect.pausedUntil = Date().addingTimeInterval(-5)
-        s.pausedState = PausedState(profileID: work.id, onDemandEnabledIDs: [work.id, auto.id], agentBuild: "1")
+        s.autoConnect.pausedUntil = ResumeIntent.wholeSeconds(Date().addingTimeInterval(-5))
+        s.pausedState = PausedState(profileID: work.id, onDemandEnabledIDs: [work.id, auto.id], agentBuild: "1",
+                                   intent: await resumeIntent(work.id, until: s.autoConnect.pausedUntil!, keychain: h.keychain, dir: h.dir.data))
         try AtomicFile.saveJSON(s, to: h.dir.data.settings)
         let fake = FakeSettleClock()
         let managers = SerializedVPNManager(inner: h.managers, settleClock: fake.clock)   // the target's on-demand save starts the settle
@@ -308,10 +311,10 @@ struct OnDemandPause3Tests {
         #expect(fake.sleeps.count == 1)
         let slept = try #require(fake.sleeps.first)
         #expect(slept > .zero && slept <= .milliseconds(600))          // the remainder, not the 1 s settle
-        #expect(r == .resumed(restarted: nil, onDemand: [work.id, auto.id]))
+        #expect(r == .outOfTime(.settle))
         #expect(h.managers.starts.isEmpty)
         let disk = AtomicFile.loadJSON(AppSettings.self, from: h.dir.data.settings)
-        #expect(disk?.autoConnect.pausedUntil == nil)
+        #expect(disk?.autoConnect.pausedUntil == s.autoConnect.pausedUntil && disk?.pausedState == s.pausedState)
     }
 
     // MARK: N9
